@@ -101,6 +101,8 @@ export class Npc {
     this._lastSpokenTime = 0;
     this._projPos = new THREE.Vector3();
     this.umbrella = null;
+    this.panicTimer = 0;
+    this.panicDir = null;
 
     this.ready = (async () => {
       this.look = opts.look ?? await randomStreetLook({ gastada: opts.gastada });
@@ -331,6 +333,35 @@ export class Npc {
     this.animAcc = 0;
   }
 
+
+
+  takePunch(attacker) {
+    const PUNCH_REACTIONS = [
+      '¡Uy qué le pasa, ñero loco!',
+      '¡Ayúdenme, me están atracando!',
+      '¡Policía, policía!',
+      '¡Socio, no me pegue, tome esto!',
+      '¡Qué boleta, bájese de la nube!'
+    ];
+    const phrase = PUNCH_REACTIONS[Math.floor(Math.random() * PUNCH_REACTIONS.length)];
+    this.say(phrase, 4.0);
+
+    if (attacker && attacker.position) {
+      const dx = this.position.x - attacker.position.x;
+      const dz = this.position.z - attacker.position.z;
+      const len = Math.hypot(dx, dz) || 1;
+      this.panicDir = { x: dx / len, z: dz / len };
+      this.panicTimer = 5.0; // 5 segundos de huida veloz
+    }
+
+    const dropMoney = 200 + Math.floor(Math.random() * 400);
+    if (typeof window !== 'undefined' && window.dispatchEvent) {
+      window.dispatchEvent(new CustomEvent('toast', {
+        detail: { text: `💥 ¡Puñetazo! El transeúnte soltó ${dropMoney} y salió corriendo.`, kind: 'info' }
+      }));
+    }
+    return dropMoney;
+  }
 
   say(text, duration = 3.5) {
     if (typeof document === 'undefined') return;

@@ -313,10 +313,12 @@ export class Bogota {
     if (this.groundMaterials.road) {
       this.groundMaterials.road.roughness = THREE.MathUtils.lerp(0.82, 0.42, wet);
       this.groundMaterials.road.metalness = THREE.MathUtils.lerp(0.0, 0.18, wet);
+      this.groundMaterials.road.envMapIntensity = THREE.MathUtils.lerp(0.3, 1.4, wet);
     }
     if (this.groundMaterials.busway) {
       this.groundMaterials.busway.roughness = THREE.MathUtils.lerp(1.0, 0.55, wet);
       this.groundMaterials.busway.metalness = THREE.MathUtils.lerp(0.0, 0.12, wet);
+      this.groundMaterials.busway.envMapIntensity = THREE.MathUtils.lerp(0.25, 1.1, wet);
     }
     if (this.groundMaterials.sidewalk) {
       this.groundMaterials.sidewalk.roughness = THREE.MathUtils.lerp(0.75, 0.48, wet);

@@ -82,7 +82,7 @@ export class Game {
 
     // Mundo + jugador
     this.world = new World(this.sceneMgr.scene);
-    this.player = new Player(this.sceneMgr.scene, this.input, this.stats);
+    this.player = new Player(this.sceneMgr.scene, this.input, this.stats, this.audio);
 
     // Sistemas de nuevas mecánicas: Popó y Psicosis por abstinencia
     this.poopSystem = new PoopSystem(
@@ -628,20 +628,23 @@ export class Game {
     this.time.update(dt, this.clock);
 
     // 2. Día/noche: cielo nublado de Bogotá y sol que sigue al jugador (sombras nítidas)
-    this.sceneMgr.setTimeOfDay(this.clock.hour);
-    this.sceneMgr.followTarget(this.player.position);
+    this.sceneMgr.setTimeOfDay(this.clock.hour, this.weather?.isRaining, this.weather?.wetness);
+    this.sceneMgr.followTarget(this.player.position, this.clock.hour);
     const isNight = this.clock.isNight;
     if (this._wasNight !== isNight) {
       this._wasNight = isNight;
       this.world.active?.setNightMode?.(isNight);
       this.dealer?.setNight(isNight);
+      if (typeof document !== 'undefined') {
+        document.body?.classList?.toggle('night-mode', isNight);
+      }
     }
 
     // 3. Jugador
     this.cameraRig.updateControls(dt, this.input);
     // Actualiza el rumbo antes de calcular WASD en relación con la cámara.
     this.cameraRig.prepareMovement();
-    this.player.update(dt, this.cameraRig.camera, this.collisions);
+    this.player.update(dt, this.cameraRig.camera, this.collisions, (x, z) => this.world.active?.getGroundHeight?.(x, z) ?? 0, this.world.active?.npcs ?? []);
 
     // 4. Stats
     this.stats.update(dt, this.player, this.diseases, this.clock, this.talents);

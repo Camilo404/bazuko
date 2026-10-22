@@ -48,14 +48,14 @@ export class SceneManager {
    * - Día (8:00-17:00): cielo nublado bogotano con luz clara
    * - Atardecer (17:30-19:00): tonos cálidos ocres y ámbar
    */
-  setTimeOfDay(hour) {
+  setTimeOfDay(hour, isRaining = false, wetness = 0) {
     const day = THREE.MathUtils.smoothstep(hour, 6.5, 8.5) * (1 - THREE.MathUtils.smoothstep(hour, 17.0, 19.0));
     const dawn = Math.max(0, 1 - Math.abs(hour - 6.2) / 1.3);
     const dusk = Math.max(0, 1 - Math.abs(hour - 18.2) / 1.2);
 
-    this.sun.intensity = 0.2 + day * 1.8 + dawn * 0.8 + dusk * 0.9;
-    this.ambient.intensity = 0.35 + day * 0.75 + dawn * 0.25;
-    this.scene.environmentIntensity = 0.18 + day * 0.55;
+    this.sun.intensity = 0.25 + day * 1.85 + dawn * 0.85 + dusk * 0.95;
+    this.ambient.intensity = 0.38 + day * 0.78 + dawn * 0.28;
+    this.scene.environmentIntensity = 0.20 + day * 0.60;
 
     if (dusk > 0.1) {
       this.sun.color.copy(_SUN_DAY).lerp(_SUN_DUSK, dusk);
@@ -72,11 +72,22 @@ export class SceneManager {
     if (day > 0.01) sky.lerp(_DAY, day);
     if (dusk > 0.01) sky.lerp(_DUSK_SKY, dusk * 0.65);
 
+    // Ajuste por bruma de páramo y lluvia
+    const rainFactor = THREE.MathUtils.clamp((isRaining ? 0.65 : 0) + (wetness || 0) * 0.4, 0, 1);
+    if (rainFactor > 0.02) {
+      const mistColor = new THREE.Color(0x3e4a56);
+      sky.lerp(mistColor, rainFactor * 0.45);
+      this.sun.intensity *= (1 - rainFactor * 0.35);
+      this.ambient.intensity *= (1 - rainFactor * 0.15);
+    }
+
     this.scene.background.copy(sky);
-    if (this.scene.fog) {
+    if (this.scene.fog && this.quality !== 'baja') {
       this.scene.fog.color.copy(sky);
-      this.scene.fog.near = 45 + day * 30;
-      this.scene.fog.far = 150 + day * 80;
+      const baseNear = 45 + day * 30;
+      const baseFar = 150 + day * 80;
+      this.scene.fog.near = Math.max(25, baseNear * (1 - rainFactor * 0.38));
+      this.scene.fog.far = Math.max(75, baseFar * (1 - rainFactor * 0.35));
     }
   }
 
@@ -101,9 +112,19 @@ export class SceneManager {
   }
 
   /** El sol (y su caja de sombras) sigue al jugador para sombras nítidas en un mapa grande */
-  followTarget(pos) {
+  followTarget(pos, hour = 12) {
     this.sun.target.position.copy(pos);
-    this.sun.position.set(pos.x + 30, 60, pos.z + 18);
+    const isDay = hour >= 5.5 && hour <= 18.5;
+    if (isDay) {
+      const solarAngle = ((hour - 5.5) / 13) * Math.PI;
+      const clamped = THREE.MathUtils.clamp(solarAngle, 0.22, Math.PI - 0.22);
+      const sx = -Math.cos(clamped) * 45;
+      const sy = Math.sin(clamped) * 60 + 20;
+      const sz = 18 + Math.sin(clamped * 2) * 8;
+      this.sun.position.set(pos.x + sx, sy, pos.z + sz);
+    } else {
+      this.sun.position.set(pos.x + 30, 60, pos.z + 18);
+    }
   }
 
   /** Ajusta el color de fondo/fog según ánimo */

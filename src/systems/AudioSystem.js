@@ -375,4 +375,77 @@ export class AudioSystem {
     } catch {}
   }
 
+
+  playJump() {
+    if (this.muted || typeof window === 'undefined') return;
+    try {
+      const ctx = Howler.ctx;
+      if (!ctx || ctx.state === 'suspended') return;
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(140, t);
+      osc.frequency.exponentialRampToValueAtTime(320, t + 0.16);
+      gain.gain.setValueAtTime(0.28 * this._masterVolume, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.17);
+    } catch {}
+  }
+
+  playLanding() {
+    if (this.muted || typeof window === 'undefined') return;
+    try {
+      const ctx = Howler.ctx;
+      if (!ctx || ctx.state === 'suspended') return;
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(95, t);
+      osc.frequency.exponentialRampToValueAtTime(35, t + 0.12);
+      gain.gain.setValueAtTime(0.42 * this._masterVolume, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.13);
+    } catch {}
+  }
+
+  playPunchHit() {
+    if (this.muted || typeof window === 'undefined') return;
+    try {
+      const ctx = Howler.ctx;
+      if (!ctx || ctx.state === 'suspended') return;
+      const t = ctx.currentTime;
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'square';
+      osc1.frequency.setValueAtTime(180, t);
+      osc1.frequency.exponentialRampToValueAtTime(50, t + 0.08);
+
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(120, t);
+      osc2.frequency.exponentialRampToValueAtTime(30, t + 0.15);
+
+      gain.gain.setValueAtTime(0.55 * this._masterVolume, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(t);
+      osc2.start(t);
+      osc1.stop(t + 0.15);
+      osc2.stop(t + 0.15);
+    } catch {}
+  }
+
 }

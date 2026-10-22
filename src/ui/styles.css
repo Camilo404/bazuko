@@ -778,3 +778,18 @@ body.is-loading #creator-modal { visibility: visible; }
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.03); }
 }
+
+/* === Viñeta Cinemática y Color Grading === */
+.cinematic-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 65%, rgba(6, 10, 16, 0.42) 100%);
+  mix-blend-mode: multiply;
+  opacity: 0.9;
+  transition: opacity 1.5s ease;
+}
+
+body.night-mode .cinematic-vignette {
+  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0) 48%, rgba(4, 7, 12, 0.58) 100%);
+}

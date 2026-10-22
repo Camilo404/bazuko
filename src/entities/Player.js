@@ -10,7 +10,10 @@ import { createCharacter } from '../character/character.js';
 import { createRealisticCharacter, REALISTIC_SCALE } from '../character/RealisticCharacter.js';
 
 export class Player {
-  constructor(scene, input, stats=null) {
+  constructor(scene, input, stats=null, audio=null) {
+    this.audio = audio;
+    this.jumpVelocity = 0;
+    this.isGrounded = true;
     this.input = input;
     this.scene = scene;
     this.stats = stats;
@@ -87,15 +90,58 @@ export class Player {
     this.actionTimer = duration;
   }
 
+
+  punch(npcs = []) {
+    this.playAction('golpear', 0.38);
+    this.audio?.playWhoosh?.();
+
+    const forwardX = Math.sin(this.root.rotation.y);
+    const forwardZ = Math.cos(this.root.rotation.y);
+
+    for (const npc of npcs) {
+      if (!npc || !npc.position) continue;
+      const dx = npc.position.x - this.position.x;
+      const dz = npc.position.z - this.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < 1.85) {
+        const dot = (dx * forwardX + dz * forwardZ) / (dist || 1);
+        if (dot > 0.25) {
+          if (typeof npc.takePunch === 'function') {
+            const drop = npc.takePunch(this);
+            this.audio?.playPunchHit?.();
+            if (drop && this.stats && typeof this.stats.dinero === 'number') {
+              this.stats.dinero += drop;
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+
   playBeg() {
     this.playAction('pedir', 1.2);
   }
 
-  update(dt, camera, collisions) {
+  update(dt, camera, collisions, groundHeight = null, npcs = []) {
     this.time += dt;
     if (this.actionTimer > 0) {
       this.actionTimer -= dt;
       if (this.actionTimer <= 0) this.action = null;
+    }
+
+        // Salto y combate cuerpo a cuerpo estilo GTA
+    const wantsJump = typeof this.input?.consumePress === 'function' && (this.input.consumePress('Space') || this.input.consumePress('KeySpace'));
+    if (wantsJump && this.isGrounded && !this.hasCart && !this.sorting) {
+      this.jumpVelocity = 5.2;
+      this.isGrounded = false;
+      this.playAction('saltar', 0.65);
+      this.audio?.playJump?.();
+    }
+
+    const wantsPunch = typeof this.input?.consumePress === 'function' && (this.input.consumePress('KeyG') || this.input.consumePress('Mouse0'));
+    if (wantsPunch && !this.action && !this.hasCart && !this.sorting) {
+      this.punch(npcs);
     }
 
     const { x, z } = this.input.axis;
@@ -144,6 +190,22 @@ export class Player {
       this.position.add(delta);
     }
     this.speed = dt > 0 ? before.distanceTo(this.position) / dt : 0;
+    this.isGrounded ??= true;
+    this.jumpVelocity ??= 0;
+    if (!this.isGrounded) {
+      this.jumpVelocity -= 17.0 * dt;
+      this.position.y += this.jumpVelocity * dt;
+      const groundY = typeof groundHeight === 'function' ? groundHeight(this.position.x, this.position.z) : 0;
+      if (this.position.y <= groundY) {
+        this.position.y = groundY;
+        this.jumpVelocity = 0;
+        this.isGrounded = true;
+        this.audio?.playLanding?.();
+      }
+    } else if (typeof groundHeight === 'function') {
+      const groundY = groundHeight(this.position.x, this.position.z);
+      this.position.y = THREE.MathUtils.lerp(this.position.y, groundY, 1 - Math.exp(-22 * dt));
+    }
 
     this.root.position.copy(this.position);
 
@@ -153,7 +215,16 @@ export class Player {
       let diff = targetAngle - this.root.rotation.y;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
-      this.root.rotation.y += diff * Math.min(1, 12 * dt);
+      this.root.rotation.y += diff * Math.min(1, 14 * dt);
+
+      // Inclinación centrífuga (banking lateral en giros)
+      const targetBank = THREE.MathUtils.clamp(-diff * (running ? 0.38 : 0.22), -0.22, 0.22);
+      this.root.rotation.z = THREE.MathUtils.lerp(this.root.rotation.z, targetBank, 1 - Math.exp(-14 * dt));
+      // Inclinación hacia adelante con la aceleración
+      this.root.rotation.x = THREE.MathUtils.lerp(this.root.rotation.x, running ? 0.08 : 0.02, 1 - Math.exp(-10 * dt));
+    } else {
+      this.root.rotation.z = THREE.MathUtils.lerp(this.root.rotation.z, 0, 1 - Math.exp(-12 * dt));
+      this.root.rotation.x = THREE.MathUtils.lerp(this.root.rotation.x, 0, 1 - Math.exp(-10 * dt));
     }
 
     this.state = (this.speed < 0.25) ? 'idle' : (running ? 'run' : 'walk');
