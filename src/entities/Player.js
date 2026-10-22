@@ -48,7 +48,8 @@ export class Player {
     this.load = 0;            // 0..1: llenado del costal (tamaño del saco)
     this.action = null;       // 'pedir' | 'buscar' | 'comer' | 'dormir' | 'saludo'
     this.actionTimer = 0;
-    this.sorting = false;     // seleccionando basura (mantener Q)
+    this.sorting = false;
+    this.hasCart = false;     // seleccionando basura (mantener Q)
   }
 
   setLook(look) {
@@ -103,6 +104,9 @@ export class Player {
     let speed = running ? this.speedRun : this.speedWalk;
     if (this.stats?.getSpeedMultiplier) {
       speed *= this.stats.getSpeedMultiplier();
+    }
+    if (this.hasCart) {
+      speed *= 0.82;
     }
     // Movimiento
     const dir = this._direction.set(x, 0, z);

@@ -306,6 +306,8 @@ export class Bogota {
 
   /** Ajusta el acabado del asfalto y andenes según la lluvia o humedad ambiental */
   setWetness(amount = 0) {
+    this.wetness = amount;
+    this.isRaining = amount > 0.05;
     if (!this.groundMaterials) return;
     const wet = THREE.MathUtils.clamp(amount, 0, 1);
     if (this.groundMaterials.road) {
@@ -555,6 +557,13 @@ export class Bogota {
     return obj;
   }
 
+  getGroundTypeAt(x, z) {
+    if (!this.map) return 'sidewalk';
+    const row = Math.round(z / T);
+    const col = Math.round(x / T);
+    return this.map[row]?.[col] ?? 'sidewalk';
+  }
+
   getGroundHeight(x, z) {
     const t = this.map[Math.round(z / T)]?.[Math.round(x / T)];
     return GROUND_HEIGHTS[t] ?? 0;
@@ -794,7 +803,7 @@ export class Bogota {
       _projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
       frustum = _frustum.setFromProjectionMatrix(_projView);
     }
-    const ctx = { player: playerPos, frustum };
+    const ctx = { player: playerPos, frustum, camera, isRaining: (this.wetness ?? 0) > 0.05 };
     for (const n of this.npcs) n.update(dt, ctx);
   }
 
