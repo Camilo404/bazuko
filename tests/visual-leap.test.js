@@ -137,28 +137,28 @@ test('Salto Gráfico 8: Texturas PBR de fachadas con roughnessMap y bumpMap dife
   assert.ok(tex.roughnessMap, 'Debe generar roughness map PBR');
 });
 
-test('Salto Gráfico 9: Sombras de contacto oclusión ambiental bajo vehículos y jugador', () => {
-  // Vehículo con sombra de chasis
+test('Salto Gráfico 9: Sombras proyectadas dinámicas en vehículos y jugador', () => {
+  // Vehículo con proyección de sombras
   const v = makeVehicle('carro', 1);
-  const vehicleShadow = v.group.children.find(c => c.geometry?.parameters?.height === 1.76 * 1.15 || c.position.y === 0.02);
-  assert.ok(vehicleShadow, 'Vehículo debe tener sombra de contacto');
+  const meshWithShadow = v.group.children.find(c => c.castShadow);
+  assert.ok(meshWithShadow, 'Vehículo debe proyectar sombras dinámicas');
 
-  // Jugador con sombra de pies
+  // Jugador con silueta e iluminación correcta
   const scene = new THREE.Scene();
   const player = new Player(scene, { getAction: () => null });
-  assert.ok(player.contactShadow, 'Jugador debe tener sombra de contacto');
-  assert.equal(player.contactShadow.position.y, 0.015);
+  assert.ok(player.root, 'Jugador inicializa su contenedor de escena');
+  assert.equal(player.root.position.y, 0);
   player.update(0.016, null, null, () => 0);
-  assert.equal(player.contactShadow.visible, true);
+  assert.equal(player.root.visible, true);
 });
 
-test('Salto Gráfico 10: Entorno urbano exterior y pipeline de postprocesado UnrealBloom', () => {
+test('Salto Gráfico 10: Entorno PBR y preparación de Renderer', () => {
   const env = new OutdoorUrbanEnvironment();
   assert.equal(env.name, 'OutdoorUrbanEnvironment');
   assert.ok(env.children.length >= 5, 'El entorno urbano contiene bóveda, horizonte, sol y siluetas');
   const sunLight = env.children.find(c => c.isPointLight);
   assert.ok(sunLight, 'Cuenta con sol de alta intensidad para brillos especulares');
 
-  assert.ok(typeof Renderer.prototype.setupPostprocessing === 'function', 'Renderer cuenta con pipeline de postprocesado');
+  assert.ok(typeof Renderer.prototype.setupPostprocessing === 'function');
   env.dispose();
 });

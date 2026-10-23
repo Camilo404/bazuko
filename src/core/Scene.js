@@ -91,7 +91,7 @@ export class SceneManager {
     this.scene.fog = new THREE.Fog(0x1a222d, 50, 180);
 
     // Luz ambiental: cielo azul-gris suave + rebote cálido del suelo/asfalto
-    this.ambient = new THREE.HemisphereLight(0x768ba2, 0x221e1a, 0.7);
+    this.ambient = new THREE.HemisphereLight(0x9fb5cc, 0x4a4640, 0.85);
     this.scene.add(this.ambient);
 
     // Sol / luna (direccional) con sombra nítida y normalBias anti-acné
@@ -125,9 +125,9 @@ export class SceneManager {
     const dawn = Math.max(0, 1 - Math.abs(hour - 6.2) / 1.3);
     const dusk = Math.max(0, 1 - Math.abs(hour - 18.2) / 1.2);
 
-    this.sun.intensity = 0.25 + day * 1.85 + dawn * 0.85 + dusk * 0.95;
-    this.ambient.intensity = 0.38 + day * 0.78 + dawn * 0.28;
-    this.scene.environmentIntensity = 0.20 + day * 0.60;
+    this.sun.intensity = 0.35 + day * 1.85 + dawn * 1.15 + dusk * 1.05;
+    this.ambient.intensity = 0.55 + day * 0.85 + dawn * 0.50 + dusk * 0.40;
+    this.scene.environmentIntensity = 0.45 + day * 0.55 + dawn * 0.35;
 
     if (dusk > 0.1) {
       this.sun.color.copy(_SUN_DAY).lerp(_SUN_DUSK, dusk);

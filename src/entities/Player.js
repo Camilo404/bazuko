@@ -46,19 +46,6 @@ export class Player {
     this.modelScale = CHARACTER_SCALE;
     this.modelKind = 'procedural';
 
-    // Sombra de contacto oclusión ambiental bajo los pies
-    const shadowTex = radialSprite(64, 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0)');
-    const shadowGeo = new THREE.PlaneGeometry(0.85, 0.85);
-    shadowGeo.rotateX(-Math.PI / 2);
-    this.contactShadow = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({
-      map: shadowTex,
-      transparent: true,
-      opacity: 0.55,
-      depthWrite: false
-    }));
-    this.contactShadow.position.y = 0.015;
-    this.root.add(this.contactShadow);
-
     this.time = 0;
     this.speed = 0;
     this.state = 'idle';
@@ -220,13 +207,6 @@ export class Player {
     } else if (typeof groundHeight === 'function') {
       groundY = groundHeight(this.position.x, this.position.z);
       this.position.y = THREE.MathUtils.lerp(this.position.y, groundY, 1 - Math.exp(-22 * dt));
-    }
-
-    if (this.contactShadow) {
-      const h = Math.max(0, this.position.y - groundY);
-      this.contactShadow.scale.setScalar(1 + h * 0.45);
-      this.contactShadow.material.opacity = Math.max(0.08, 0.55 - h * 0.35);
-      this.contactShadow.position.y = 0.015 - h;
     }
 
     this.root.position.copy(this.position);

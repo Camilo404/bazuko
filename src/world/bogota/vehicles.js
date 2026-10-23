@@ -75,13 +75,6 @@ export function makeVehicle(kind = 'carro', seedColor = 0, { beams = true } = {}
   body.castShadow = true;
   g.add(body);
 
-  // Sombra de contacto oclusión ambiental bajo el chasis
-  const shadowGeo = new THREE.PlaneGeometry(L * 0.95, W * 1.15);
-  shadowGeo.rotateX(-Math.PI / 2);
-  const contactShadow = new THREE.Mesh(shadowGeo, s.shadowMat);
-  contactShadow.position.set(0, 0.02, 0);
-  g.add(contactShadow);
-
   if (isBus) {
     const win = new THREE.Mesh(new THREE.BoxGeometry(L - 1.2, 0.75, W + 0.02), new THREE.MeshStandardMaterial({ color: '#1a1206', emissive: '#ffbf6e', emissiveIntensity: 0.9, roughness: 0.2 }));
     win.position.set(-0.2, 2.15, 0);

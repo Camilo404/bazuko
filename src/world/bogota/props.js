@@ -217,7 +217,7 @@ export function streetSign(lines) {
   g.add(pole);
   lines.forEach((text, i) => {
     const map = signTexture({ title: text, bg: '#ffffff', fg: '#1b1b1b', w: 512, h: 128 });
-    const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.28), new THREE.MeshBasicMaterial({ map, side: THREE.DoubleSide }));
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.28), new THREE.MeshStandardMaterial({ map, roughness: 0.7, side: THREE.DoubleSide }));
     plate.position.set(0, 2.65 - i * 0.32, 0);
     plate.rotation.y = i % 2 ? Math.PI / 2 : 0;
     g.add(plate);
@@ -353,19 +353,6 @@ export function articulatedBus() {
   routeSign.rotation.y = Math.PI;
   routeSign.position.set(0, 2.9, -9.13);
   g.add(routeSign);
-
-  // Sombra de contacto oclusión ambiental bajo el bus articulado
-  const busShadowTex = radialSprite(128, 'rgba(0,0,0,0.85)', 'rgba(0,0,0,0)');
-  const busShadowGeo = new THREE.PlaneGeometry(3.1, 18.2);
-  busShadowGeo.rotateX(-Math.PI / 2);
-  const busShadow = new THREE.Mesh(busShadowGeo, new THREE.MeshBasicMaterial({
-    map: busShadowTex,
-    transparent: true,
-    opacity: 0.65,
-    depthWrite: false
-  }));
-  busShadow.position.set(0, 0.02, 0);
-  g.add(busShadow);
 
   return shadow(g);
 }

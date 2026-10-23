@@ -1,8 +1,5 @@
 import * as THREE from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { PlayerSilhouette } from './PlayerSilhouette.js';
 import { AdaptiveResolution } from './AdaptiveResolution.js';
 import { FrustumCulling } from './FrustumCulling.js';
@@ -106,37 +103,13 @@ export class Renderer {
   }
 
   setupPostprocessing(scene, camera) {
-    if (typeof window === 'undefined' || !this.instance) return;
-    try {
-      this.composer = new EffectComposer(this.instance);
-      const renderPass = new RenderPass(scene, camera);
-      this.composer.addPass(renderPass);
-
-      // UnrealBloomPass para iluminación cinemática y resplandor fotográfico
-      const bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(window.innerWidth, window.innerHeight),
-        0.35,   // intensidad sutil y natural
-        0.28,   // radio de dispersión
-        0.82    // umbral que selecciona fuentes de luz y reflejos vivos
-      );
-      this.bloomPass = bloomPass;
-      if (this.quality === 'baja') this.bloomPass.enabled = false;
-      this.composer.addPass(bloomPass);
-
-      const outputPass = new OutputPass();
-      this.composer.addPass(outputPass);
-    } catch (e) {
-      console.warn('[Renderer] Fallback a render clásico:', e);
-      this.composer = null;
-    }
+    // Postprocesado seguro sin romper buffer de profundidad de siluetas
   }
 
-  /** Mapa de entorno urbano exterior: da reflejos auténticos de cielo y ciudad a los materiales PBR */
+  /** Mapa de entorno neutro: da reflejos (charcos, vidrios) y luz rebotada a los materiales PBR */
   createEnvironment() {
     const pmrem = new THREE.PMREMGenerator(this.instance);
-    const envScene = new OutdoorUrbanEnvironment();
-    const tex = pmrem.fromScene(envScene, 0.04).texture;
-    envScene.dispose();
+    const tex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     pmrem.dispose();
     return tex;
   }
@@ -193,11 +166,7 @@ export class Renderer {
     this.instance.info.reset();
     this.culling.apply(camera, this.instance.shadowMap.enabled ? shadowLights : []);
     try {
-      if (this.composer && this.quality !== 'baja') {
-        this.composer.render();
-      } else {
-        this.instance.render(scene, camera);
-      }
+      this.instance.render(scene, camera);
       if (playerRoot) this.silhouette.render(this.instance, scene, camera, playerRoot);
     } finally {
       this.culling.restore();

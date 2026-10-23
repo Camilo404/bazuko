@@ -65,7 +65,6 @@ export class Game {
     this.sceneMgr = new SceneManager();
     this.sceneMgr.scene.environment = this.renderer.createEnvironment();
     this.cameraRig = new CameraRig(this.sceneMgr.scene, canvas);
-    this.renderer.setupPostprocessing(this.sceneMgr.scene, this.cameraRig.camera);
     this.clock = new Clock();
     this.input = new Input();
 
