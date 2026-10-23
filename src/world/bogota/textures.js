@@ -16,6 +16,22 @@ export function rng(seed) {
 export const pick = (r, arr) => arr[Math.floor(r() * arr.length)];
 
 function canvas(w, h) {
+  if (typeof document === 'undefined') {
+    return [
+      { width: w, height: h },
+      {
+        fillStyle: '', strokeStyle: '', lineWidth: 1, globalAlpha: 1,
+        fillRect() {}, strokeRect() {}, clearRect() {},
+        beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, fill() {},
+        arc() {}, save() {}, restore() {}, translate() {}, rotate() {},
+        scale() {}, fillText() {}, strokeText() {}, measureText: () => ({ width: 0 }),
+        createRadialGradient: () => ({ addColorStop() {} }),
+        createLinearGradient: () => ({ addColorStop() {} }),
+        getImageData: () => ({ data: new Uint8ClampedArray(w * h * 4) }),
+        putImageData() {}
+      }
+    ];
+  }
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
@@ -23,6 +39,7 @@ function canvas(w, h) {
 }
 
 function toTexture(c, { srgb = true, repeat } = {}) {
+  if (typeof document === 'undefined') return new THREE.Texture();
   const t = new THREE.CanvasTexture(c);
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;

@@ -155,9 +155,11 @@ export class Bogota {
     this._buildExtensions();
 
     const cer = P.cerros();
+    cer.userData.noMerge = true;
     cer.position.set(-130, 0, W(this.height / 2) - 30);
     cer.rotation.y = Math.PI / 2;
     this.group.add(cer);
+    this.cerros = cer;
     this._mergeStatic();
     this.group.add(this.buildingVisibility.buildClosedView());
     const closedView = this.buildingVisibility.closedView;
@@ -311,17 +313,19 @@ export class Bogota {
     if (!this.groundMaterials) return;
     const wet = THREE.MathUtils.clamp(amount, 0, 1);
     if (this.groundMaterials.road) {
-      this.groundMaterials.road.roughness = THREE.MathUtils.lerp(0.82, 0.42, wet);
-      this.groundMaterials.road.metalness = THREE.MathUtils.lerp(0.0, 0.18, wet);
-      this.groundMaterials.road.envMapIntensity = THREE.MathUtils.lerp(0.3, 1.4, wet);
+      this.groundMaterials.road.roughness = THREE.MathUtils.lerp(0.82, 0.28, wet);
+      this.groundMaterials.road.metalness = THREE.MathUtils.lerp(0.0, 0.24, wet);
+      this.groundMaterials.road.envMapIntensity = THREE.MathUtils.lerp(0.3, 1.8, wet);
     }
     if (this.groundMaterials.busway) {
-      this.groundMaterials.busway.roughness = THREE.MathUtils.lerp(1.0, 0.55, wet);
-      this.groundMaterials.busway.metalness = THREE.MathUtils.lerp(0.0, 0.12, wet);
-      this.groundMaterials.busway.envMapIntensity = THREE.MathUtils.lerp(0.25, 1.1, wet);
+      this.groundMaterials.busway.roughness = THREE.MathUtils.lerp(1.0, 0.42, wet);
+      this.groundMaterials.busway.metalness = THREE.MathUtils.lerp(0.0, 0.18, wet);
+      this.groundMaterials.busway.envMapIntensity = THREE.MathUtils.lerp(0.25, 1.5, wet);
     }
     if (this.groundMaterials.sidewalk) {
-      this.groundMaterials.sidewalk.roughness = THREE.MathUtils.lerp(0.75, 0.48, wet);
+      this.groundMaterials.sidewalk.roughness = THREE.MathUtils.lerp(0.75, 0.38, wet);
+      this.groundMaterials.sidewalk.metalness = THREE.MathUtils.lerp(0.0, 0.15, wet);
+      this.groundMaterials.sidewalk.envMapIntensity = THREE.MathUtils.lerp(0.2, 1.2, wet);
     }
   }
 
@@ -627,6 +631,21 @@ export class Bogota {
     this._add(P.busStation(16), bx, WZ(21.5));
     this.busService = new BusService(this.getBusRoute());
     this.group.add(this.busService.group);
+
+    // Avisos de neón comerciales en esquinas principales
+    const neons = [
+      { title: 'DROGUERÍA', sub: '24 HORAS', color: '#00ff88', accent: '#ff2255', x: W(CARRERAS[0][0] - 1), z: W(CALLES[0][0] - 1), ry: 0 },
+      { title: 'PANADERÍA', sub: 'Y PASTELERÍA', color: '#ffb020', accent: '#ffe066', x: W(CARRERAS[1][1] + 1), z: W(CALLES[1][0] - 1), ry: Math.PI / 2 },
+      { title: 'CIGARRERÍA', sub: 'LICORES Y DULCES', color: '#00d4ff', accent: '#ff0077', x: W(CARACAS.lanes[1][1] + 2), z: W(CALLES[0][1] + 1), ry: -Math.PI / 2 },
+      { title: 'BILLAR CLUB', sub: 'TRES BANDAS', color: '#ff00aa', accent: '#00ffee', x: W(CARRERAS[0][1] + 1), z: W(CALLES[1][1] + 1), ry: Math.PI }
+    ];
+    for (const n of neons) {
+      const sign = P.neonSign(n);
+      sign.position.set(n.x, 3.8, n.z);
+      sign.rotation.y = n.ry;
+      this.group.add(sign);
+      if (sign.userData.update) this.animated.push(sign);
+    }
     // cerca de la estación: vendedor de tinto y una chaza
     this.vendors = [];
     this._vendor(WX(21), WZ(18.5), Math.PI / 2, 'chaza', 'Chaza de don Efraín', ['cigarrillo', 'cafe', 'pan', 'agua']);
@@ -812,6 +831,7 @@ export class Bogota {
   setNightMode(isNight) {
     for (const p of this.props) p.instance.setNight?.(isNight);
     for (const m of this.facadeMats) m.emissiveIntensity = isNight ? 1.2 : 0;
+    this.cerros?.userData?.setNight?.(isNight);
   }
 
   dispose(scene) {

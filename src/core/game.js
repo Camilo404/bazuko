@@ -630,11 +630,18 @@ export class Game {
     // 2. Día/noche: cielo nublado de Bogotá y sol que sigue al jugador (sombras nítidas)
     this.sceneMgr.setTimeOfDay(this.clock.hour, this.weather?.isRaining, this.weather?.wetness);
     this.sceneMgr.followTarget(this.player.position, this.clock.hour);
+    this.sceneMgr.update(dt);
     const isNight = this.clock.isNight;
-    if (this._wasNight !== isNight) {
+    const isRainingNow = this.weather?.isRaining ?? false;
+    if (this._wasNight !== isNight || this._wasRaining !== isRainingNow) {
       this._wasNight = isNight;
+      this._wasRaining = isRainingNow;
       this.world.active?.setNightMode?.(isNight);
       this.dealer?.setNight(isNight);
+      for (const car of this.cars) car.setNight?.(isNight, isRainingNow);
+      if (this.traffic) {
+        for (const v of this.traffic.vehicles) v.car?.setNight?.(isNight, isRainingNow);
+      }
       if (typeof document !== 'undefined') {
         document.body?.classList?.toggle('night-mode', isNight);
       }
