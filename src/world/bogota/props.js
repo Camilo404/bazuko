@@ -3,7 +3,7 @@
 // los que tienen `userData.update(dt, t)` se animan (fuego, toldos).
 import * as THREE from 'three';
 import { signTexture } from '../../utils/signs.js';
-import { trashBag, cardboard } from './textures.js';
+import { trashBag, cardboard, radialSprite } from './textures.js';
 
 const lam = (color, opts = {}) => new THREE.MeshLambertMaterial({ color, ...opts });
 const std = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...opts });
@@ -353,6 +353,19 @@ export function articulatedBus() {
   routeSign.rotation.y = Math.PI;
   routeSign.position.set(0, 2.9, -9.13);
   g.add(routeSign);
+
+  // Sombra de contacto oclusión ambiental bajo el bus articulado
+  const busShadowTex = radialSprite(128, 'rgba(0,0,0,0.85)', 'rgba(0,0,0,0)');
+  const busShadowGeo = new THREE.PlaneGeometry(3.1, 18.2);
+  busShadowGeo.rotateX(-Math.PI / 2);
+  const busShadow = new THREE.Mesh(busShadowGeo, new THREE.MeshBasicMaterial({
+    map: busShadowTex,
+    transparent: true,
+    opacity: 0.65,
+    depthWrite: false
+  }));
+  busShadow.position.set(0, 0.02, 0);
+  g.add(busShadow);
 
   return shadow(g);
 }

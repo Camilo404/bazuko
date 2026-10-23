@@ -17,6 +17,13 @@ function shared() {
   cache.rimGeo.rotateX(Math.PI / 2);
   cache.beamTex = radialSprite(128, 'rgba(255,240,215,0.9)', 'rgba(255,240,215,0)');
   cache.flareTex = radialSprite(64, 'rgba(255,255,255,1)', 'rgba(255,255,255,0)');
+  cache.shadowTex = radialSprite(128, 'rgba(0,0,0,0.85)', 'rgba(0,0,0,0)');
+  cache.shadowMat = new THREE.MeshBasicMaterial({
+    map: cache.shadowTex,
+    transparent: true,
+    opacity: 0.58,
+    depthWrite: false
+  });
   cache.ready = true;
   return cache;
 }
@@ -67,6 +74,13 @@ export function makeVehicle(kind = 'carro', seedColor = 0, { beams = true } = {}
   body.position.y = isBus ? 0.4 + H / 2 : 0.62;
   body.castShadow = true;
   g.add(body);
+
+  // Sombra de contacto oclusión ambiental bajo el chasis
+  const shadowGeo = new THREE.PlaneGeometry(L * 0.95, W * 1.15);
+  shadowGeo.rotateX(-Math.PI / 2);
+  const contactShadow = new THREE.Mesh(shadowGeo, s.shadowMat);
+  contactShadow.position.set(0, 0.02, 0);
+  g.add(contactShadow);
 
   if (isBus) {
     const win = new THREE.Mesh(new THREE.BoxGeometry(L - 1.2, 0.75, W + 0.02), new THREE.MeshStandardMaterial({ color: '#1a1206', emissive: '#ffbf6e', emissiveIntensity: 0.9, roughness: 0.2 }));

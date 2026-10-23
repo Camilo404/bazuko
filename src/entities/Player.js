@@ -8,6 +8,7 @@ import {
 } from '../utils/constants.js';
 import { createCharacter } from '../character/character.js';
 import { createRealisticCharacter, REALISTIC_SCALE } from '../character/RealisticCharacter.js';
+import { radialSprite } from '../world/bogota/textures.js';
 
 export class Player {
   constructor(scene, input, stats=null, audio=null) {
@@ -44,6 +45,19 @@ export class Player {
     this.procedural = this.character;
     this.modelScale = CHARACTER_SCALE;
     this.modelKind = 'procedural';
+
+    // Sombra de contacto oclusión ambiental bajo los pies
+    const shadowTex = radialSprite(64, 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0)');
+    const shadowGeo = new THREE.PlaneGeometry(0.85, 0.85);
+    shadowGeo.rotateX(-Math.PI / 2);
+    this.contactShadow = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({
+      map: shadowTex,
+      transparent: true,
+      opacity: 0.55,
+      depthWrite: false
+    }));
+    this.contactShadow.position.y = 0.015;
+    this.root.add(this.contactShadow);
 
     this.time = 0;
     this.speed = 0;
@@ -144,9 +158,9 @@ export class Player {
       this.punch(npcs);
     }
 
-    const { x, z } = this.input.axis;
+    const { x = 0, z = 0 } = this.input?.axis ?? {};
     const moving = (x !== 0 || z !== 0);
-    const running = this.input.isRunning && moving;
+    const running = Boolean(this.input?.isRunning && moving);
     let speed = running ? this.speedRun : this.speedWalk;
     if (this.stats?.getSpeedMultiplier) {
       speed *= this.stats.getSpeedMultiplier();
@@ -156,7 +170,7 @@ export class Player {
     }
     // Movimiento
     const dir = this._direction.set(x, 0, z);
-    if (camera?.userData.cameraMode === 'third-person') {
+    if (camera?.userData?.cameraMode === 'third-person') {
       const forward = camera.getWorldDirection(this._forward);
       forward.y = 0;
       forward.normalize();
@@ -192,10 +206,11 @@ export class Player {
     this.speed = dt > 0 ? before.distanceTo(this.position) / dt : 0;
     this.isGrounded ??= true;
     this.jumpVelocity ??= 0;
+    let groundY = 0;
     if (!this.isGrounded) {
       this.jumpVelocity -= 17.0 * dt;
       this.position.y += this.jumpVelocity * dt;
-      const groundY = typeof groundHeight === 'function' ? groundHeight(this.position.x, this.position.z) : 0;
+      groundY = typeof groundHeight === 'function' ? groundHeight(this.position.x, this.position.z) : 0;
       if (this.position.y <= groundY) {
         this.position.y = groundY;
         this.jumpVelocity = 0;
@@ -203,8 +218,15 @@ export class Player {
         this.audio?.playLanding?.();
       }
     } else if (typeof groundHeight === 'function') {
-      const groundY = groundHeight(this.position.x, this.position.z);
+      groundY = groundHeight(this.position.x, this.position.z);
       this.position.y = THREE.MathUtils.lerp(this.position.y, groundY, 1 - Math.exp(-22 * dt));
+    }
+
+    if (this.contactShadow) {
+      const h = Math.max(0, this.position.y - groundY);
+      this.contactShadow.scale.setScalar(1 + h * 0.45);
+      this.contactShadow.material.opacity = Math.max(0.08, 0.55 - h * 0.35);
+      this.contactShadow.position.y = 0.015 - h;
     }
 
     this.root.position.copy(this.position);

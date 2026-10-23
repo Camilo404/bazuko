@@ -259,16 +259,34 @@ export class Bogota {
     const walk = TX.sidewalk(11);
     const dirt = TX.dirt(31);
     const concrete = TX.concrete(41);
-    const tex = (t, scale) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.userData = { scale }; return t; };
+    const tex = (t, scale) => { if (!t) return t; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.userData = { scale }; return t; };
     const mats = {
       // sin roughnessMap: los charcos espejo se ven como huecos negros con cámara cenital
-      road: new THREE.MeshStandardMaterial({ map: tex(asphalt.map, 14), roughness: 0.82, color: '#b4b4b4' }),
-      busway: new THREE.MeshStandardMaterial({ map: asphalt.map, roughness: 1, color: '#a8726a' }),
-      sidewalk: new THREE.MeshStandardMaterial({ map: tex(walk.map, 6), bumpMap: walk.bumpMap, bumpScale: 0.3, roughness: 0.75, color: '#b9b4aa' }),
+      road: new THREE.MeshStandardMaterial({
+        map: tex(asphalt.map, 14),
+        bumpMap: tex(asphalt.bumpMap, 14),
+        bumpScale: 0.16,
+        roughness: 0.82,
+        color: '#b4b4b4'
+      }),
+      busway: new THREE.MeshStandardMaterial({
+        map: tex(asphalt.map, 14),
+        bumpMap: tex(asphalt.bumpMap, 14),
+        bumpScale: 0.14,
+        roughness: 1,
+        color: '#a8726a'
+      }),
+      sidewalk: new THREE.MeshStandardMaterial({
+        map: tex(walk.map, 6),
+        bumpMap: tex(walk.bumpMap, 6),
+        bumpScale: 0.28,
+        roughness: 0.75,
+        color: '#b9b4aa'
+      }),
       floor: new THREE.MeshStandardMaterial({ map: tex(concrete.map, 6), roughness: 0.9, color: '#8a8a86' }),
       dirt: new THREE.MeshStandardMaterial({ map: tex(dirt.map, 8), roughness: 1, color: '#8a7a64' }),
       grass: new THREE.MeshStandardMaterial({ map: dirt.map, roughness: 1, color: '#3e5a2c' }),
-      plaza: new THREE.MeshStandardMaterial({ map: walk.map, roughness: 0.8, color: '#c9b9a0' })
+      plaza: new THREE.MeshStandardMaterial({ map: tex(walk.map, 6), roughness: 0.8, color: '#c9b9a0' })
     };
     const scaleOf = { road: 14, busway: 14, sidewalk: 6, floor: 6, dirt: 8, grass: 8, plaza: 6 };
     const heightOf = GROUND_HEIGHTS;
@@ -296,7 +314,12 @@ export class Bogota {
         }
       }
     }
-    mats.curb = new THREE.MeshStandardMaterial({ color: '#d8d4c8', roughness: 0.8 });
+    mats.curb = new THREE.MeshStandardMaterial({
+      color: '#d8d4c8',
+      roughness: 0.8,
+      bumpMap: tex(concrete.map, 4),
+      bumpScale: 0.12
+    });
     this.groundMaterials = mats;
     for (const [t, list] of Object.entries(quads)) {
       this.group.add(mergeByChunk(list, mats[t], { receiveShadow: true }));
@@ -456,14 +479,22 @@ export class Bogota {
     const textureKey = `${widthM}:${floors}:${style}:${variant}`;
     let tex = this._facadeTextures.get(textureKey);
     if (!tex) {
-      tex = TX.facade({ seed: Math.floor(Math.random() * 1e6), width: widthM, floors, pxPerM: style === 'pintada' ? 28 : 40, shopFront: true, style });
+      tex = TX.facade({ seed: Math.floor(Math.random() * 1e6), width: widthM, floors, pxPerM: style === 'pintada' ? 36 : 48, shopFront: true, style });
       this._facadeTextures.set(textureKey, tex);
     }
-    for (const t of [tex.map, tex.emissiveMap, tex.bumpMap]) { t.anisotropy = 8; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; }
+    for (const t of [tex.map, tex.emissiveMap, tex.bumpMap, tex.roughnessMap]) {
+      if (t) { t.anisotropy = 8; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; }
+    }
     const facadeMat = new THREE.MeshStandardMaterial({
-      map: tex.map, emissiveMap: tex.emissiveMap, emissive: '#ffffff', emissiveIntensity: 0,
-      bumpMap: tex.bumpMap, bumpScale: 0.4, roughness: 0.85
+      map: tex.map,
+      emissiveMap: tex.emissiveMap,
+      emissive: '#ffffff',
+      emissiveIntensity: 0,
+      bumpMap: tex.bumpMap,
+      bumpScale: 0.35,
+      roughness: 0.95
     });
+    if (tex.roughnessMap) facadeMat.roughnessMap = tex.roughnessMap;
     this.facadeMats.push(facadeMat);
 
     const [x0, z0] = tiles[0], [x1, z1] = tiles[tiles.length - 1];

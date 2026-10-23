@@ -5,6 +5,10 @@ import { SceneManager } from '../src/core/Scene.js';
 import { cerros, articulatedBus, tree, neonSign } from '../src/world/bogota/props.js';
 import { WeatherSystem } from '../src/world/WeatherSystem.js';
 import { Car } from '../src/entities/Car.js';
+import { facade } from '../src/world/bogota/textures.js';
+import { makeVehicle } from '../src/world/bogota/vehicles.js';
+import { Player } from '../src/entities/Player.js';
+import { OutdoorUrbanEnvironment, Renderer } from '../src/core/Renderer.js';
 
 beforeEach(() => {
   globalThis.window = new EventTarget();
@@ -123,4 +127,38 @@ test('Salto Gráfico 7: Letreros de neón comerciales con parpadeo y visibilidad
   // Update ejecuta parpadeo
   neon.userData.update(0.016, 2.0);
   assert.ok(neon.children.length >= 3);
+});
+
+test('Salto Gráfico 8: Texturas PBR de fachadas con roughnessMap y bumpMap diferenciados', () => {
+  const tex = facade({ seed: 42, width: 6, floors: 3, pxPerM: 36, shopFront: true, style: 'ladrillo' });
+  assert.ok(tex.map, 'Debe generar diffuse map');
+  assert.ok(tex.emissiveMap, 'Debe generar emissive map');
+  assert.ok(tex.bumpMap, 'Debe generar bump map');
+  assert.ok(tex.roughnessMap, 'Debe generar roughness map PBR');
+});
+
+test('Salto Gráfico 9: Sombras de contacto oclusión ambiental bajo vehículos y jugador', () => {
+  // Vehículo con sombra de chasis
+  const v = makeVehicle('carro', 1);
+  const vehicleShadow = v.group.children.find(c => c.geometry?.parameters?.height === 1.76 * 1.15 || c.position.y === 0.02);
+  assert.ok(vehicleShadow, 'Vehículo debe tener sombra de contacto');
+
+  // Jugador con sombra de pies
+  const scene = new THREE.Scene();
+  const player = new Player(scene, { getAction: () => null });
+  assert.ok(player.contactShadow, 'Jugador debe tener sombra de contacto');
+  assert.equal(player.contactShadow.position.y, 0.015);
+  player.update(0.016, null, null, () => 0);
+  assert.equal(player.contactShadow.visible, true);
+});
+
+test('Salto Gráfico 10: Entorno urbano exterior y pipeline de postprocesado UnrealBloom', () => {
+  const env = new OutdoorUrbanEnvironment();
+  assert.equal(env.name, 'OutdoorUrbanEnvironment');
+  assert.ok(env.children.length >= 5, 'El entorno urbano contiene bóveda, horizonte, sol y siluetas');
+  const sunLight = env.children.find(c => c.isPointLight);
+  assert.ok(sunLight, 'Cuenta con sol de alta intensidad para brillos especulares');
+
+  assert.ok(typeof Renderer.prototype.setupPostprocessing === 'function', 'Renderer cuenta con pipeline de postprocesado');
+  env.dispose();
 });
