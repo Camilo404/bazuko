@@ -103,6 +103,19 @@ export const ITEMS = {
     consumable: 'vicio', amount: 35, salud: -1
   },
 
+  // ===== FABRICADOS EN LA MESA =====
+  // Valores por debajo o cerca de sus materiales: fabricar da XP, no dinero fácil.
+  curita: {
+    id: 'curita', name: 'Curita', weight: 0.05, value: 800,
+    consumable: 'salud', amount: 12
+  },
+  hierba: {
+    id: 'hierba', name: 'Hierba seca', weight: 0.05, value: 250,
+    consumable: 'vicio', amount: 25, salud: -1, substance: true
+  },
+  rifa:  { id: 'rifa', name: 'Cartón de rifa', weight: 0.02, value: 1500 },
+  arma:  { id: 'arma', name: 'Arma casera',    weight: 1.2,  value: 6000 },
+
   // ===== MATERIALES DEL CAMBUCHE =====
   lona:    { id: 'lona',    name: 'Lona azul',     weight: 2,    value: 4000, build: true, rarity: 'rare' },
   madera:  { id: 'madera',  name: 'Tablas',        weight: 2,    value: 1500, build: true, rarity: 'uncommon' },
@@ -130,7 +143,8 @@ const ITEM_EMOJIS = {
   lona: '⛺', madera: '🪵', colchon: '🛏️', vela: '🕯️', pan: '🍞',
   agua: '💧', refresco: '🥤', cafe: '☕', lataComida: '🐟', vendaje: '🩹',
   reloj: '⌚', moneda: '🪙', anillo: '💍', jabon: '🧼', cepillo: '🪥',
-  retrovisor: '🪞', radio: '📻', radioTransistor: '📻', pilas: '🔋', popo: '💩', cigarrillo: '🚬'
+  retrovisor: '🪞', radio: '📻', radioTransistor: '📻', pilas: '🔋', popo: '💩', cigarrillo: '🚬',
+  curita: '🩹', hierba: '🌿', rifa: '🎟️', arma: '🗡️'
 };
 for (const item of Object.values(ITEMS)) {
   item.emoji = ITEM_EMOJIS[item.id] ?? (item.cure ? '💊' : item.substance ? '🧪' : '📦');
@@ -162,7 +176,8 @@ const ICONS = {
   reloj: 'watch', moneda: 'coins', anillo: 'sparkles', retrovisor: 'eye', radio: 'phone', radioTransistor: 'radio', pilas: 'flame',
   pan: 'bread', lataComida: 'food', agua: 'water', refresco: 'water', cafe: 'coffee',
   vendaje: 'bandage', jabon: 'bath', cepillo: 'bath', cigarrillo: 'flame',
-  lona: 'tent', madera: 'layers', colchon: 'bed', vela: 'flame', popo: 'alert-triangle'
+  lona: 'tent', madera: 'layers', colchon: 'bed', vela: 'flame', popo: 'alert-triangle',
+  curita: 'bandage', hierba: 'flame', rifa: 'dice', arma: 'wrench'
 };
 export const itemIcon = (id) => ICONS[id] ?? (ITEMS[id]?.cure ? 'pill' : 'box');
 

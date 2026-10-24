@@ -1,5 +1,6 @@
 // src/data/recipes.js
-// Recetas de crafteo: ingredientes (id item -> cantidad) -> resultado
+// Recetas de crafteo: ingredientes (id item -> cantidad) -> resultado.
+// Todos los ingredientes salen de la basura, la tienda o el dealer (ver tests/crafting.test.js).
 
 export const RECIPES = [
   {
@@ -23,19 +24,8 @@ export const RECIPES = [
     qty: 1,
     ingredients: {
       chatarra: 2,
-      alambre: 1,
+      cable: 1,
       madera: 1
-    }
-  },
-  {
-    id: 'mochila',
-    name: 'Mochila',
-    emoji: '🎒',
-    result: 'mochila',
-    qty: 1,
-    ingredients: {
-      tela: 3,
-      alambre: 1
     }
   },
   {
@@ -45,8 +35,8 @@ export const RECIPES = [
     result: 'curita',
     qty: 2,
     ingredients: {
-      tela: 1,
-      plastico: 1
+      botella: 1,
+      carton: 1
     }
   },
   {
@@ -78,7 +68,7 @@ export const RECIPES = [
     result: 'hierba',
     qty: 2,
     ingredients: {
-      tela: 1,
+      carton: 1,
       madera: 1
     }
   }
