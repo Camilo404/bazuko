@@ -51,6 +51,9 @@ test('si el resultado no cabe en el costal no se fabrica ni se pierden materiale
   inventory.maxWeight = inventory.totalWeight;
   assert.equal(crafting.craft(recipe, inventory), null);
   for (const [id, qty] of Object.entries(recipe.ingredients)) assert.equal(inventory.count(id), qty);
+  const shown = crafting.getAvailable(inventory).find((r) => r.id === 'arma');
+  assert.equal(shown.craftable, true);
+  assert.equal(shown.fits, false);
 });
 
 test('fabricar sustancias no deja ganancia al revenderlas al dealer con el mejor talento', () => {

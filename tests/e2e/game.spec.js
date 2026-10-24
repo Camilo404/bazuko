@@ -35,6 +35,20 @@ test('partida nueva, talentos, recetas y edición del personaje', async ({ page 
   await expect(page.locator('#craft-panel')).toHaveClass(/open/);
   await expect(page.locator('#craft-panel')).toContainText('Mesa de Crafteo');
   await expect(page.locator('#craft-panel .craft-recipe').first()).toBeVisible();
+  await expect(page.locator('#craft-panel .craft-go')).toBeDisabled();
+  // Con los materiales de la curita, elegirla y fabricarla desde el banco.
+  await page.evaluate(async () => {
+    const { ITEMS } = await import('/src/data/items.js');
+    window.__game.inventory.add(ITEMS.botella, 1);
+    window.__game.inventory.add(ITEMS.carton, 1);
+  });
+  await page.keyboard.press('C');
+  await page.keyboard.press('C');
+  await page.locator('#craft-panel .craft-recipe[data-id="curita"]').click();
+  await expect(page.locator('#craft-panel .craft-recipe[data-id="curita"]')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#craft-panel .craft-go').click();
+  expect(await page.evaluate(() => window.__game.inventory.count('curita'))).toBe(2);
+  await expect(page.locator('#craft-panel .craft-reason')).toContainText('Te faltan 2 materiales');
   // Un panel abierto pausa el juego: cerrarlo antes de editar la apariencia.
   await page.keyboard.press('Escape');
   await page.keyboard.press('P');

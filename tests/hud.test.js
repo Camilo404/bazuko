@@ -105,3 +105,61 @@ test('paneles estables conservan sus nodos y se refrescan cuando cambia el estad
   assert.equal(hud.craftPanel.writes, 2);
   assert.equal(hud.dealerPanel.writes, 2);
 });
+
+test('la mesa conserva la receta elegida y explica por qué no se puede fabricar', async () => {
+  const { CraftingSystem } = await import('../src/systems/CraftingSystem.js');
+  const { InventorySystem } = await import('../src/systems/InventorySystem.js');
+  const { ITEMS } = await import('../src/data/items.js');
+  const hud = fixture();
+  const crafting = new CraftingSystem();
+  const inventory = new InventorySystem(20);
+  inventory.add(ITEMS.carton, 2); inventory.add(ITEMS.lata, 1);
+
+  hud.renderCrafting(crafting, inventory, null);
+  assert.equal(hud._craftSelected, 'rifa', 'abre en la primera receta lista');
+  assert.match(hud.craftPanel.html, /data-id="rifa" aria-pressed="true"/);
+  assert.match(hud.craftPanel.html, /Listo para fabricar/);
+
+  hud._craftSelected = 'arma';
+  hud.renderCrafting(crafting, inventory, null);
+  hud.renderCrafting(crafting, inventory, null);
+  assert.equal(hud._craftSelected, 'arma', 'la selección sobrevive a los redibujados');
+  assert.match(hud.craftPanel.html, /Te faltan 4 materiales/);
+  assert.match(hud.craftPanel.html, /class="craft-go" data-act="craft" disabled/);
+
+  inventory.add(ITEMS.chatarra, 2); inventory.add(ITEMS.cable, 1); inventory.add(ITEMS.madera, 1);
+  inventory.maxWeight = inventory.totalWeight;
+  hud.renderCrafting(crafting, inventory, null);
+  assert.match(hud.craftPanel.html, /No te cabe en el costal/);
+  assert.match(hud.craftPanel.html, /data-id="arma"[^>]*no cabe en el costal/);
+});
+
+test('fabricar desde el banco descuenta materiales, suma XP y suena una vez', async () => {
+  const { CraftingSystem } = await import('../src/systems/CraftingSystem.js');
+  const { InventorySystem } = await import('../src/systems/InventorySystem.js');
+  const { ITEMS } = await import('../src/data/items.js');
+  const hud = fixture();
+  hud.craftPanel.querySelector = () => null;
+  globalThis.CustomEvent ??= class { constructor(type, init) { this.type = type; this.detail = init?.detail; } };
+  const events = [], sounds = [];
+  let xp = 0;
+  Object.assign(window, { dispatchEvent: (e) => events.push(e.type) });
+  window.__game = { stats: { addXP: (n) => { xp += n; } }, talents: null, audio: { play: (s) => sounds.push(s) } };
+  const crafting = new CraftingSystem();
+  const inventory = new InventorySystem(20);
+  inventory.add(ITEMS.botella, 1); inventory.add(ITEMS.carton, 1);
+  hud.renderCrafting(crafting, inventory, null);
+  hud._craftSelected = 'curita';
+
+  const target = (data) => ({ target: { closest: () => ({ dataset: data }) } });
+  hud._onCraftClick(target({ act: 'craft' }));
+  assert.equal(inventory.count('curita'), 2);
+  assert.equal(inventory.count('botella'), 0);
+  assert.equal(xp, 10);
+  assert.deepEqual(sounds, ['treasure']);
+  assert.deepEqual(events, ['craft']);
+
+  hud._onCraftClick(target({ id: 'hierba' }));
+  assert.equal(hud._craftSelected, 'hierba');
+  assert.match(hud.craftPanel.html, /data-id="hierba" aria-pressed="true"/);
+});

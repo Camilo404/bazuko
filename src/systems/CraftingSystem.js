@@ -41,11 +41,18 @@ export class CraftingSystem {
     return resultItem;
   }
 
-  /** Devuelve todas las recetas marcando si son crafteables */
+  /** ¿Cabe el resultado en el costal? (misma regla que craft) */
+  fits(recipe, inventory) {
+    const resultItem = ITEMS[recipe.result];
+    return !!resultItem && inventory.totalWeight + resultItem.weight * recipe.qty <= inventory.maxWeight;
+  }
+
+  /** Devuelve todas las recetas marcando si son crafteables y si su resultado cabe */
   getAvailable(inventory) {
     return this.recipes.map((r) => ({
       ...r,
-      craftable: this.canCraft(r, inventory)
+      craftable: this.canCraft(r, inventory),
+      fits: this.fits(r, inventory)
     }));
   }
 }
