@@ -63,3 +63,22 @@ test('fabricar sustancias no deja ganancia al revenderlas al dealer con el mejor
     assert.ok(earned < cost, `${recipe.id}: paga ${earned} por materiales de ${cost}`);
   }
 });
+
+test('los objetos de la mesa tienen iconos limpios y acreditados', async () => {
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const { hasItemArt, itemArtHTML } = await import('../src/ui/itemArt.js');
+  const credits = readFileSync(new URL('../docs/iconos.md', import.meta.url), 'utf8');
+  for (const recipe of RECIPES) {
+    for (const id of [recipe.result, ...Object.keys(recipe.ingredients)]) {
+      assert.ok(hasItemArt(id), `${id} no tiene icono`);
+      assert.match(itemArtHTML(id), /item-art" style="--art: url\('[^'"]+\/item-art\/[^'"]+\.svg'\)"/);
+    }
+  }
+  assert.match(itemArtHTML('pan'), /item-art--emoji[^>]*>🍞</);
+  const dir = new URL('../src/ui/item-art/', import.meta.url);
+  for (const file of readdirSync(dir)) {
+    const svg = readFileSync(new URL(file, dir), 'utf8');
+    assert.match(svg, /^<svg [^>]*viewBox="0 0 512 512" fill="currentColor">(<path d="[^"<>]+"\/>)+<\/svg>\s*$/, file);
+    assert.ok(credits.includes(`\`${file}\``), `${file} sin créditos en docs/iconos.md`);
+  }
+});
