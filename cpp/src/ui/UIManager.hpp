@@ -62,6 +62,16 @@ struct TalentOption {
     bool available = false;
 };
 
+struct CambuchePieceOption {
+    std::string id;
+    std::string name;
+    std::string desc;
+    std::string reqText;
+    bool isBuilt = false;
+    bool isLocked = false;
+    bool canBuild = false;
+};
+
 class UIManager {
 public:
     UIManager(GLFWwindow* window);
@@ -93,6 +103,13 @@ public:
     int GetCompanionCoat() const { return m_CompanionCoat; }
     void RenderLoadingScreen(Window& window, float progress, const std::string& stageText, const std::string& tipText = "");
 
+    void OpenCambucheMenu() { m_CambucheMenuOpen = true; }
+    void CloseCambucheMenu() { m_CambucheMenuOpen = false; }
+    bool IsCambucheMenuOpen() const { return m_CambucheMenuOpen; }
+    std::string ConsumeCambucheBuildRequest() { return std::exchange(m_CambucheBuildRequest, {}); }
+    bool ConsumeSleepRequest() { return std::exchange(m_SleepRequest, false); }
+    void RenderCambucheMenu(const std::vector<CambuchePieceOption>& pieces, bool hasBase, bool isNight);
+
     void RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, Renderer& renderer, Window& window,
                    const CityLayout& city, const Simulation& simulation,
                    AudioManager& audio,
@@ -104,7 +121,8 @@ public:
                    const std::vector<CraftingOption>& craftingOptions,
                    const std::vector<InventoryOption>& inventoryOptions, int talentPoints,
                    const std::vector<TalentOption>& talentOptions, bool companionIsFriend,
-                   const std::vector<DealerOption>& dealerOptions);
+                   const std::vector<DealerOption>& dealerOptions,
+                   bool boostActive = false, float boostTimer = 0.0f, float psychosisSeverity = 0.0f);
 
     bool ConsumeSaveRequest();
     bool ConsumeNewGameRequest();
@@ -128,6 +146,9 @@ private:
     bool m_RadioMenuOpen = false;
     bool m_RadioReturnsToPause = false;
     bool m_CraftMenuOpen = false;
+    bool m_CambucheMenuOpen = false;
+    std::string m_CambucheBuildRequest;
+    bool m_SleepRequest = false;
     int m_PauseSection = 0;
     bool m_RadarVisible = true;
     bool m_SaveRequest = false;
@@ -139,6 +160,11 @@ private:
     std::string m_PickupNotification;
     float m_PickupNotificationTimer = 0.0f;
     bool m_PickupNotificationRare = false;
+    float m_WhisperTimer = 5.0f;
+    std::string m_ActiveWhisper;
+    float m_ActiveWhisperTimer = 0.0f;
+    float m_WhisperPosX = 0.5f;
+    float m_WhisperPosY = 0.35f;
     std::string m_CraftRequest;
     size_t m_InventoryUseRequest = static_cast<size_t>(-1);
     size_t m_InventoryDropRequest = static_cast<size_t>(-1);

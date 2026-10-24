@@ -3,3 +3,7 @@ build-*/
 .cache/
 *.o
 *.exe
+win64-deps/
+test_*
+test_*.cpp
+CMakeLists-win64.txt

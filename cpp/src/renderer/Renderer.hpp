@@ -9,6 +9,8 @@
 
 namespace Bazuko {
 
+class Texture;
+
 struct alignas(16) CameraBlockData {
     glm::mat4 view;
     glm::mat4 projection;
@@ -37,7 +39,7 @@ public:
     void BeginScene(const Camera& camera, float time);
     void EndScene();
 
-    void Submit(const Mesh& mesh, const glm::mat4& transform, const glm::vec4& albedo = glm::vec4(1.0f), bool useTexture = false, bool doubleSided = false, const std::vector<glm::mat4>* skinMatrices = nullptr, int alphaMode = 0, float alphaCutoff = 0.5f);
+    void Submit(const Mesh& mesh, const glm::mat4& transform, const glm::vec4& albedo = glm::vec4(1.0f), bool useTexture = false, bool doubleSided = false, const std::vector<glm::mat4>* skinMatrices = nullptr, int alphaMode = 0, float alphaCutoff = 0.5f, const Texture* specularTexture = nullptr);
     void SetWireframe(bool wireframe);
 
     Shader& GetDefaultShader() { return *m_DefaultShader; }

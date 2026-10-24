@@ -1,0 +1,189 @@
+# Blender 4.1.1 MTL File: 'Building01.blend'
+# www.blender.org
+
+newmtl AC_Body
+Ns 360.000000
+Ka 0.163636 0.163636 0.163636
+Kd 0.567421 0.567426 0.567426
+Ks 0.600000 0.600000 0.600000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 3
+
+newmtl AC_Pipes
+Ns 360.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.155253 0.192701 0.254560
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 3
+map_Bump -bm 1.000000 F:/3D Work/3d Models/Textures/AC.png
+
+newmtl BackGroundWindow
+Ns 90.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Bump -bm 1.000000 F:/3D Work/3d Models/Textures/Window/Normal.png
+
+newmtl BlackMetal
+Ns 360.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.014676 0.014676 0.014676
+Ks 0.300000 0.300000 0.300000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 3
+
+newmtl ChimneyPipe
+Ns 422.499969
+Ka 1.000000 1.000000 1.000000
+Kd 0.512736 0.512736 0.512736
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 3
+
+newmtl Concrete
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Ns F:/3D Work/3d Models/Textures/scuffed_cement_4k/scuffed_cement_rough_4k.jpg
+map_Bump -bm 1.000000 F:/3D Work/3d Models/Textures/scuffed_cement_4k/scuffed_cement_nor_gl_4k.jpg
+
+newmtl Foothpath
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd F:/3D Work/Textures/Tiles087_2K-JPG/Tiles087_2K-JPG_Color.jpg
+map_Ns F:/3D Work/Textures/Tiles087_2K-JPG/Tiles087_2K-JPG_Roughness.jpg
+map_Bump -bm 1.000000 F:/3D Work/Textures/Tiles087_2K-JPG/Tiles087_2K-JPG_NormalGL.jpg
+
+newmtl Glass
+Ns 360.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+
+newmtl GrilledFloor
+Ns 360.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.100000 0.100000 0.100000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 3
+map_d F:/3D Work/3d Models/Textures/Stairs/GrilledFloorOpacity.png
+map_Bump -bm 1.000000 F:/3D Work/3d Models/Textures/Stairs/GrilledFloorNormal.png
+
+newmtl Hotel_Board
+Ns 360.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+
+newmtl LampGlass
+Ns 360.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.000000
+d 1.000000
+illum 2
+
+newmtl Metal
+Ns 360.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.030086 0.030086 0.030086
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 3
+
+newmtl Shop01
+Ns 39.999996
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd F:/3D Work/3d Models/Textures/Shops/download (1).jpg
+map_Ke F:/3D Work/3d Models/Textures/Shops/download (1).jpg
+
+newmtl Shop02
+Ns 39.999996
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd F:/3D Work/3d Models/Textures/Shops/clark-street-mercantile-qnKhZJPKFD8-unsplash.jpg
+map_Ke F:/3D Work/3d Models/Textures/Shops/clark-street-mercantile-qnKhZJPKFD8-unsplash.jpg
+
+newmtl Shop03
+Ns 77.385109
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd F:/3D Work/3d Models/Textures/Shops/photo-1441986300917-64674bd600d8.jpg
+map_Ke F:/3D Work/3d Models/Textures/Shops/photo-1441986300917-64674bd600d8.jpg
+
+newmtl StairFence
+Ns 360.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.023920 0.023920 0.023920
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 2
+map_d F:/3D Work/3d Models/Textures/Stairs/GrilledOpacity.png
+map_Bump -bm 1.000000 F:/3D Work/3d Models/Textures/Stairs/GrilledNormal.png
+
+newmtl Wall
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.800000 0.800000 0.800000
+Ke 0.000000 0.000000 0.000000
+Ni 1.450000
+d 1.000000
+illum 2
+map_Ks F:/3D Work/3d Models/Textures/Buildings01/red_brick_03_4k/red_brick_03_spec_4k.jpg
+
+newmtl Wood
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd F:/3D Work/3d Models/Textures/Wood_4K/wood_table_001_diff_4k.jpg
+map_Ns F:/3D Work/3d Models/Textures/Wood_4K/wood_table_001_rough_4k.jpg
+map_Bump -bm 1.000000 F:/3D Work/3d Models/Textures/Wood_4K/wood_table_001_nor_gl_4k.jpg

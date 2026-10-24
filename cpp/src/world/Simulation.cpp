@@ -231,7 +231,7 @@ std::shared_ptr<Mesh> MakeTrashBagMesh(size_t variant) {
 }
 
 Simulation::Simulation(const CityLayout& city, uint32_t seed,
-                       std::function<void(size_t, size_t)> modelLoadProgress)
+                       ModelLoadProgress modelLoadProgress)
     : m_City(city), m_Random(seed) {
     m_PedestrianBody = Mesh::CreateCube({0.34f, 1.05f, 0.25f}, {0.48f, 0.34f, 0.25f, 1.0f});
     m_PedestrianHead = Mesh::CreateCube({0.24f, 0.25f, 0.24f}, {0.62f, 0.46f, 0.34f, 1.0f});
@@ -260,16 +260,16 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
             "car1.opt.glb", "car2.opt.glb", "tm.opt.glb", "cambuche.opt.glb",
             "bolsa.opt.glb", "contenedor.opt.glb", "lamparas.opt.glb", "semaforo.opt.glb"
         }};
-        const size_t totalModelLoads = 1 + outfits.size() * outfits.front().size() + importedFiles.size();
+        const size_t totalModelLoads = 1 + outfits.size() * outfits.front().size() + importedFiles.size() + 9;
         size_t completedModelLoads = 0;
-        const auto reportModelLoad = [&]() {
-            if (modelLoadProgress) modelLoadProgress(++completedModelLoads, totalModelLoads);
+        const auto reportModelLoad = [&](const std::string& name = "") {
+            if (modelLoadProgress) modelLoadProgress(++completedModelLoads, totalModelLoads, name);
         };
 
         std::string animationPath = modelsRoot + "animaciones-actionforge.glb";
         if (!std::filesystem::exists(animationPath)) animationPath = modelsRoot + "animaciones-prueba.glb";
         m_PedestrianAnimation = Model::LoadFromFile(animationPath);
-        reportModelLoad();
+        reportModelLoad("Animaciones de peatones (ActionForge)");
 
         std::unordered_map<std::string, std::shared_ptr<Model>> modelCache;
         for (const auto& outfit : outfits) {
@@ -292,6 +292,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
             if (!appearance.parts.empty() && appearance.parts.front()) {
                 appearance.idleClip = appearance.parts.front()->FindAnimationClip("Idle");
                 appearance.walkClip = appearance.parts.front()->FindAnimationClip("Walk");
+                appearance.sitClip = appearance.idleClip;
                 m_PedestrianAppearances.push_back(std::move(appearance));
             }
         }
@@ -335,8 +336,51 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
                     break;
                 default: break;
             }
-            reportModelLoad();
+            reportModelLoad(importedFiles[index]);
         }
+        m_TreeModel = Model::LoadFromFile(modelsRoot + "Arbol 1/FBX format/conifer_macedonian_pine.fbx");
+        if (m_TreeModel)
+            m_TreeModelFit = FitModelTransform(*m_TreeModel, {2.8f, 5.4f, 2.8f}, 0.0f, true);
+        reportModelLoad("Vegetación: Pino macedonio FBX");
+        m_VendorChairModel = Model::LoadFromFile(
+            modelsRoot + "Silla plastica/plastic+chair.obj", "Chair_lv_1");
+        if (m_VendorChairModel)
+            m_VendorChairModelFit = FitModelTransform(*m_VendorChairModel, {0.54f, 0.74f, 0.52f}, 0.0f, true);
+        reportModelLoad("Mobiliario: Silla plástica");
+        m_GrassModel = Model::LoadFromFile(modelsRoot + "pasto.fbx");
+        if (m_GrassModel)
+            m_GrassModelFit = FitModelTransform(*m_GrassModel, {1.9f, 0.52f, 1.9f}, 0.0f, true);
+        reportModelLoad("Vegetación: Pasto FBX");
+        m_BirdModels[0] = Model::LoadFromFile(modelsRoot + "Ave 1/Woodpecker.gltf");
+        if (m_BirdModels[0])
+            m_BirdModelFits[0] = FitModelTransform(*m_BirdModels[0], {0.42f, 0.18f, 0.30f}, 0.0f, true);
+        reportModelLoad("Fauna: Ave carpintero GLTF");
+        m_BirdModels[1] = Model::LoadFromFile(modelsRoot + "Ave 2/Seagull.gltf");
+        if (m_BirdModels[1])
+            m_BirdModelFits[1] = FitModelTransform(*m_BirdModels[1], {0.72f, 0.22f, 0.38f}, 0.0f, true);
+        reportModelLoad("Fauna: Ave gaviota GLTF");
+        m_RatModel = Model::LoadFromFile(modelsRoot + "Rata/Rat.gltf");
+        if (m_RatModel)
+            m_RatModelFit = FitModelTransform(*m_RatModel, {0.20f, 0.14f, 0.54f}, 0.0f, true);
+        reportModelLoad("Fauna: Rata urbana GLTF");
+        m_PetModel = Model::LoadFromFile(modelsRoot + "mascota.fbx");
+        if (m_PetModel)
+            m_PetModelFit = glm::translate(glm::mat4(1.0f), {0.0f, 0.08f, 0.0f})
+                * FitModelTransform(*m_PetModel, {0.6175f, 0.507f, 0.8125f}, glm::pi<float>(), true);
+        reportModelLoad("Compañero: Mascota canina (El Chato) FBX");
+        m_VendorCartModel = Model::LoadFromFile(modelsRoot + "comida rapida/food+cart.fbx");
+        if (m_VendorCartModel)
+            m_VendorCartModelFit = FitModelTransform(
+                *m_VendorCartModel, {2.0f, 2.1f, 1.6f}, 0.0f, true);
+        reportModelLoad("Puesto de comida rápida FBX");
+        auto importedStreetLamp = Model::LoadFromFile(
+            modelsRoot + "luminaria/street+light.fbx", {}, "Plane.002", 620.0f);
+        if (importedStreetLamp) {
+            m_StreetLampModel = std::move(importedStreetLamp);
+            m_StreetLampModelFit = FitModelTransform(
+                *m_StreetLampModel, {2.163f, 4.2f, 0.53f}, 0.0f, true);
+        }
+        reportModelLoad("Luminaria urbana FBX");
     }
     m_CarBody = Mesh::CreateRoundedBox({4.3f, 0.78f, 1.76f}, 0.22f, 3);
     m_CarCabin = Mesh::CreateRoundedBox({2.25f, 0.62f, 1.62f}, 0.20f, 3, {0.035f, 0.045f, 0.06f, 1.0f});
@@ -394,6 +438,14 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
     m_RecyclerSack = Mesh::CreateRoundedBox({0.55f, 0.72f, 0.52f}, 0.18f, 2, {0.74f, 0.71f, 0.61f, 1.0f});
     m_RecyclerScale = Mesh::CreateCube({0.55f, 0.08f, 0.55f}, {0.52f, 0.55f, 0.57f, 1.0f});
     m_DealerLantern = Mesh::CreateRoundedBox({0.24f, 0.24f, 0.24f}, 0.10f, 2, {0.62f, 0.22f, 0.83f, 1.0f});
+    m_CambucheBaseMesh = Mesh::CreateCube({2.8f, 0.08f, 2.2f}, {0.66f, 0.52f, 0.35f, 1.0f});
+    m_CambucheMarkerMesh = Mesh::CreateCube({0.8f, 0.04f, 0.6f}, {0.55f, 0.42f, 0.28f, 1.0f});
+    m_CambucheFireMesh = Mesh::CreateCylinder(0.12f, 0.25f, 8, {1.0f, 0.52f, 0.12f, 1.0f});
+    m_CambucheBedMesh = Mesh::CreateRoundedBox({0.95f, 0.18f, 1.9f}, 0.04f, 2, {0.62f, 0.60f, 0.52f, 1.0f});
+    m_ShadowHeadMesh = Mesh::CreateRoundedBox({0.35f, 0.38f, 0.35f}, 0.12f, 2, {0.03f, 0.03f, 0.04f, 1.0f});
+    m_ShadowEyeMesh = Mesh::CreateCube({0.06f, 0.04f, 0.06f}, {1.0f, 0.12f, 0.12f, 1.0f});
+    m_ShadowTorsoMesh = Mesh::CreateRoundedBox({0.42f, 0.85f, 0.28f}, 0.08f, 2, {0.03f, 0.03f, 0.04f, 1.0f});
+    m_ShadowLegMesh = Mesh::CreateCylinder(0.08f, 0.80f, 6, {0.03f, 0.03f, 0.04f, 1.0f});
     std::uniform_real_distribution<float> rainHorizontal(-13.0f, 13.0f);
     std::uniform_real_distribution<float> rainHeight(0.0f, 16.0f);
     for (size_t drop = 0; drop < 48; ++drop) {
@@ -411,7 +463,12 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
                                   0.0f,
                                   (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT);
             m_GrassPositions.push_back(point);
-            if ((x * 7 + z * 13) % 11 == 0) m_TreePositions.push_back(point);
+            const bool treeTile = (x * 7 + z * 13) % 11 == 0;
+            const bool treeHasRoom = std::all_of(m_TreePositions.begin(), m_TreePositions.end(),
+                [&](const glm::vec3& tree) {
+                    return glm::distance(glm::vec2(tree.x, tree.z), glm::vec2(point.x, point.z)) >= 6.0f;
+                });
+            if (treeTile && treeHasRoom) m_TreePositions.push_back(point);
             for (size_t parkIndex = 0; parkIndex < parkBounds.size(); ++parkIndex) {
                 const auto& bounds = parkBounds[parkIndex];
                 if (x >= bounds[0] && x <= bounds[1] && z >= bounds[2] && z <= bounds[3]) {
@@ -428,32 +485,74 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
             const glm::vec3 point = grass[grassIndex];
             const float offset = static_cast<float>(pigeonIndex % 4) * 0.07f;
             m_Pigeons.push_back({point + glm::vec3(offset, 0.0f, -offset), point, 0.0f,
-                                 static_cast<float>(parkIndex * 10 + pigeonIndex) * 0.83f, parkIndex});
+                                 static_cast<float>(parkIndex * 10 + pigeonIndex) * 0.83f, parkIndex,
+                                 (parkIndex + pigeonIndex) % m_BirdModels.size(), 0.0f});
         }
+    }
+    for (int z = 1; z < CityLayout::HEIGHT - 1; ++z) {
+        for (int x = 1; x < CityLayout::WIDTH - 1; ++x) {
+            if (m_City.GetTileAt(x, z) != TileType::Sidewalk) continue;
+            const bool besideRoad = m_City.GetTileAt(x - 1, z) == TileType::Road
+                || m_City.GetTileAt(x + 1, z) == TileType::Road
+                || m_City.GetTileAt(x, z - 1) == TileType::Road
+                || m_City.GetTileAt(x, z + 1) == TileType::Road;
+            if (!besideRoad) continue;
+            m_RatWalkPoints.emplace_back((x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
+                                         0.15f,
+                                         (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT);
+        }
+    }
+    std::vector<glm::vec3> selectedRatPoints;
+    for (size_t attempt = 0; attempt < 80 && selectedRatPoints.size() < 6 && !m_RatWalkPoints.empty(); ++attempt) {
+        std::uniform_int_distribution<size_t> choosePoint(0, m_RatWalkPoints.size() - 1);
+        const glm::vec3 point = m_RatWalkPoints[choosePoint(m_Random)];
+        const bool tooClose = std::any_of(selectedRatPoints.begin(), selectedRatPoints.end(),
+            [&](const glm::vec3& rat) {
+                return glm::distance(glm::vec2(rat.x, rat.z), glm::vec2(point.x, point.z)) < 20.0f;
+            });
+        if (tooClose) continue;
+        selectedRatPoints.push_back(point);
+        m_Rats.push_back({point, point, 0.0f, 0.0f, 0.0f, 0.5f + m_Unit(m_Random) * 1.5f, m_Unit(m_Random) * 10.0f, 0.0f, RatState::Idle, 0.0f});
     }
     for (size_t variant = 0; variant < 8; ++variant) {
         m_PickupMeshes.push_back(MakeTrashBagMesh(variant));
     }
-    for (int z = 2; z < CityLayout::HEIGHT - 2; z += 7) {
-        for (int x = 2; x < CityLayout::WIDTH - 2; x += 7) {
+    // Postes de luz: cuadrícula cada 14 tiles (28 m), mínimo 18 m entre postes
+    for (int z = 2; z < CityLayout::HEIGHT - 2; z += 14) {
+        for (int x = 2; x < CityLayout::WIDTH - 2; x += 14) {
             bool placed = false;
-            for (int dz = 0; dz < 7 && !placed; ++dz) for (int dx = 0; dx < 7 && !placed; ++dx) {
+            for (int dz = 0; dz < 14 && !placed; ++dz) for (int dx = 0; dx < 14 && !placed; ++dx) {
                 const int tx = x + dx, tz = z + dz;
                 if (m_City.GetTileAt(tx, tz) != TileType::Sidewalk) continue;
                 const bool adjacentToRoad = m_City.GetTileAt(tx + 1, tz) == TileType::Road || m_City.GetTileAt(tx - 1, tz) == TileType::Road ||
                     m_City.GetTileAt(tx, tz + 1) == TileType::Road || m_City.GetTileAt(tx, tz - 1) == TileType::Road;
                 if (!adjacentToRoad) continue;
-                m_StreetLamps.emplace_back((tx + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH, 0.0f,
+                const glm::vec3 candidate(
+                    (tx + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH, 0.0f,
                     (tz + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT);
+                // Garantizar separación mínima real de 18 m entre postes
+                const bool tooClose = std::any_of(m_StreetLamps.begin(), m_StreetLamps.end(),
+                    [&](const StreetLamp& lamp) {
+                        return glm::distance(glm::vec2(lamp.position.x, lamp.position.z),
+                                             glm::vec2(candidate.x, candidate.z)) < 18.0f;
+                    });
+                if (tooClose) continue;
+                glm::vec2 roadDirection(0.0f);
+                if (m_City.GetTileAt(tx - 1, tz) == TileType::Road) roadDirection.x = -1.0f;
+                else if (m_City.GetTileAt(tx + 1, tz) == TileType::Road) roadDirection.x = 1.0f;
+                else if (m_City.GetTileAt(tx, tz - 1) == TileType::Road) roadDirection.y = -1.0f;
+                else roadDirection.y = 1.0f;
+                m_StreetLamps.push_back({candidate, std::atan2(-roadDirection.y, roadDirection.x)});
                 placed = true;
             }
         }
     }
-    for (int z = 4; z < CityLayout::HEIGHT - 4 && m_Pickups.size() < 12; z += 9) {
-        for (int x = 4; x < CityLayout::WIDTH - 4 && m_Pickups.size() < 12; x += 11) {
+    // Contenedores de basura fijos (solo andén junto a calle, sin bloqueo)
+    for (int z = 4; z < CityLayout::HEIGHT - 4 && m_Pickups.size() < 10; z += 18) {
+        for (int x = 4; x < CityLayout::WIDTH - 4 && m_Pickups.size() < 10; x += 20) {
             bool placed = false;
-            for (int dz = 0; dz < 9 && !placed; ++dz) {
-                for (int dx = 0; dx < 11 && !placed; ++dx) {
+            for (int dz = 0; dz < 18 && !placed; ++dz) {
+                for (int dx = 0; dx < 20 && !placed; ++dx) {
                     const int tx = x + dx;
                     const int tz = z + dz;
                     if (m_City.GetTileAt(tx, tz) != TileType::Sidewalk) continue;
@@ -466,10 +565,18 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
                     const glm::vec3 position((tx + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
                                              0.0f,
                                              (tz + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT);
+                    // Descartar si hay obstáculo o poste muy cerca
+                    if (m_City.IsBlocked(position.x, position.z, 0.55f)) continue;
+                    const bool tooCloseToLamp = std::any_of(m_StreetLamps.begin(), m_StreetLamps.end(),
+                        [&](const StreetLamp& lamp) {
+                            return glm::distance(glm::vec2(lamp.position.x, lamp.position.z),
+                                                 glm::vec2(position.x, position.z)) < 1.8f;
+                        });
+                    if (tooCloseToLamp) continue;
                     const bool separated = std::all_of(m_Pickups.begin(), m_Pickups.end(),
                         [&](const PickupItem& pickup) {
                             return glm::distance(glm::vec2(pickup.position.x, pickup.position.z),
-                                                 glm::vec2(position.x, position.z)) >= 5.0f;
+                                                 glm::vec2(position.x, position.z)) >= 12.0f;
                         });
                     if (!separated) continue;
                     const size_t itemIndex = static_cast<size_t>(m_Unit(m_Random) * 8.0f);
@@ -477,6 +584,59 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
                     placed = true;
                 }
             }
+        }
+    }
+    // Precomputar puntos de andén válidos para aparición de basura dinámica
+    // Solo andenes junto a calles, sin bloqueo ni postes cerca
+    for (int z = 1; z < CityLayout::HEIGHT - 1; ++z) {
+        for (int x = 1; x < CityLayout::WIDTH - 1; ++x) {
+            if (m_City.GetTileAt(x, z) != TileType::Sidewalk) continue;
+            const bool adjacentToRoad =
+                m_City.GetTileAt(x + 1, z) == TileType::Road ||
+                m_City.GetTileAt(x - 1, z) == TileType::Road ||
+                m_City.GetTileAt(x, z + 1) == TileType::Road ||
+                m_City.GetTileAt(x, z - 1) == TileType::Road;
+            if (!adjacentToRoad) continue;
+            const glm::vec3 pos(
+                (x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
+                0.0f,
+                (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT);
+            // Descartar si bloqueado por edificio, pared u objeto
+            if (m_City.IsBlocked(pos.x, pos.z, 0.55f)) continue;
+            // Descartar si es un tile de parque o hierba (solo andenes urbanos)
+            const TileType northTile = m_City.GetTileAt(x, z - 1);
+            const TileType southTile = m_City.GetTileAt(x, z + 1);
+            const TileType westTile  = m_City.GetTileAt(x - 1, z);
+            const TileType eastTile  = m_City.GetTileAt(x + 1, z);
+            const bool nextToGrass = northTile == TileType::Grass || southTile == TileType::Grass
+                                  || westTile  == TileType::Grass || eastTile  == TileType::Grass;
+            if (nextToGrass) continue;
+            // Descartar muy cerca de un poste
+            const bool nearLamp = std::any_of(m_StreetLamps.begin(), m_StreetLamps.end(),
+                [&](const StreetLamp& lamp) {
+                    return glm::distance(glm::vec2(lamp.position.x, lamp.position.z),
+                                         glm::vec2(pos.x, pos.z)) < 1.6f;
+                });
+            if (nearLamp) continue;
+            m_ValidTrashSpots.push_back(pos);
+        }
+    }
+    // Mezclar la lista para evitar patrones repetidos al spawnar
+    std::shuffle(m_ValidTrashSpots.begin(), m_ValidTrashSpots.end(), m_Random);
+    // Llenado inicial: colocar ~28 bolsas repartidas por la lista de spots válidos
+    // Toma 1 de cada N spots para distribuirlas por toda la ciudad
+    if (!m_ValidTrashSpots.empty()) {
+        constexpr size_t TARGET_INITIAL = 28;
+        const size_t step = std::max(size_t(1), m_ValidTrashSpots.size() / TARGET_INITIAL);
+        size_t placed = 0;
+        for (size_t i = 0; i < m_ValidTrashSpots.size() && placed < TARGET_INITIAL; i += step) {
+            const glm::vec3& spot = m_ValidTrashSpots[i];
+            const bool overlapping = std::any_of(m_Pickups.begin(), m_Pickups.end(),
+                [&](const PickupItem& p) { return glm::distance(p.position, spot) < 3.0f; });
+            if (overlapping) continue;
+            const size_t variant = (placed * 13 + i * 7) % m_PickupMeshes.size(); // determinista
+            m_Pickups.push_back({variant, spot, false, true, 0.0f});
+            ++placed;
         }
     }
     const auto worldTile = [](float tile, int count) {
@@ -1042,6 +1202,7 @@ void Simulation::Update(float dt, const glm::vec3& playerPosition) {
     }
     UpdatePedestrians(dt, playerPosition);
     UpdatePigeons(dt, playerPosition);
+    UpdateRats(dt, playerPosition);
     UpdatePoop(dt);
     UpdateTraffic(dt);
     UpdateBus(dt);
@@ -1074,7 +1235,10 @@ void Simulation::UpdatePigeons(float dt, const glm::vec3& playerPosition) {
         }
         const glm::vec3 delta = pigeon.target - pigeon.position;
         const float distance = glm::length(delta);
-        if (distance > 0.01f) pigeon.position += delta * std::min(1.0f, 4.0f * dt / distance);
+        if (distance > 0.01f) {
+            pigeon.yaw = std::atan2(delta.x, delta.z);
+            pigeon.position += delta * std::min(1.0f, 4.0f * dt / distance);
+        }
         pigeon.flightRemaining = std::max(0.0f, pigeon.flightRemaining - dt);
         if (pigeon.flightRemaining <= 0.0f) {
             pigeon.position = pigeon.target;
@@ -1082,6 +1246,178 @@ void Simulation::UpdatePigeons(float dt, const glm::vec3& playerPosition) {
         }
     }
 }
+
+void Simulation::UpdateRats(float dt, const glm::vec3& playerPosition) {
+    if (dt <= 0.0f) return;
+
+    for (Rat& rat : m_Rats) {
+        rat.animTime += dt;
+
+        // 1. Detectar amenazas cercanas (jugador o peatones)
+        float threatDistance = glm::distance(glm::vec2(playerPosition.x, playerPosition.z),
+                                             glm::vec2(rat.position.x, rat.position.z));
+        glm::vec2 threatPos(playerPosition.x, playerPosition.z);
+
+        for (const auto& pedestrian : m_Pedestrians) {
+            const float pedDist = glm::distance(glm::vec2(pedestrian.position.x, pedestrian.position.z),
+                                                glm::vec2(rat.position.x, rat.position.z));
+            if (pedDist < threatDistance) {
+                threatDistance = pedDist;
+                threatPos = glm::vec2(pedestrian.position.x, pedestrian.position.z);
+            }
+        }
+
+        // Si una persona está demasiado cerca (< 3.2m), la rata entra en pánico (Fleeing)
+        if (threatDistance < 3.2f) {
+            rat.state = RatState::Fleeing;
+            rat.fleeRemaining = 2.0f + m_Unit(m_Random) * 1.2f;
+
+            // Huir en dirección contraria a la amenaza con zigzag aleatorio
+            glm::vec2 away = glm::vec2(rat.position.x, rat.position.z) - threatPos;
+            if (glm::length(away) > 0.001f) {
+                away = glm::normalize(away);
+            } else {
+                away = glm::vec2(1.0f, 0.0f);
+            }
+            const float zigzag = (m_Unit(m_Random) - 0.5f) * 0.9f;
+            glm::vec2 fleeDir = glm::normalize(away + glm::vec2(-away.y, away.x) * zigzag);
+
+            bool foundEscape = false;
+            for (float dist = 6.5f; dist >= 2.5f; dist -= 1.0f) {
+                glm::vec3 candidate = rat.position + glm::vec3(fleeDir.x * dist, 0.0f, fleeDir.y * dist);
+                if (m_City.IsSidewalk(candidate.x, candidate.z) && !m_City.IsBlocked(candidate.x, candidate.z, 0.2f)) {
+                    rat.target = candidate;
+                    foundEscape = true;
+                    break;
+                }
+            }
+            if (!foundEscape) {
+                glm::vec3 escPoint;
+                if (FindSidewalkPoint(escPoint, rat.position, 5.0f)) {
+                    rat.target = escPoint;
+                }
+            }
+            rat.speed = 4.0f + m_Unit(m_Random) * 1.4f; // Huida veloz (4.0 - 5.4 m/s)
+        }
+
+        // 2. Máquina de estados
+        if (rat.state == RatState::Fleeing) {
+            rat.fleeRemaining -= dt;
+            if (rat.fleeRemaining <= 0.0f && threatDistance > 4.8f) {
+                // Escapó de la amenaza: parar a olfatear en alerta
+                rat.state = RatState::Idle;
+                rat.stateTimer = 0.8f + m_Unit(m_Random) * 1.0f;
+                rat.speed = 0.0f;
+            }
+        } else if (rat.state == RatState::Idle) {
+            rat.stateTimer -= dt;
+            rat.speed = 0.0f;
+            // Movimiento nervioso de olfateo
+            rat.sniffOffset = std::sin(rat.animTime * 14.0f) * 0.30f;
+
+            if (rat.stateTimer <= 0.0f) {
+                // Comprobar si hay bolsas de basura o canecas cerca para husmear
+                const PickupItem* nearbyTrash = nullptr;
+                float closestTrashDist = 8.0f;
+                for (const auto& pickup : m_Pickups) {
+                    if (!pickup.available) continue;
+                    float d = glm::distance(glm::vec2(pickup.position.x, pickup.position.z),
+                                            glm::vec2(rat.position.x, rat.position.z));
+                    if (d < closestTrashDist) {
+                        closestTrashDist = d;
+                        nearbyTrash = &pickup;
+                    }
+                }
+
+                if (nearbyTrash && m_Unit(m_Random) < 0.45f) {
+                    // Scurry hacia la basura
+                    glm::vec3 trashTarget;
+                    if (FindSidewalkPoint(trashTarget, nearbyTrash->position, 0.9f)) {
+                        rat.target = trashTarget;
+                        rat.state = RatState::Scurrying;
+                        rat.speed = 2.4f + m_Unit(m_Random) * 1.0f;
+                        rat.stateTimer = 2.5f;
+                    }
+                } else {
+                    // Correr en ráfaga hacia otro punto del andén (en 2D libre, no una línea recta)
+                    glm::vec3 newTarget;
+                    if (FindSidewalkPoint(newTarget, rat.position, 5.5f)) {
+                        rat.target = newTarget;
+                        rat.state = RatState::Scurrying;
+                        rat.speed = 2.2f + m_Unit(m_Random) * 1.2f;
+                        rat.stateTimer = 1.8f + m_Unit(m_Random) * 1.2f;
+                    } else {
+                        rat.stateTimer = 0.4f;
+                    }
+                }
+            }
+        } else if (rat.state == RatState::Scavenging) {
+            rat.stateTimer -= dt;
+            rat.speed = 0.0f;
+            // Husmeando basura: pequeños espasmos de cabeza
+            rat.sniffOffset = std::sin(rat.animTime * 18.0f) * 0.20f;
+
+            if (rat.stateTimer <= 0.0f) {
+                rat.state = RatState::Idle;
+                rat.stateTimer = 0.5f + m_Unit(m_Random) * 0.8f;
+            }
+        } else if (rat.state == RatState::Scurrying) {
+            rat.stateTimer -= dt;
+
+            float distToTarget = glm::distance(glm::vec2(rat.position.x, rat.position.z),
+                                               glm::vec2(rat.target.x, rat.target.z));
+            if (distToTarget < 0.25f || rat.stateTimer <= 0.0f) {
+                // Verificar si llegó cerca de basura
+                bool nearGarbage = false;
+                for (const auto& pickup : m_Pickups) {
+                    if (pickup.available && glm::distance(glm::vec2(pickup.position.x, pickup.position.z),
+                                                          glm::vec2(rat.position.x, rat.position.z)) < 1.3f) {
+                        nearGarbage = true;
+                        break;
+                    }
+                }
+                if (nearGarbage && m_Unit(m_Random) < 0.70f) {
+                    rat.state = RatState::Scavenging;
+                    rat.stateTimer = 2.0f + m_Unit(m_Random) * 2.5f;
+                } else {
+                    rat.state = RatState::Idle;
+                    rat.stateTimer = 0.5f + m_Unit(m_Random) * 1.3f;
+                }
+                rat.speed = 0.0f;
+            }
+        }
+
+        // 3. Movimiento y rotación
+        if (rat.speed > 0.05f) {
+            glm::vec2 toTarget(rat.target.x - rat.position.x, rat.target.z - rat.position.z);
+            const float dist = glm::length(toTarget);
+            if (dist > 0.01f) {
+                glm::vec2 dir = toTarget / dist;
+
+                // Suavizar giro hacia el objetivo
+                const float desiredYaw = std::atan2(dir.x, dir.y);
+                float angleDiff = desiredYaw - rat.yaw;
+                while (angleDiff > glm::pi<float>()) angleDiff -= glm::two_pi<float>();
+                while (angleDiff < -glm::pi<float>()) angleDiff += glm::two_pi<float>();
+                rat.yaw += angleDiff * std::min(1.0f, 15.0f * dt);
+
+                // Desplazamiento
+                const float move = std::min(rat.speed * dt, dist);
+                const glm::vec3 nextPos = rat.position + glm::vec3(dir.x * move, 0.0f, dir.y * move);
+
+                if (m_City.IsSidewalk(nextPos.x, nextPos.z) && !m_City.IsBlocked(nextPos.x, nextPos.z, 0.15f)) {
+                    rat.position = nextPos;
+                } else {
+                    // Detenerse ante bordes o muros y volver a Idle para reevaluar ruta
+                    rat.state = RatState::Idle;
+                    rat.stateTimer = 0.3f;
+                    rat.speed = 0.0f;
+                }
+            }
+        }
+    }
+}
+
 
 void Simulation::UpdatePoop(float dt) {
     for (auto projectile = m_PoopProjectiles.begin(); projectile != m_PoopProjectiles.end();) {
@@ -1130,26 +1466,52 @@ void Simulation::UpdatePoop(float dt) {
 }
 
 void Simulation::UpdatePickups(float dt, const glm::vec3& playerPosition) {
+    // Reactivar contenedores vacíos después del enfriamiento
     for (auto& pickup : m_Pickups) {
         if (!pickup.container || pickup.available) continue;
         pickup.cooldownRemaining = std::max(0.0f, pickup.cooldownRemaining - dt);
         if (pickup.cooldownRemaining <= 0.0f) pickup.available = true;
     }
     m_PickupSpawnTimer -= dt;
-    if (m_Pickups.size() >= 32 || m_PickupSpawnTimer > 0.0f) return;
-    for (int attempt = 0; attempt < 30; ++attempt) {
-        const float angle = m_Unit(m_Random) * glm::two_pi<float>();
-        const float distance = 4.0f + m_Unit(m_Random) * 24.0f;
-        glm::vec3 point = playerPosition + glm::vec3(std::cos(angle) * distance, 0.0f, std::sin(angle) * distance);
-        if (!m_City.IsWalkable(point.x, point.z) || m_City.IsRoad(point.x, point.z)) continue;
-        bool overlapping = false;
-        for (const auto& pickup : m_Pickups) if (glm::distance(pickup.position, point) < 2.0f) overlapping = true;
+    // Contar solo bolsas dinámicas (los contenedores fijos no cuentan)
+    const size_t dynamicBags = std::count_if(m_Pickups.begin(), m_Pickups.end(),
+        [](const PickupItem& p) { return !p.container; });
+    if (dynamicBags >= 35 || m_PickupSpawnTimer > 0.0f || m_ValidTrashSpots.empty()) return;
+
+    const glm::vec2 playerXZ(playerPosition.x, playerPosition.z);
+    static size_t s_SpotCursor = 0;
+    const size_t spotCount = m_ValidTrashSpots.size();
+    // Limitar iteraciones por frame para no bloquear el hilo principal
+    const size_t maxTries = std::min(spotCount, size_t(400));
+    size_t tried = 0;
+    while (tried < maxTries) {
+        const glm::vec3& spot = m_ValidTrashSpots[s_SpotCursor % spotCount];
+        ++s_SpotCursor;
+        ++tried;
+        const glm::vec2 toSpot(spot.x - playerXZ.x, spot.z - playerXZ.y);
+        const float dist = glm::length(toSpot);
+        // No aparece a menos de 12 m del jugador
+        if (dist < 12.0f) continue;
+        // No aparece justo delante del jugador si está muy cerca (8–25 m)
+        if (dist < 25.0f) {
+            const float dot = (dist > 0.01f)
+                ? glm::dot(glm::normalize(toSpot), m_PlayerFacing)
+                : 0.0f;
+            if (dot > 0.65f) continue; // dentro del FOV frontal estrecho
+        }
+        // No solapar con otra bolsa existente
+        const bool overlapping = std::any_of(m_Pickups.begin(), m_Pickups.end(),
+            [&](const PickupItem& p) { return !p.container && glm::distance(p.position, spot) < 2.5f; });
         if (overlapping) continue;
-        m_Pickups.push_back({static_cast<size_t>(m_Unit(m_Random) * m_PickupMeshes.size()) % m_PickupMeshes.size(), point});
-        m_PickupSpawnTimer = 1.8f;
+        // Colocar bolsa
+        const size_t variant = static_cast<size_t>(m_Unit(m_Random) * m_PickupMeshes.size()) % m_PickupMeshes.size();
+        m_Pickups.push_back({variant, spot, false, true, 0.0f});
+        // Reaparición: 5–12 s (ciudad sucia pero no instantánea)
+        m_PickupSpawnTimer = 5.0f + m_Unit(m_Random) * 7.0f;
         return;
     }
-    m_PickupSpawnTimer = 0.5f;
+    // No se encontró spot adecuado; reintento en 3 s
+    m_PickupSpawnTimer = 3.0f;
 }
 
 std::vector<PickupItem> Simulation::CollectPickups(const glm::vec3& position, float radius) {
@@ -1175,12 +1537,23 @@ void Simulation::UpdatePedestrians(float dt, const glm::vec3& playerPosition) {
     m_PedestrianSpawnTimer -= dt;
     const size_t populationLimit = IsNight() ? 9 : 22;
     if (m_Pedestrians.size() < populationLimit && m_PedestrianSpawnTimer <= 0.0f) {
-        glm::vec3 spawn;
-        if (FindSidewalkPoint(spawn, playerPosition, 48.0f)) {
+        glm::vec3 spawn(0.0f);
+        bool foundSpawn = false;
+        for (int attempt = 0; attempt < 60 && !foundSpawn; ++attempt) {
+            const float angle = m_Unit(m_Random) * glm::two_pi<float>();
+            const float distance = 58.0f + m_Unit(m_Random) * 12.0f;
+            const glm::vec3 candidate = playerPosition
+                + glm::vec3(std::cos(angle) * distance, 0.0f, std::sin(angle) * distance);
+            if (!m_City.IsSidewalk(candidate.x, candidate.z)
+                || m_City.IsBlocked(candidate.x, candidate.z, 0.25f)) continue;
+            spawn = candidate;
+            foundSpawn = true;
+        }
+        if (foundSpawn) {
             Pedestrian pedestrian;
             pedestrian.position = spawn;
             glm::vec3 destination;
-            if (FindSidewalkPoint(destination, spawn, 22.0f) && FindSidewalkPath(spawn, destination, pedestrian.route)) {
+            if (FindSidewalkPoint(destination, spawn, 48.0f) && FindSidewalkPath(spawn, destination, pedestrian.route)) {
                 pedestrian.target = pedestrian.route.front();
                 pedestrian.nextWaypoint = 1;
             } else {
@@ -1227,7 +1600,7 @@ void Simulation::UpdatePedestrians(float dt, const glm::vec3& playerPosition) {
                 glm::vec3 destination;
                 pedestrian.route.clear();
                 pedestrian.nextWaypoint = 0;
-                if (FindSidewalkPoint(destination, pedestrian.position, 24.0f) && FindSidewalkPath(pedestrian.position, destination, pedestrian.route)) {
+                if (FindSidewalkPoint(destination, pedestrian.position, 48.0f) && FindSidewalkPath(pedestrian.position, destination, pedestrian.route)) {
                     pedestrian.target = pedestrian.route.front();
                     pedestrian.nextWaypoint = 1;
                 } else pedestrian.target = pedestrian.position;
@@ -1247,13 +1620,13 @@ void Simulation::UpdatePedestrians(float dt, const glm::vec3& playerPosition) {
             pedestrian.route.clear();
             pedestrian.nextWaypoint = 0;
             glm::vec3 destination;
-            if (FindSidewalkPoint(destination, pedestrian.position, 12.0f) && FindSidewalkPath(pedestrian.position, destination, pedestrian.route)) {
+            if (FindSidewalkPoint(destination, pedestrian.position, 32.0f) && FindSidewalkPath(pedestrian.position, destination, pedestrian.route)) {
                 pedestrian.target = pedestrian.route.front();
                 pedestrian.nextWaypoint = 1;
             } else pedestrian.target = pedestrian.position;
         }
     }
-    std::erase_if(m_Pedestrians, [&](const Pedestrian& pedestrian) { return glm::distance(pedestrian.position, playerPosition) > 72.0f; });
+    std::erase_if(m_Pedestrians, [&](const Pedestrian& pedestrian) { return glm::distance(pedestrian.position, playerPosition) > 96.0f; });
 }
 
 void Simulation::UpdateTraffic(float dt) {
@@ -1263,9 +1636,28 @@ void Simulation::UpdateTraffic(float dt) {
     constexpr float acceleration = 1.8f;
     constexpr float gap = 1.8f;
     constexpr float probeStep = 0.5f;
+    std::vector<bool> previouslyYielding(m_Traffic.size(), false);
+    const auto hasPriority = [&](size_t first, size_t second) {
+        if (previouslyYielding[first] != previouslyYielding[second])
+            return static_cast<bool>(previouslyYielding[second]);
+        const auto signalPriority = [&](const TrafficVehicle& vehicle) {
+            const glm::vec2 direction(vehicle.direction.x, vehicle.direction.z);
+            const size_t axis = std::abs(direction.x) >= std::abs(direction.y) ? 0 : 1;
+            const size_t state = GetSignalState(m_Elapsed, axis);
+            return state == 0 ? 2 : state == 1 ? 1 : 0;
+        };
+        const int firstPriority = signalPriority(m_Traffic[first]);
+        const int secondPriority = signalPriority(m_Traffic[second]);
+        if (firstPriority != secondPriority) return firstPriority > secondPriority;
+        if (std::abs(m_Traffic[first].speed - m_Traffic[second].speed) > 0.1f)
+            return m_Traffic[first].speed > m_Traffic[second].speed;
+        return first < second;
+    };
     float remaining = std::min(dt, 0.5f);
     while (remaining > 1e-8f) {
         const float stepTime = std::min(remaining, 0.05f);
+        for (size_t index = 0; index < m_Traffic.size(); ++index)
+            previouslyYielding[index] = m_Traffic[index].yieldingForTraffic;
         for (auto& vehicle : m_Traffic) {
             float clearance = std::numeric_limits<float>::infinity();
             bool stoppedForPerson = false;
@@ -1307,6 +1699,13 @@ void Simulation::UpdateTraffic(float dt) {
                     const auto& other = m_Traffic[otherIndex];
                     if (otherIndex == vehicleIndex || (other.routeIndex == vehicle.routeIndex)
                         || (otherIndex > vehicleIndex && other.speed > 0.1f)) continue;
+                    const bool alreadyOverlapping = OrientedBoxesOverlap(
+                        vehicle.position, forward, vehicle.length, vehicle.width,
+                        other.position, {other.direction.x, other.direction.z},
+                        other.length, other.width);
+                    if (other.yieldingForTraffic && hasPriority(vehicleIndex, otherIndex)) continue;
+                    if (alreadyOverlapping && other.speed <= 0.1f
+                        && hasPriority(vehicleIndex, otherIndex)) continue;
                     if (OrientedBoxesOverlap(probePosition, probeForward, vehicle.length, vehicle.width,
                                              other.position, {other.direction.x, other.direction.z},
                                              other.length, other.width)) {
@@ -1366,6 +1765,7 @@ void Simulation::UpdateTraffic(float dt) {
             vehicle.nextDistance = std::fmod(vehicle.distance + travel, routeLength);
             vehicle.nextSpeed = travel / stepTime;
         }
+        for (auto& vehicle : m_Traffic) vehicle.yieldingForTraffic = false;
         for (size_t first = 0; first < m_Traffic.size(); ++first) {
             auto& a = m_Traffic[first];
             glm::vec3 predictedA, directionA;
@@ -1380,17 +1780,16 @@ void Simulation::UpdateTraffic(float dt) {
                               predictedB, directionB, waypointB);
                 if (!OrientedBoxesOverlap(predictedA, {directionA.x, directionA.z}, a.length, a.width,
                                           predictedB, {directionB.x, directionB.z}, b.length, b.width)) continue;
-                const bool aMoving = a.nextSpeed > 0.05f;
-                const bool bMoving = b.nextSpeed > 0.05f;
-                if (aMoving && !bMoving) {
+                const size_t aIndex = first;
+                const size_t bIndex = second;
+                if (hasPriority(aIndex, bIndex)) {
+                    b.nextDistance = b.distance;
+                    b.nextSpeed = 0.0f;
+                    b.yieldingForTraffic = true;
+                } else {
                     a.nextDistance = a.distance;
                     a.nextSpeed = 0.0f;
-                } else if (bMoving && !aMoving) {
-                    b.nextDistance = b.distance;
-                    b.nextSpeed = 0.0f;
-                } else {
-                    b.nextDistance = b.distance;
-                    b.nextSpeed = 0.0f;
+                    a.yieldingForTraffic = true;
                 }
             }
         }
@@ -1548,25 +1947,83 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
             renderer.Submit(*m_BusStationPost, post);
         }
     }
-    if (m_ShelterModel &&
-        glm::distance(glm::vec2(focusPosition.x, focusPosition.z), glm::vec2(112.98f, 94.64f)) < 80.0f) {
-        glm::mat4 shelter = glm::translate(glm::mat4(1.0f), {112.98f, 0.0f, 94.64f});
-        shelter = glm::rotate(shelter, glm::pi<float>() * 0.08f, {0.0f, 1.0f, 0.0f});
-        m_ShelterModel->Draw(renderer, shelter * m_ShelterModelFit);
+    const float distToCambuche = glm::distance(glm::vec2(focusPosition.x, focusPosition.z),
+                                               glm::vec2(m_CambuchePosition.x, m_CambuchePosition.z));
+    if (distToCambuche < 80.0f) {
+        glm::mat4 cambucheRoot = glm::translate(glm::mat4(1.0f), m_CambuchePosition);
+        cambucheRoot = glm::rotate(cambucheRoot, glm::pi<float>() * 0.08f, {0.0f, 1.0f, 0.0f});
+
+        // Si tiene techo y base, se renderiza el refugio completo importado
+        if (m_CambucheState.base && m_CambucheState.techo && m_ShelterModel) {
+            m_ShelterModel->Draw(renderer, cambucheRoot * m_ShelterModelFit);
+        } else if (m_CambucheState.base) {
+            // Solo base: se dibuja la tarima de cartones/madera
+            if (m_CambucheBaseMesh) {
+                glm::mat4 baseMat = glm::translate(cambucheRoot, {0.0f, 0.04f, 0.0f});
+                renderer.Submit(*m_CambucheBaseMesh, baseMat);
+            }
+            if (m_CambucheState.cama && m_CambucheBedMesh) {
+                glm::mat4 bedMat = glm::translate(cambucheRoot, {-0.4f, 0.14f, 0.0f});
+                renderer.Submit(*m_CambucheBedMesh, bedMat);
+            }
+        } else {
+            // Sin armar: cartones esparcidos que marcan el sitio
+            if (m_CambucheMarkerMesh) {
+                for (int i = 0; i < 4; ++i) {
+                    float ox = (i % 2 == 0 ? -0.4f : 0.4f) + 0.1f * i;
+                    float oz = (i < 2 ? -0.3f : 0.3f);
+                    glm::mat4 markerMat = glm::translate(cambucheRoot, {ox, 0.02f + i * 0.005f, oz});
+                    markerMat = glm::rotate(markerMat, 0.3f * i, {0.0f, 1.0f, 0.0f});
+                    renderer.Submit(*m_CambucheMarkerMesh, markerMat, glm::vec4(0.55f, 0.42f, 0.28f, 0.85f));
+                }
+            }
+        }
+
+        // Fogón de latas con fuego encendido
+        if (m_CambucheState.fogon && m_CambucheFireMesh) {
+            glm::mat4 fogonMat = glm::translate(cambucheRoot, {1.0f, 0.12f, 1.2f});
+            renderer.Submit(*m_CambucheFireMesh, fogonMat, glm::vec4(1.0f, 0.48f, 0.10f, 1.0f));
+        }
+
+        // Vela encendida
+        if (m_CambucheState.vela && m_CambucheFireMesh) {
+            glm::mat4 velaMat = glm::translate(cambucheRoot, {0.6f, 0.08f, -0.9f});
+            velaMat = glm::scale(velaMat, {0.25f, 0.5f, 0.25f});
+            renderer.Submit(*m_CambucheFireMesh, velaMat, glm::vec4(1.0f, 0.85f, 0.40f, 1.0f));
+        }
     }
-    for (const auto& position : m_StreetLamps) {
+    for (const auto& lamp : m_StreetLamps) {
         if (m_StreetLampModel) {
-            m_StreetLampModel->Draw(renderer, glm::translate(glm::mat4(1.0f), position) * m_StreetLampModelFit);
+            glm::mat4 transform = glm::translate(glm::mat4(1.0f), lamp.position);
+            transform = glm::rotate(transform, lamp.yaw, {0.0f, 1.0f, 0.0f});
+            m_StreetLampModel->Draw(renderer, transform * m_StreetLampModelFit);
             continue;
         }
-        glm::mat4 pole = glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, 1.6f, 0.0f));
+        glm::mat4 lampRoot = glm::translate(glm::mat4(1.0f), lamp.position);
+        lampRoot = glm::rotate(lampRoot, lamp.yaw, {0.0f, 1.0f, 0.0f});
+        glm::mat4 pole = glm::translate(lampRoot, {0.0f, 1.6f, 0.0f});
         renderer.Submit(*m_StreetLampPole, pole);
-        glm::mat4 head = glm::translate(glm::mat4(1.0f), position + glm::vec3(0.18f, 3.18f, 0.0f));
+        glm::mat4 head = glm::translate(lampRoot, {0.18f, 3.18f, 0.0f});
         renderer.Submit(*m_StreetLampHead, head, glm::vec4(1.0f, 0.89f, 0.65f, 1.0f));
+    }
+    for (size_t index = 0; index < m_GrassPositions.size(); ++index) {
+        const auto& position = m_GrassPositions[index];
+        if (glm::distance(glm::vec2(focusPosition.x, focusPosition.z),
+                          glm::vec2(position.x, position.z)) > 32.0f) continue;
+        const float yaw = static_cast<float>((index * 37) % 360) * glm::pi<float>() / 180.0f;
+        const glm::mat4 grass = glm::translate(glm::mat4(1.0f), position)
+            * glm::rotate(glm::mat4(1.0f), yaw, {0.0f, 1.0f, 0.0f});
+        if (m_GrassModel)
+            m_GrassModel->Draw(renderer, grass * m_GrassModelFit,
+                               glm::vec4(0.35f, 0.58f, 0.25f, 1.0f));
     }
     for (const auto& position : m_TreePositions) {
         if (glm::distance(glm::vec2(focusPosition.x, focusPosition.z),
-                          glm::vec2(position.x, position.z)) > 80.0f) continue;
+                          glm::vec2(position.x, position.z)) > 60.0f) continue;
+        if (m_TreeModel) {
+            m_TreeModel->Draw(renderer, glm::translate(glm::mat4(1.0f), position) * m_TreeModelFit);
+            continue;
+        }
         renderer.Submit(*m_TreeTrunk, glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, 0.8f, 0.0f)));
         renderer.Submit(*m_TreeCanopy, glm::translate(glm::mat4(1.0f), position + glm::vec3(0.0f, 2.0f, 0.0f)));
     }
@@ -1605,12 +2062,36 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
         if (glm::distance(glm::vec2(focusPosition.x, focusPosition.z),
                           glm::vec2(pigeon.position.x, pigeon.position.z)) > 45.0f) continue;
         glm::mat4 bird = glm::translate(glm::mat4(1.0f), pigeon.position);
+        bird = glm::rotate(bird, pigeon.yaw, {0.0f, 1.0f, 0.0f});
+        if (pigeon.flightRemaining > 0.0f && m_BirdModels[pigeon.modelIndex]) {
+            m_BirdModels[pigeon.modelIndex]->Draw(
+                renderer, bird * m_BirdModelFits[pigeon.modelIndex]);
+            continue;
+        }
         renderer.Submit(*m_PigeonBody, glm::translate(bird, {0.0f, 0.18f, 0.0f}));
         const float wingLift = pigeon.flightRemaining > 0.0f ? std::sin(time * 18.0f + pigeon.phase) * 0.20f : 0.0f;
         for (float side : {-1.0f, 1.0f}) {
             glm::mat4 wing = glm::translate(bird, {side * 0.14f, 0.24f, 0.0f});
             wing = glm::rotate(wing, side * wingLift, {0.0f, 0.0f, 1.0f});
             renderer.Submit(*m_PigeonWing, wing);
+        }
+    }
+    if (m_RatModel) {
+        for (const Rat& rat : m_Rats) {
+            if (glm::distance(glm::vec2(focusPosition.x, focusPosition.z),
+                              glm::vec2(rat.position.x, rat.position.z)) > 38.0f) continue;
+            // Wiggle lateral al corretear y cabeceo al olfatear
+            const float wiggle = (rat.speed > 0.4f)
+                ? std::sin(rat.animTime * 22.0f) * 0.12f
+                : rat.sniffOffset;
+            const float bob = (rat.speed > 0.4f)
+                ? std::abs(std::sin(rat.animTime * 22.0f)) * 0.015f
+                : std::abs(std::sin(rat.animTime * 7.0f)) * 0.005f;
+
+            const glm::mat4 ratTransform = glm::translate(glm::mat4(1.0f), rat.position + glm::vec3(0.0f, bob, 0.0f))
+                * glm::rotate(glm::mat4(1.0f), rat.yaw + wiggle, {0.0f, 1.0f, 0.0f})
+                * m_RatModelFit;
+            m_RatModel->Draw(renderer, ratTransform);
         }
     }
     if (m_IsRaining) {
@@ -1674,6 +2155,9 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
         const glm::vec4 coat = coats[static_cast<size_t>(std::clamp(m_DogCoat, 0, 3))];
         glm::mat4 dog = glm::translate(glm::mat4(1.0f), m_DogPosition);
         dog = glm::rotate(dog, m_DogYaw, {0.0f, 1.0f, 0.0f});
+        if (m_PetModel) {
+            m_PetModel->Draw(renderer, dog * m_PetModelFit, coat);
+        } else {
         const float bounce = m_DogIsFriend ? std::abs(std::sin(m_DogTime * 8.0f)) * 0.025f : 0.0f;
         renderer.Submit(*m_DogBody, glm::translate(dog, {0.0f, 0.39f + bounce, 0.0f}), coat);
         renderer.Submit(*m_DogHead, glm::translate(dog, {0.0f, 0.55f + bounce, 0.48f}), coat);
@@ -1691,6 +2175,7 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
         tail = glm::rotate(tail, std::sin(m_DogTime * (m_DogIsFriend ? 14.0f : 6.0f)) * 0.35f, {0.0f, 0.0f, 1.0f});
         tail = glm::rotate(tail, glm::half_pi<float>(), {1.0f, 0.0f, 0.0f});
         renderer.Submit(*m_DogTail, tail, coat);
+        }
     }
     for (const auto& mark : m_GroundPoops) {
         if (glm::distance(glm::vec2(focusPosition.x, focusPosition.z),
@@ -1797,23 +2282,33 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
         const float yaw = std::atan2(vendor.facing.x, vendor.facing.z);
         glm::mat4 stall = glm::translate(glm::mat4(1.0f), vendor.position)
             * glm::rotate(glm::mat4(1.0f), yaw, {0.0f, 1.0f, 0.0f});
-        renderer.Submit(*m_VendorCounter, glm::translate(stall, {0.0f, 0.68f, 0.0f}));
-        for (float x : {-0.48f, 0.48f}) for (float z : {-0.25f, 0.25f})
-            renderer.Submit(*m_VendorLeg, glm::translate(stall, {x, 0.36f, z}));
-        renderer.Submit(*m_VendorPole, glm::translate(stall, {-0.48f, 1.2f, -0.28f}));
-        renderer.Submit(*m_VendorPole, glm::translate(stall, {0.48f, 1.2f, -0.28f}));
-        const glm::vec4 canopyColor = vendor.fritanga
-            ? glm::vec4(0.16f, 0.44f, 0.22f, 1.0f)
-            : glm::vec4(0.76f, 0.13f, 0.12f, 1.0f);
-        renderer.Submit(*m_VendorCanopy, glm::translate(stall, {-0.48f, 2.25f, -0.28f}), canopyColor);
-        for (float x : {-0.95f, -0.48f, 0.0f}) {
-            const glm::vec4 stripeColor = vendor.fritanga
-                ? glm::vec4(0.90f, 0.89f, 0.77f, 1.0f)
-                : glm::vec4(0.95f, 0.76f, 0.18f, 1.0f);
-            renderer.Submit(*m_VendorCanopyStripe,
-                            glm::translate(stall, {x, 2.26f, -0.28f}), stripeColor);
+        if (m_VendorCartModel) {
+            m_VendorCartModel->Draw(renderer, stall * m_VendorCartModelFit);
+        } else {
+            renderer.Submit(*m_VendorCounter, glm::translate(stall, {0.0f, 0.68f, 0.0f}));
+            for (float x : {-0.48f, 0.48f}) for (float z : {-0.25f, 0.25f})
+                renderer.Submit(*m_VendorLeg, glm::translate(stall, {x, 0.36f, z}));
+            renderer.Submit(*m_VendorPole, glm::translate(stall, {-0.48f, 1.2f, -0.28f}));
+            renderer.Submit(*m_VendorPole, glm::translate(stall, {0.48f, 1.2f, -0.28f}));
+            const glm::vec4 canopyColor = vendor.fritanga
+                ? glm::vec4(0.16f, 0.44f, 0.22f, 1.0f)
+                : glm::vec4(0.76f, 0.13f, 0.12f, 1.0f);
+            renderer.Submit(*m_VendorCanopy, glm::translate(stall, {-0.48f, 2.25f, -0.28f}), canopyColor);
+            for (float x : {-0.95f, -0.48f, 0.0f}) {
+                const glm::vec4 stripeColor = vendor.fritanga
+                    ? glm::vec4(0.90f, 0.89f, 0.77f, 1.0f)
+                    : glm::vec4(0.95f, 0.76f, 0.18f, 1.0f);
+                renderer.Submit(*m_VendorCanopyStripe,
+                                glm::translate(stall, {x, 2.26f, -0.28f}), stripeColor);
+            }
         }
-        if (vendor.fritanga) {
+        if (m_VendorChairModel) {
+            const glm::mat4 chair = glm::translate(glm::mat4(1.0f), vendor.serverPosition)
+                * glm::rotate(glm::mat4(1.0f), yaw, {0.0f, 1.0f, 0.0f})
+                * m_VendorChairModelFit;
+            m_VendorChairModel->Draw(renderer, chair);
+        }
+        if (vendor.fritanga && !m_VendorCartModel) {
             const glm::mat4 grill = glm::translate(stall, {0.78f, 0.48f, 0.0f});
             renderer.Submit(*m_VendorGrill, grill);
             renderer.Submit(*m_VendorCoal, glm::translate(stall, {0.78f, 0.81f, 0.0f}));
@@ -1823,7 +2318,7 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
                                 food % 2 == 0 ? glm::vec4(0.65f, 0.30f, 0.09f, 1.0f)
                                               : glm::vec4(0.87f, 0.62f, 0.20f, 1.0f));
             }
-        } else {
+        } else if (!m_VendorCartModel) {
             for (int item = 0; item < 10; ++item) {
                 const float x = -0.48f + static_cast<float>(item % 5) * 0.23f;
                 const float z = item < 5 ? -0.20f : 0.16f;
@@ -1839,23 +2334,22 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
         glm::mat4 server = glm::translate(glm::mat4(1.0f), vendor.serverPosition);
         server = glm::rotate(server, yaw, {0.0f, 1.0f, 0.0f});
         server = glm::scale(server, glm::vec3(0.95f));
+        server = glm::translate(server, {0.0f, -0.48f, 0.0f});
         if (vendor.appearance < m_PedestrianAppearances.size()) {
             const auto& appearance = m_PedestrianAppearances[vendor.appearance];
             for (const auto& part : appearance.parts) {
                 if (part) part->Draw(renderer, server, glm::vec4(1.0f),
                                      time + static_cast<float>(index) * 1.37f,
-                                     appearance.idleClip >= 0, appearance.idleClip);
+                                     appearance.sitClip >= 0, appearance.sitClip, -1, true);
             }
         } else {
             renderer.Submit(*m_PedestrianBody, glm::translate(server, {0.0f, 0.62f, 0.0f}));
             renderer.Submit(*m_PedestrianHead, glm::translate(server, {0.0f, 1.30f, 0.0f}));
         }
     }
-    size_t visiblePedestrians = 0;
     for (const auto& pedestrian : m_Pedestrians) {
         const glm::vec2 offset(pedestrian.position.x - focusPosition.x, pedestrian.position.z - focusPosition.z);
-        if (glm::dot(offset, offset) > 42.0f * 42.0f || visiblePedestrians >= 12) continue;
-        ++visiblePedestrians;
+        if (glm::dot(offset, offset) > 56.0f * 56.0f) continue;
         glm::mat4 character = glm::translate(glm::mat4(1.0f), pedestrian.position);
         character = glm::rotate(character, pedestrian.yaw, {0.0f, 1.0f, 0.0f});
         character = glm::scale(character, glm::vec3(pedestrian.scale));
@@ -1873,7 +2367,100 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
             model->Draw(renderer, character, tint, pedestrian.animationTime + pedestrian.animationOffset, clip >= 0, clip);
         }
     }
+
+    // Sombras espectrales (Gente Sombra de la psicosis)
+    for (const auto& sp : m_ShadowPeople) {
+        if (sp.opacity <= 0.02f) continue;
+        glm::mat4 root = glm::translate(glm::mat4(1.0f), sp.position);
+        root = glm::rotate(root, sp.yaw, {0.0f, 1.0f, 0.0f});
+
+        const glm::vec4 bodyColor(0.02f, 0.02f, 0.03f, sp.opacity);
+        const glm::vec4 eyeColor(1.0f, 0.12f, 0.12f, sp.opacity);
+
+        if (m_ShadowHeadMesh) {
+            glm::mat4 headMat = glm::translate(root, {0.0f, 1.55f, 0.0f});
+            renderer.Submit(*m_ShadowHeadMesh, headMat, bodyColor, false, false, nullptr, 2);
+        }
+        if (m_ShadowEyeMesh) {
+            glm::mat4 eyeL = glm::translate(root, {-0.07f, 1.58f, 0.16f});
+            glm::mat4 eyeR = glm::translate(root, { 0.07f, 1.58f, 0.16f});
+            renderer.Submit(*m_ShadowEyeMesh, eyeL, eyeColor, false, false, nullptr, 2);
+            renderer.Submit(*m_ShadowEyeMesh, eyeR, eyeColor, false, false, nullptr, 2);
+        }
+        if (m_ShadowTorsoMesh) {
+            glm::mat4 torsoMat = glm::translate(root, {0.0f, 1.05f, 0.0f});
+            renderer.Submit(*m_ShadowTorsoMesh, torsoMat, bodyColor, false, false, nullptr, 2);
+        }
+        if (m_ShadowLegMesh) {
+            glm::mat4 legL = glm::translate(root, {-0.12f, 0.42f, 0.0f});
+            legL = glm::rotate(legL, -glm::half_pi<float>(), {1.0f, 0.0f, 0.0f});
+            glm::mat4 legR = glm::translate(root, { 0.12f, 0.42f, 0.0f});
+            legR = glm::rotate(legR, -glm::half_pi<float>(), {1.0f, 0.0f, 0.0f});
+            renderer.Submit(*m_ShadowLegMesh, legL, bodyColor, false, false, nullptr, 2);
+            renderer.Submit(*m_ShadowLegMesh, legR, bodyColor, false, false, nullptr, 2);
+        }
+    }
     (void)time;
+}
+
+bool Simulation::BuildCambuchePiece(const std::string& pieceId) {
+    if (pieceId.empty()) return false;
+    if (pieceId != "base" && !m_CambucheState.base) return false;
+    if (m_CambucheState.IsBuilt(pieceId)) return false;
+    m_CambucheState.SetBuilt(pieceId, true);
+    return true;
+}
+
+void Simulation::UpdatePsychosis(float dt, const glm::vec3& playerPosition, float severity) {
+    if (severity <= 0.0f) {
+        if (!m_ShadowPeople.empty()) {
+            for (auto it = m_ShadowPeople.begin(); it != m_ShadowPeople.end();) {
+                it->dissolving = true;
+                it->opacity -= dt * 3.0f;
+                if (it->opacity <= 0.02f) it = m_ShadowPeople.erase(it);
+                else ++it;
+            }
+        }
+        return;
+    }
+
+    // Spawn shadow people (máximo 3)
+    if (m_ShadowPeople.size() < 3) {
+        std::uniform_real_distribution<float> spawnChance(0.0f, 1.0f);
+        if (spawnChance(m_Random) < 0.035f * (dt > 0.0f ? dt / 0.016f : 1.0f)) {
+            std::uniform_real_distribution<float> angleDist(0.0f, glm::two_pi<float>());
+            std::uniform_real_distribution<float> distDist(14.0f, 22.0f);
+            const float angle = angleDist(m_Random);
+            const float dist = distDist(m_Random);
+            glm::vec3 spawnPos = playerPosition + glm::vec3(std::cos(angle) * dist, 0.0f, std::sin(angle) * dist);
+            spawnPos.y = 0.0f;
+            m_ShadowPeople.push_back({spawnPos, 0.0f, 18.0f + std::uniform_real_distribution<float>(0.0f, 10.0f)(m_Random), false, 0.78f});
+        }
+    }
+
+    // Actualizar sombras existentes
+    for (auto it = m_ShadowPeople.begin(); it != m_ShadowPeople.end();) {
+        it->lifetime -= dt;
+        const float distToPlayer = glm::distance(glm::vec2(it->position.x, it->position.z),
+                                                 glm::vec2(playerPosition.x, playerPosition.z));
+        // Mirar hacia el jugador
+        it->yaw = std::atan2(playerPosition.x - it->position.x, playerPosition.z - it->position.z);
+
+        if (distToPlayer < 5.5f || it->lifetime <= 0.0f) {
+            it->dissolving = true;
+        }
+
+        if (it->dissolving) {
+            it->position.y += dt * 0.45f;
+            it->opacity -= dt * 2.2f;
+        }
+
+        if (it->opacity <= 0.02f) {
+            it = m_ShadowPeople.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 } // namespace Bazuko

@@ -38,6 +38,7 @@ struct PedestrianAppearance {
     std::vector<std::shared_ptr<Model>> parts;
     int walkClip = -1;
     int idleClip = -1;
+    int sitClip = -1;
 };
 
 struct TrafficVehicle {
@@ -63,6 +64,7 @@ struct TrafficVehicle {
     float nextDistance = 0.0f;
     float nextSpeed = 0.0f;
     bool blockedForPerson = false;
+    bool yieldingForTraffic = false;
     std::vector<glm::vec3> route;
     std::vector<float> routeCumulative;
     size_t nextWaypoint = 0;
@@ -83,6 +85,10 @@ struct StreetVendor {
     bool fritanga = false;
     size_t appearance = 0;
 };
+struct StreetLamp {
+    glm::vec3 position{0.0f};
+    float yaw = 0.0f;
+};
 
 struct PickupItem {
     size_t itemIndex = 0;
@@ -92,11 +98,49 @@ struct PickupItem {
     float cooldownRemaining = 0.0f;
 };
 
+struct ShadowPerson {
+    glm::vec3 position{0.0f};
+    float yaw = 0.0f;
+    float lifetime = 20.0f;
+    bool dissolving = false;
+    float opacity = 0.78f;
+};
+
+struct CambucheState {
+    bool base = false;
+    bool techo = false;
+    bool paredes = false;
+    bool cama = false;
+    bool fogon = false;
+    bool vela = false;
+
+    bool IsBuilt(const std::string& pieceId) const {
+        if (pieceId == "base") return base;
+        if (pieceId == "techo") return techo;
+        if (pieceId == "paredes") return paredes;
+        if (pieceId == "cama") return cama;
+        if (pieceId == "fogon") return fogon;
+        if (pieceId == "vela") return vela;
+        return false;
+    }
+
+    void SetBuilt(const std::string& pieceId, bool built = true) {
+        if (pieceId == "base") base = built;
+        else if (pieceId == "techo") techo = built;
+        else if (pieceId == "paredes") paredes = built;
+        else if (pieceId == "cama") cama = built;
+        else if (pieceId == "fogon") fogon = built;
+        else if (pieceId == "vela") vela = built;
+    }
+};
+
 class Simulation {
 public:
+    using ModelLoadProgress = std::function<void(size_t completed, size_t total, const std::string& name)>;
     explicit Simulation(const CityLayout& city, uint32_t seed = 42,
-                        std::function<void(size_t, size_t)> modelLoadProgress = {});
+                        ModelLoadProgress modelLoadProgress = {});
     void Update(float dt, const glm::vec3& playerPosition);
+    void SetPlayerFacing(const glm::vec2& facing) { m_PlayerFacing = glm::length(facing) > 0.01f ? glm::normalize(facing) : glm::vec2(0.0f, 1.0f); }
     bool IsBlocked(const glm::vec3& position, float radius) const;
     bool GetVehicleImpact(const glm::vec3& position, float& speed, glm::vec3& direction) const;
     const std::vector<TrafficVehicle>& GetTrafficVehicles() const { return m_Traffic; }
@@ -150,6 +194,20 @@ public:
     bool CompleteMissionItem() { if (m_MissionProgress >= m_MissionTarget) return false; ++m_MissionProgress; return true; }
     void SetMissionProgress(size_t progress) { m_MissionProgress = std::min(progress, m_MissionTarget); }
 
+    // Cambuche (Refugio de 6 piezas)
+    bool IsNearCambuche(const glm::vec3& position, float radius = 3.5f) const {
+        return glm::distance(glm::vec2(position.x, position.z), glm::vec2(112.98f, 94.64f)) < radius;
+    }
+    const glm::vec3& GetCambuchePosition() const { return m_CambuchePosition; }
+    const glm::vec3& GetCambucheSpawnPosition() const { return m_CambucheSpawnPosition; }
+    const CambucheState& GetCambucheState() const { return m_CambucheState; }
+    void SetCambucheState(const CambucheState& state) { m_CambucheState = state; }
+    bool BuildCambuchePiece(const std::string& pieceId);
+
+    // Psicosis / Sombras espectrales (Gente Sombra)
+    void UpdatePsychosis(float dt, const glm::vec3& playerPosition, float severity);
+    const std::vector<ShadowPerson>& GetShadowPeople() const { return m_ShadowPeople; }
+
 private:
     struct Pigeon {
         glm::vec3 position{0.0f};
@@ -157,6 +215,26 @@ private:
         float flightRemaining = 0.0f;
         float phase = 0.0f;
         size_t parkIndex = 0;
+        size_t modelIndex = 0;
+        float yaw = 0.0f;
+    };
+    enum class RatState {
+        Idle,
+        Scurrying,
+        Scavenging,
+        Fleeing
+    };
+    struct Rat {
+        glm::vec3 position{0.0f};
+        glm::vec3 target{0.0f};
+        float yaw = 0.0f;
+        float targetYaw = 0.0f;
+        float speed = 0.0f;
+        float stateTimer = 0.0f;
+        float animTime = 0.0f;
+        float sniffOffset = 0.0f;
+        RatState state = RatState::Idle;
+        float fleeRemaining = 0.0f;
     };
     struct TrafficSignal {
         glm::vec3 stopPosition{0.0f};
@@ -182,6 +260,7 @@ private:
     void UpdateBus(float dt);
     void UpdatePickups(float dt, const glm::vec3& playerPosition);
     void UpdatePigeons(float dt, const glm::vec3& playerPosition);
+    void UpdateRats(float dt, const glm::vec3& playerPosition);
     void UpdatePoop(float dt);
 
     const CityLayout& m_City;
@@ -227,8 +306,22 @@ private:
     std::shared_ptr<Model> m_TrashBagModel;
     std::shared_ptr<Model> m_TrashContainerModel;
     std::shared_ptr<Model> m_ShelterModel;
+    glm::vec3 m_CambuchePosition{112.98f, 0.0f, 94.64f};
+    glm::vec3 m_CambucheSpawnPosition{112.98f, 0.0f, 97.84f};
+    CambucheState m_CambucheState{};
+    std::shared_ptr<Mesh> m_CambucheBaseMesh;
+    std::shared_ptr<Mesh> m_CambucheMarkerMesh;
+    std::shared_ptr<Mesh> m_CambucheFireMesh;
+    std::shared_ptr<Mesh> m_CambucheBedMesh;
     std::shared_ptr<Model> m_StreetLampModel;
     std::shared_ptr<Model> m_TrafficSignalModel;
+    std::shared_ptr<Model> m_TreeModel;
+    std::shared_ptr<Model> m_VendorChairModel;
+    std::shared_ptr<Model> m_VendorCartModel;
+    std::shared_ptr<Model> m_GrassModel;
+    std::array<std::shared_ptr<Model>, 2> m_BirdModels;
+    std::shared_ptr<Model> m_RatModel;
+    std::shared_ptr<Model> m_PetModel;
     glm::mat4 m_CarModelFit{1.0f};
     glm::mat4 m_TaxiModelFit{1.0f};
     glm::mat4 m_BusModelFit{1.0f};
@@ -237,9 +330,16 @@ private:
     glm::mat4 m_ShelterModelFit{1.0f};
     glm::mat4 m_StreetLampModelFit{1.0f};
     glm::mat4 m_TrafficSignalModelFit{1.0f};
+    glm::mat4 m_TreeModelFit{1.0f};
+    glm::mat4 m_VendorChairModelFit{1.0f};
+    glm::mat4 m_VendorCartModelFit{1.0f};
+    glm::mat4 m_GrassModelFit{1.0f};
+    std::array<glm::mat4, 2> m_BirdModelFits{{glm::mat4(1.0f), glm::mat4(1.0f)}};
+    glm::mat4 m_RatModelFit{1.0f};
+    glm::mat4 m_PetModelFit{1.0f};
     std::shared_ptr<Mesh> m_StreetLampPole;
     std::shared_ptr<Mesh> m_StreetLampHead;
-    std::vector<glm::vec3> m_StreetLamps;
+    std::vector<StreetLamp> m_StreetLamps;
     std::shared_ptr<Mesh> m_DogBody;
     std::shared_ptr<Mesh> m_DogHead;
     std::shared_ptr<Mesh> m_DogSnout;
@@ -283,6 +383,8 @@ private:
     std::vector<glm::vec3> m_GrassPositions;
     std::array<std::vector<glm::vec3>, 3> m_ParkGrassPositions;
     std::vector<Pigeon> m_Pigeons;
+    std::vector<glm::vec3> m_RatWalkPoints;
+    std::vector<Rat> m_Rats;
     std::vector<glm::vec3> m_RainOffsets;
     float m_WeatherRemaining = 180.0f;
     bool m_IsRaining = true;
@@ -306,6 +408,8 @@ private:
     glm::vec3 m_MissionNpcPosition{3.0f, 0.0f, 0.0f};
     float m_PickupSpawnTimer = 0.0f;
     float m_Elapsed = 0.0f;
+    std::vector<glm::vec3> m_ValidTrashSpots;  // Andenes limpios sin bloqueo
+    glm::vec2 m_PlayerFacing{0.0f, 1.0f};      // Dirección de vista del jugador (XZ)
     size_t m_MissionProgress = 0;
     size_t m_MissionTarget = 5;
     bool m_MissionStarted = false;
@@ -313,6 +417,11 @@ private:
     float m_Clock = 0.30f;
     float m_DayProgress = 0.30f;
     float m_PedestrianSpawnTimer = 0.0f;
+    std::vector<ShadowPerson> m_ShadowPeople;
+    std::shared_ptr<Mesh> m_ShadowHeadMesh;
+    std::shared_ptr<Mesh> m_ShadowEyeMesh;
+    std::shared_ptr<Mesh> m_ShadowTorsoMesh;
+    std::shared_ptr<Mesh> m_ShadowLegMesh;
 };
 
 } // namespace Bazuko

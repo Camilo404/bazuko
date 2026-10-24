@@ -189,6 +189,11 @@ void UIManager::HandleEscape() {
         m_CraftMenuOpen = false;
         return;
     }
+    if (m_CambucheMenuOpen) {
+        m_CambucheMenuOpen = false;
+        Input::SetCursorLocked(true);
+        return;
+    }
     if (m_Paused && m_PauseSection != 0) {
         TogglePause();
         return;
@@ -551,7 +556,8 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                           const std::vector<CraftingOption>& craftingOptions,
                           const std::vector<InventoryOption>& inventoryOptions, int talentPoints,
                           const std::vector<TalentOption>& talentOptions, bool companionIsFriend,
-                          const std::vector<DealerOption>& dealerOptions) {
+                          const std::vector<DealerOption>& dealerOptions,
+                          bool boostActive, float boostTimer, float psychosisSeverity) {
     if (m_SaveNotificationTimer > 0.0f) {
         m_SaveNotificationTimer -= (dt > 0.0f ? dt : 0.016f);
         if (m_SaveNotificationTimer <= 0.0f) m_SaveNotification.clear();
@@ -951,7 +957,65 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
         } else if (needs[3] <= 25.0f) {
             ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.24f, 1.0f), "Salud baja: usa vendajes y evita los vehículos.");
         }
+        if (boostActive) {
+            ImGui::Spacing();
+            ImGui::TextColored(ImVec4(0.25f, 0.95f, 1.0f, 1.0f), "⚡ ADRENALINA: %.1fs (+35%% vel, +botin)", std::max(0.0f, boostTimer));
+        }
+        const float withdrawal = needs[6] < 20.0f ? (20.0f - needs[6]) * 5.0f : 0.0f;
+        if (withdrawal >= 80.0f) {
+            const float flash = 0.5f + 0.5f * static_cast<float>(std::sin(ImGui::GetTime() * 8.0));
+            ImGui::Spacing();
+            ImGui::TextColored(ImVec4(1.0f, 0.15f * flash, 0.15f * flash, 1.0f), "⚠️ ¡ABSTINENCIA CRÍTICA: PSICOSIS!");
+        } else if (withdrawal >= 50.0f) {
+            ImGui::Spacing();
+            ImGui::TextColored(ImVec4(1.0f, 0.60f, 0.20f, 1.0f), "⚠️ Síndrome de abstinencia: paranoia");
+        }
         ImGui::End();
+    }
+
+    // Viñeta roja oscura pulsante en los bordes de la pantalla durante psicosis
+    if (psychosisSeverity > 0.0f && !m_Paused) {
+        const float pulse = 0.5f + 0.5f * static_cast<float>(std::sin(ImGui::GetTime() * 4.0));
+        const int alphaVal = static_cast<int>((75.0f + 65.0f * pulse) * psychosisSeverity);
+        const ImU32 vigColor = IM_COL32(45, 6, 10, std::clamp(alphaVal, 0, 255));
+        ImDrawList* bgDraw = ImGui::GetBackgroundDrawList();
+        const ImVec2 dSize = ImGui::GetIO().DisplaySize;
+        const float thickness = (35.0f + 15.0f * pulse) * psychosisSeverity;
+        bgDraw->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(dSize.x, thickness), vigColor, vigColor, 0, 0);
+        bgDraw->AddRectFilledMultiColor(ImVec2(0, dSize.y - thickness), ImVec2(dSize.x, dSize.y), 0, 0, vigColor, vigColor);
+        bgDraw->AddRectFilledMultiColor(ImVec2(0, 0), ImVec2(thickness, dSize.y), vigColor, 0, 0, vigColor);
+        bgDraw->AddRectFilledMultiColor(ImVec2(dSize.x - thickness, 0), ImVec2(dSize.x, dSize.y), 0, vigColor, vigColor, 0);
+
+        // Susurros de paranoia flotantes
+        static const std::array<const char*, 9> paranoiaWhispers{{
+            "¿QUIÉN ESTÁ AHÍ?", "TE ESTÁN SIGUIENDO", "NO MIRES ATRÁS",
+            "TODOS TE ESTÁN MIRANDO", "¡VIENEN POR TI!", "ESTÁN EN LAS PAREDES",
+            "NO CONFÍES EN NADIE", "¡ESOS CARROS TE VIGILAN!", "¡CORRE!"
+        }};
+        m_WhisperTimer -= dt;
+        if (m_WhisperTimer <= 0.0f) {
+            static std::mt19937 whisperRand(777);
+            std::uniform_int_distribution<size_t> pick(0, paranoiaWhispers.size() - 1);
+            m_ActiveWhisper = paranoiaWhispers[pick(whisperRand)];
+            m_ActiveWhisperTimer = 3.2f;
+            std::uniform_real_distribution<float> randX(0.20f, 0.75f);
+            std::uniform_real_distribution<float> randY(0.20f, 0.70f);
+            m_WhisperPosX = randX(whisperRand);
+            m_WhisperPosY = randY(whisperRand);
+            m_WhisperTimer = 6.0f + std::uniform_real_distribution<float>(0.0f, 7.0f)(whisperRand);
+        }
+        if (m_ActiveWhisperTimer > 0.0f) {
+            m_ActiveWhisperTimer -= dt;
+            const float alpha = std::clamp(m_ActiveWhisperTimer / 0.7f, 0.0f, 0.92f);
+            const ImVec2 whisperPos(ImGui::GetIO().DisplaySize.x * m_WhisperPosX,
+                                    ImGui::GetIO().DisplaySize.y * m_WhisperPosY);
+            ImGui::SetNextWindowPos(whisperPos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowBgAlpha(0.75f * alpha);
+            if (ImGui::Begin("WhisperOverlay", nullptr, hudFlags | ImGuiWindowFlags_NoInputs)) {
+                ImGui::TextColored(ImVec4(1.0f, 0.22f, 0.22f, alpha), "👁️  \"%s\"", m_ActiveWhisper.c_str());
+            }
+            ImGui::End();
+        }
     }
 
     ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 12, 12), ImGuiCond_Always, ImVec2(1, 0));
@@ -1131,6 +1195,98 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
         ImGui::BulletText("N: Mostrar / ocultar radar");
         ImGui::BulletText("Z: Hacer popo · X: Lanzar mojón si tienes uno");
         ImGui::BulletText("E / Q cerca de peatones: Cosquilleo / robo directo");
+    }
+    ImGui::End();
+}
+
+void UIManager::RenderCambucheMenu(const std::vector<CambuchePieceOption>& pieces, bool hasBase, bool isNight) {
+    if (!m_CambucheMenuOpen) return;
+
+    // Liberar el ratón mientras el menú está abierto
+    Input::SetCursorLocked(false);
+
+    const ImGuiIO& io = ImGui::GetIO();
+    const float menuWidth  = std::min(480.0f, io.DisplaySize.x - 40.0f);
+    const float menuHeight = std::min(560.0f, io.DisplaySize.y - 40.0f);
+    ImGui::SetNextWindowSize({menuWidth, menuHeight}, ImGuiCond_Always);
+    ImGui::SetNextWindowPos({(io.DisplaySize.x - menuWidth) * 0.5f,
+                             (io.DisplaySize.y - menuHeight) * 0.5f},
+                            ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.94f);
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
+                           | ImGuiWindowFlags_NoCollapse;
+    if (ImGui::Begin("🏠 Cambuche - Refugio urbano", nullptr, flags)) {
+        ImGui::TextColored(ImVec4(0.96f, 0.82f, 0.25f, 1.0f),
+                           "Construye tu refugio paso a paso.");
+        ImGui::Text("Acércate a los materiales y recógelos antes de construir.");
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        for (const auto& piece : pieces) {
+            ImGui::PushID(piece.id.c_str());
+
+            // Color del encabezado según estado
+            if (piece.isBuilt) {
+                ImGui::TextColored(ImVec4(0.40f, 0.85f, 0.45f, 1.0f), "✓ %s", piece.name.c_str());
+            } else if (piece.isLocked) {
+                ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.0f), "🔒 %s", piece.name.c_str());
+            } else {
+                ImGui::TextColored(ImVec4(0.92f, 0.92f, 0.92f, 1.0f), "🔨 %s", piece.name.c_str());
+            }
+
+            ImGui::SameLine(menuWidth * 0.62f);
+            if (piece.isBuilt) {
+                ImGui::TextColored(ImVec4(0.40f, 0.85f, 0.45f, 1.0f), "Construido");
+            } else if (piece.isLocked) {
+                ImGui::TextDisabled("Bloqueado");
+            } else if (piece.canBuild) {
+                if (ImGui::SmallButton(("Construir##" + piece.id).c_str())) {
+                    m_CambucheBuildRequest = piece.id;
+                }
+            } else {
+                ImGui::TextColored(ImVec4(0.85f, 0.42f, 0.25f, 1.0f), "Faltan materiales");
+            }
+
+            ImGui::TextDisabled("  %s", piece.desc.c_str());
+            if (!piece.reqText.empty()) {
+                ImGui::TextDisabled("  Requiere: %s", piece.reqText.c_str());
+            }
+
+            ImGui::Spacing();
+            ImGui::PopID();
+        }
+
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Botón de dormir — solo si la base está construida
+        if (hasBase) {
+            const bool canSleep = isNight;
+            if (!canSleep) {
+                ImGui::TextColored(ImVec4(0.60f, 0.60f, 0.60f, 1.0f),
+                                   "Puedes dormir aquí de noche para recuperar energía.");
+            } else {
+                ImGui::TextColored(ImVec4(0.70f, 0.85f, 1.0f, 1.0f),
+                                   "Es de noche. Puedes descansar en el cambuche.");
+                if (ImGui::Button("💤  Dormir (recupera energía y salud)")) {
+                    m_SleepRequest = true;
+                    m_CambucheMenuOpen = false;
+                    Input::SetCursorLocked(true);
+                }
+            }
+        } else {
+            ImGui::TextColored(ImVec4(0.75f, 0.55f, 0.20f, 1.0f),
+                               "Construye la base para poder descansar aquí.");
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        if (ImGui::Button("Cerrar [Esc]", {menuWidth - 32.0f, 0.0f})) {
+            m_CambucheMenuOpen = false;
+            Input::SetCursorLocked(true);
+        }
     }
     ImGui::End();
 }

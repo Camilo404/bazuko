@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <limits>
 #include <unordered_map>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/glm.hpp>
@@ -14,6 +15,7 @@ namespace Bazuko {
 struct ModelPart {
     std::shared_ptr<Mesh> mesh;
     std::shared_ptr<Texture> texture;
+    std::shared_ptr<Texture> specularTexture;
     glm::vec4 baseColor = glm::vec4(1.0f);
     glm::mat4 transform{1.0f};
     int alphaMode = 0;
@@ -28,14 +30,17 @@ public:
     Model() = default;
     ~Model() = default;
 
-    static std::shared_ptr<Model> LoadFromFile(const std::string& filepath);
+    static std::shared_ptr<Model> LoadFromFile(const std::string& filepath,
+                                               const std::string& meshNameFilter = {},
+                                               const std::string& excludedMeshName = {},
+                                               float maximumWorldX = std::numeric_limits<float>::infinity());
     void SetAnimationSource(const Model& source,
                             const std::unordered_map<std::string, std::string>& clipAliases = {});
     int FindAnimationClip(const std::string& name) const;
 
     void Draw(Renderer& renderer, const glm::mat4& transform, const glm::vec4& tint = glm::vec4(1.0f),
               float animationTime = 0.0f, bool animate = false, int animationClip = 0,
-              int alphaModeOverride = -1) const;
+              int alphaModeOverride = -1, bool seatedPose = false) const;
 
     const std::vector<ModelPart>& GetParts() const { return m_Parts; }
     size_t GetAnimationClipCount() const { return m_AnimationClips.size(); }
@@ -44,6 +49,11 @@ public:
     const glm::vec3& GetGroundAnchor() const { return m_GroundAnchor; }
 
 private:
+    static std::shared_ptr<Model> LoadWithAssimp(const std::string& filepath,
+                                                 const std::string& meshNameFilter,
+                                                 const std::string& excludedMeshName,
+                                                 float maximumWorldX);
+
     std::vector<ModelPart> m_Parts;
     glm::vec3 m_BoundsMinimum{0.0f};
     glm::vec3 m_BoundsMaximum{0.0f};

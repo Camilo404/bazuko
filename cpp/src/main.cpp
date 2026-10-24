@@ -32,6 +32,8 @@
 #include <fstream>
 #include <limits>
 #include <unordered_set>
+#include <chrono>
+#include <thread>
 #include <nlohmann/json.hpp>
 
 #if defined(_WIN32)
@@ -44,6 +46,12 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 namespace fs = std::filesystem;
 
 int main(int argc, char** argv) {
+#if defined(_WIN32)
+    HWND consoleWnd = ::GetConsoleWindow();
+    if (consoleWnd != NULL) {
+        ::ShowWindow(consoleWnd, SW_HIDE);
+    }
+#endif
     using namespace Bazuko;
     Paths::Init(argc, argv);
 
@@ -64,30 +72,40 @@ int main(int argc, char** argv) {
         }
     });
 
-    ui.RenderLoadingScreen(window, 0.10f, "Motor gráfico, audio e interfaz inicializados...",
+    ui.RenderLoadingScreen(window, 0.06f, "Motor gráfico, audio e interfaz inicializados...",
                           "💡 Consejo: Rebusca en las bolsas de basura de la Séptima para conseguir reciclaje y comida.");
 
-    CityLayout city;
-    ui.RenderLoadingScreen(window, 0.25f, "Ciudad y edificios preparados...",
-                          "💡 Consejo: Puedes alternar entre vista en tercera persona e isométrica con la tecla [V].");
+    CityLayout city([&](size_t completed, size_t total, const std::string& stage) {
+        const float progress = 0.06f + 0.22f * static_cast<float>(completed) / static_cast<float>(total);
+        ui.RenderLoadingScreen(window, progress, stage,
+                               "💡 Consejo: Puedes alternar entre vista en tercera persona e isométrica con la tecla [V].");
+    });
 
     CharacterManager characterManager;
     Ragdoll playerRagdoll;
     CharacterCreatorUI characterCreatorUI;
     CharacterPreview characterPreview;
-    ui.RenderLoadingScreen(window, 0.30f, "Preparando el personaje y su vista previa...",
-                          "💡 Consejo: Puedes personalizar tu aspecto, sexo, corte y ropa con la tecla [P].");
 
-    Simulation simulation(city, 42, [&](size_t completed, size_t total) {
-        const float progress = 0.30f + 0.40f * static_cast<float>(completed) / static_cast<float>(total);
-        const std::string stage = "Cargando modelos de peatones (" + std::to_string(completed)
-            + "/" + std::to_string(total) + ")...";
+    Simulation simulation(city, 42, [&](size_t completed, size_t total, const std::string& name) {
+        const float progress = 0.28f + 0.47f * static_cast<float>(completed) / static_cast<float>(total);
+        const std::string stage = "Cargando mundo urbano (" + std::to_string(completed)
+            + "/" + std::to_string(total) + "): " + (name.empty() ? "elementos 3D" : name) + "...";
         ui.RenderLoadingScreen(window, progress, stage,
                                "💡 Consejo: Cuida tus niveles de hambre, sed y salud para no enfermarte.");
     });
     audio.SetRaining(simulation.IsRaining());
-    ui.RenderLoadingScreen(window, 0.75f, "Simulación urbana, peatones y tráfico preparados...",
-                          "💡 Consejo: Cuida tus niveles de hambre, sed y salud para no enfermarte.");
+
+    characterManager.Init([&](size_t completed, size_t total) {
+        const float progress = 0.75f + 0.13f * static_cast<float>(completed) / static_cast<float>(total);
+        const std::string stage = "Cargando modelos y animaciones del personaje (" + std::to_string(completed)
+            + "/" + std::to_string(total) + ")...";
+        ui.RenderLoadingScreen(window, progress, stage,
+                               "💡 Consejo: Puedes personalizar tu aspecto, sexo, corte y ropa con la tecla [P].");
+    });
+
+    characterPreview.Init(512, 640);
+    ui.RenderLoadingScreen(window, 0.89f, "Configurando estudio 3D y vista previa...",
+                           "💡 Consejo: Puedes personalizar tu aspecto, sexo, corte y ropa con la tecla [P].");
     glm::vec3 playerPos = city.GetSpawnPoint();
     playerPos.y = 0.0f;
     float playerYaw = 0.0f;
@@ -97,6 +115,8 @@ int main(int argc, char** argv) {
     bool deathByVehicleImpact = false;
     float poopCooldown = 0.0f;
     float poopAnimationRemaining = 0.0f;
+    bool boostActive = false;
+    float boostTimer = 0.0f;
     struct Item {
         std::string id;
         std::string name;
@@ -110,7 +130,7 @@ int main(int argc, char** argv) {
         float moodDelta = 0.0f;
         float energyDelta = 0.0f;
     };
-    const std::array<Item, 40> lootTable{{
+    const std::array<Item, 42> lootTable{{
         {"lata", "Lata vacía", 0.2f, 250}, {"botella", "Botella PET", 0.3f, 150},
         {"carton", "Cartón", 0.5f, 200}, {"chatarra", "Chatarra", 1.0f, 900},
         {"cable", "Cable cobre", 0.4f, 2400}, {"pan", "Pan duro", 0.3f, 1000, 0, 25.0f, 0.0f, false, "", 5.0f},
@@ -136,7 +156,9 @@ int main(int argc, char** argv) {
         {"carbon", "Carbón activo", 0.1f, 9000, -1, 0.0f, 0.0f, false, "intoxicacion"},
         {"jarabe", "Jarabe", 0.2f, 11000, -1, 0.0f, 0.0f, false, "gripe"},
         {"pomada", "Pomada", 0.15f, 9500, -1, 0.0f, 0.0f, false, "sarna"},
-        {"antiparasitario", "Antiparasitario", 0.1f, 13000, -1, 0.0f, 0.0f, false, "parasitos"}
+        {"antiparasitario", "Antiparasitario", 0.1f, 13000, -1, 0.0f, 0.0f, false, "parasitos"},
+        {"moneda", "Moneda Antigua", 0.02f, 5000},
+        {"anillo", "Anillo", 0.05f, 20000}
     }};
     const std::array<Item, 20> shopCatalog{{
         {"pan", "Pan duro", 0.3f, 1000, 0, 25.0f, 0.0f, false, "", 5.0f}, {"agua", "Botella agua", 0.5f, 1500, 1, 35.0f},
@@ -212,7 +234,7 @@ int main(int argc, char** argv) {
     };
     const fs::path savePath = "savegame.json";
     bool hasSavedCharacter = false;
-    ui.RenderLoadingScreen(window, 0.76f, "Restaurando la partida guardada...",
+    ui.RenderLoadingScreen(window, 0.90f, "Comprobando y restaurando datos de partida...",
                           "💡 Consejo: Tus necesidades y tu inventario se conservan al guardar.");
     {
         std::ifstream save(savePath);
@@ -247,6 +269,17 @@ int main(int argc, char** argv) {
                 if (state.value("missionStarted", false)) simulation.StartMission();
                 if (state.value("missionComplete", false)) simulation.CompleteMission();
                 objective = state.value("objective", objective);
+                {
+                    CambucheState cambucheState{};
+                    const auto& savedCambuche = state.value("cambuche", nlohmann::json::object());
+                    cambucheState.base    = savedCambuche.value("base",    false);
+                    cambucheState.techo   = savedCambuche.value("techo",   false);
+                    cambucheState.paredes = savedCambuche.value("paredes", false);
+                    cambucheState.cama    = savedCambuche.value("cama",    false);
+                    cambucheState.fogon   = savedCambuche.value("fogon",   false);
+                    cambucheState.vela    = savedCambuche.value("vela",    false);
+                    simulation.SetCambucheState(cambucheState);
+                }
                 for (const auto& savedDisease : state.value("diseases", nlohmann::json::array())) {
                     DiseaseState disease{savedDisease.value("id", std::string{}), savedDisease.value("remaining", 0.0f), savedDisease.value("healthDrain", 0.0f), savedDisease.value("mentalDrain", 0.0f)};
                     if (disease.remaining > 0.0f && disease.healthDrain > 0.0f) diseases.push_back(std::move(disease));
@@ -264,15 +297,15 @@ int main(int argc, char** argv) {
                     }
                 }
                 hasSavedCharacter = characterManager.Deserialize(state, [&](size_t completed, size_t total) {
-                    const float progress = 0.76f + 0.06f * static_cast<float>(completed) / static_cast<float>(total);
-                    const std::string stage = "Cargando personaje guardado (" + std::to_string(completed)
-                        + "/" + std::to_string(total) + " modelos)...";
+                    const float progress = 0.91f + 0.06f * static_cast<float>(completed) / static_cast<float>(total);
+                    const std::string stage = "Cargando apariencia del personaje (" + std::to_string(completed)
+                        + "/" + std::to_string(total) + " piezas)...";
                     ui.RenderLoadingScreen(window, progress, stage);
                 });
             } catch (const std::exception& error) { LogWarn("Partida guardada inválida: {}", error.what()); }
         }
     }
-    ui.RenderLoadingScreen(window, 0.83f, "Partida y estado del jugador restaurados...");
+    ui.RenderLoadingScreen(window, 0.97f, "Partida y estado del jugador preparados...");
     std::mt19937 lootRandom(std::random_device{}());
     float survivalSaveTimer = 0.0f;
     float begCooldownRemaining = 0.0f;
@@ -314,6 +347,17 @@ int main(int argc, char** argv) {
         state["companionIsFriend"] = simulation.IsDogFriend();
         state["companionX"] = simulation.GetDogPosition().x;
         state["companionZ"] = simulation.GetDogPosition().z;
+        {
+            const auto& cs = simulation.GetCambucheState();
+            state["cambuche"] = {
+                {"base",    cs.base},
+                {"techo",   cs.techo},
+                {"paredes", cs.paredes},
+                {"cama",    cs.cama},
+                {"fogon",   cs.fogon},
+                {"vela",    cs.vela}
+            };
+        }
         characterManager.Serialize(state);
         state["inventory"] = nlohmann::json::array();
         for (const auto& entry : inventory) {
@@ -504,16 +548,9 @@ int main(int argc, char** argv) {
         return true;
     };
 
-    characterManager.Init([&](size_t completed, size_t total) {
-        const float progress = 0.84f + 0.12f * static_cast<float>(completed) / static_cast<float>(total);
-        const std::string stage = "Cargando modelos y animaciones del personaje (" + std::to_string(completed)
-            + "/" + std::to_string(total) + ")...";
-        ui.RenderLoadingScreen(window, progress, stage);
-    });
-
-    characterPreview.Init(512, 640);
-
+    ui.RenderLoadingScreen(window, 0.99f, "Sincronizando semáforos, rutas de tráfico y entorno...", "");
     ui.RenderLoadingScreen(window, 1.0f, "¡Todo listo! Entrando a Bogotá...", "");
+    std::this_thread::sleep_for(std::chrono::milliseconds(350));
 
     // Si es partida nueva o no tiene personaje configurado, abrir creador inmediatamente
     if (!hasSavedCharacter) {
@@ -618,6 +655,7 @@ int main(int argc, char** argv) {
         const float withdrawal = needs[6] < 20.0f ? (20.0f - needs[6]) * 5.0f : 0.0f;
         const bool highWithdrawal = withdrawal >= 50.0f;
         const bool criticalWithdrawal = withdrawal >= 80.0f;
+        const float psychosisSeverity = std::clamp((withdrawal - 50.0f) / 50.0f, 0.0f, 1.0f);
         float statusSpeedMultiplier = 1.0f;
         if (needs[5] < 30.0f) statusSpeedMultiplier *= 0.8f;
         if (needs[5] <= 0.0f) statusSpeedMultiplier *= 0.7f;
@@ -627,6 +665,7 @@ int main(int argc, char** argv) {
             if (criticalWithdrawal) statusSpeedMultiplier *= 0.75f;
             else if (highWithdrawal) statusSpeedMultiplier *= 0.88f;
         }
+        if (boostActive) statusSpeedMultiplier *= 1.35f;
         float moveSpeed = (isRunning ? 6.0f : 3.0f) * statusSpeedMultiplier;
 
         glm::vec3 moveDir(0.0f);
@@ -713,6 +752,27 @@ int main(int argc, char** argv) {
             && healthDrain == 0.0f) {
             needs[3] = std::min(100.0f, needs[3] + 0.5f * dtClamped);
         }
+
+        // Actualización de Boost (Adrenalina)
+        if (boostActive && dtClamped > 0.0f) {
+            boostTimer = std::max(0.0f, boostTimer - dtClamped);
+            needs[3] = std::max(0.0f, needs[3] - 3.0f * dtClamped);
+            if (boostTimer <= 0.0f || needs[3] <= 5.0f) {
+                boostActive = false;
+                boostTimer = 0.0f;
+                ui.SetPickupNotification("La adrenalina se ha agotado.");
+            }
+        }
+
+        // Psicosis y alucinaciones por abstinencia
+        if (psychosisSeverity > 0.0f && !ui.IsPaused()) {
+            const float fovPulse = std::sin(clock.GetElapsedTime() * 4.5f) * 3.2f * psychosisSeverity;
+            camera.SetPsychosisFovOffset(fovPulse);
+        } else {
+            camera.SetPsychosisFovOffset(0.0f);
+        }
+        simulation.UpdatePsychosis(dtClamped, playerPos, psychosisSeverity);
+
         showDeathScreenIfNeeded();
         if (ui.IsDeathScreenOpen()) dt = 0.0f;
         if (!ui.IsPaused() && !characterCreatorUI.IsOpen() && Input::IsKeyPressed(GLFW_KEY_Q)) {
@@ -742,7 +802,21 @@ int main(int argc, char** argv) {
         if (!ui.IsPaused() && Input::IsKeyPressed(GLFW_KEY_F)) {
             const bool atRecycler = simulation.IsNearRecycler(playerPos, 3.0f);
             if (!atRecycler) {
-                ui.SetPickupNotification("Solo puedes entregar reciclables en la Recicladora El Progreso.");
+                if (boostActive) {
+                    boostActive = false;
+                    boostTimer = 0.0f;
+                    ui.SetPickupNotification("Adrenalina desactivada.");
+                } else if (needs[2] < 15.0f) {
+                    ui.SetPickupNotification("No tienes suficiente energía para activar adrenalina (mínimo 15).");
+                } else if (needs[3] <= 5.0f) {
+                    ui.SetPickupNotification("Tu salud es demasiado baja para el esfuerzo (mínimo 5).");
+                } else {
+                    boostActive = true;
+                    boostTimer = 8.0f;
+                    needs[2] = std::max(0.0f, needs[2] - 10.0f);
+                    audio.Play(AudioCue::Pickup);
+                    ui.SetPickupNotification("⚡ ¡Adrenalina activada! Mayor velocidad, más botín y ventas.");
+                }
             } else if (!simulation.IsMissionStarted()) {
                 ui.SetPickupNotification("Habla con el vecino de la recicladora para iniciar la misión.");
             } else if (simulation.IsMissionComplete()) {
@@ -782,45 +856,51 @@ int main(int argc, char** argv) {
                 }
             }
         }
-        if (!ui.IsPaused() && (Input::IsKeyPressed(GLFW_KEY_B) || Input::IsKeyPressed(GLFW_KEY_L)) && !simulation.IsNearShop(playerPos, 2.0f)) {
-            if (begCooldownRemaining > 0.0f) {
-                ui.SetPickupNotification("Espera " + std::to_string(static_cast<int>(std::ceil(begCooldownRemaining)))
-                                         + " s antes de volver a pedir limosna.");
-            } else if (needs[2] < 3.0f) {
-                ui.SetPickupNotification("Estás demasiado cansado para pedir limosna (necesitas 3 de energía).");
-            } else {
-                begCooldownRemaining = 4.0f;
-                needs[2] = std::max(0.0f, needs[2] - 3.0f);
-                const auto chance = [&](float probability) {
-                    return std::uniform_real_distribution<float>(0.0f, 1.0f)(lootRandom) < probability;
-                };
-                if (needs[4] < 20.0f && chance(0.70f)) {
-                    needs[5] = std::max(0.0f, needs[5] - 2.0f);
-                    ui.SetPickupNotification("La gente te rechaza por tu higiene. Usa jabón o un cepillo.");
-                } else if (chance(0.20f)) {
-                    needs[5] = std::max(0.0f, needs[5] - 1.0f);
-                    ui.SetPickupNotification("Los transeúntes te ignoran.");
-                } else if (chance(0.18f)) {
-                    const std::string gift = std::uniform_int_distribution<int>(0, 1)(lootRandom) == 0 ? "pan" : "agua";
-                    const bool received = addLootById(gift);
-                    needs[5] = std::min(100.0f, needs[5] + 4.0f);
-                    awardXp(4);
-                    ui.SetPickupNotification(received
-                        ? "Una persona te regaló " + (gift == "pan" ? std::string("pan") : std::string("agua")) + "."
-                        : "Te ofrecieron comida o agua, pero el costal está lleno.");
+        if (!ui.IsPaused() && !characterCreatorUI.IsOpen() && (Input::IsKeyPressed(GLFW_KEY_B) || Input::IsKeyPressed(GLFW_KEY_L))) {
+            const bool nearCambuche = simulation.IsNearCambuche(playerPos, 4.5f);
+            if (nearCambuche && !simulation.IsNearShop(playerPos, 2.0f)) {
+                ui.OpenCambucheMenu();
+            } else if (!simulation.IsNearShop(playerPos, 2.0f)) {
+                // Pedir limosna
+                if (begCooldownRemaining > 0.0f) {
+                    ui.SetPickupNotification("Espera " + std::to_string(static_cast<int>(std::ceil(begCooldownRemaining)))
+                                             + " s antes de volver a pedir limosna.");
+                } else if (needs[2] < 3.0f) {
+                    ui.SetPickupNotification("Estás demasiado cansado para pedir limosna (necesitas 3 de energía).");
                 } else {
-                    const bool rare = chance(0.08f);
-                    const int amount = rare
-                        ? (std::uniform_int_distribution<int>(0, 1)(lootRandom) == 0 ? 5000 : 10000)
-                        : static_cast<int>(std::round((2.0f + std::uniform_real_distribution<float>(0.0f, 13.0f)(lootRandom)) * 100.0f));
-                    const int earned = static_cast<int>(std::round(
-                        static_cast<float>(amount) * (hasTalent("crime2") ? 1.3f : 1.0f)));
-                    money += static_cast<float>(earned);
-                    needs[5] = std::min(100.0f, needs[5] + (rare ? 6.0f : 2.0f));
-                    awardXp(rare ? 8 : 4);
-                    ui.SetPickupNotification(rare
-                        ? "Una persona generosa te dio $" + std::to_string(earned) + " COP."
-                        : "Recibiste $" + std::to_string(earned) + " COP de limosna.");
+                    begCooldownRemaining = 4.0f;
+                    needs[2] = std::max(0.0f, needs[2] - 3.0f);
+                    const auto chance = [&](float probability) {
+                        return std::uniform_real_distribution<float>(0.0f, 1.0f)(lootRandom) < probability;
+                    };
+                    if (needs[4] < 20.0f && chance(0.70f)) {
+                        needs[5] = std::max(0.0f, needs[5] - 2.0f);
+                        ui.SetPickupNotification("La gente te rechaza por tu higiene. Usa jabón o un cepillo.");
+                    } else if (chance(0.20f)) {
+                        needs[5] = std::max(0.0f, needs[5] - 1.0f);
+                        ui.SetPickupNotification("Los transeúntes te ignoran.");
+                    } else if (chance(0.18f)) {
+                        const std::string gift = std::uniform_int_distribution<int>(0, 1)(lootRandom) == 0 ? "pan" : "agua";
+                        const bool received = addLootById(gift);
+                        needs[5] = std::min(100.0f, needs[5] + 4.0f);
+                        awardXp(4);
+                        ui.SetPickupNotification(received
+                            ? "Una persona te regaló " + (gift == "pan" ? std::string("pan") : std::string("agua")) + "."
+                            : "Te ofrecieron comida o agua, pero el costal está lleno.");
+                    } else {
+                        const bool rare = chance(0.08f);
+                        const int amount = rare
+                            ? (std::uniform_int_distribution<int>(0, 1)(lootRandom) == 0 ? 5000 : 10000)
+                            : static_cast<int>(std::round((2.0f + std::uniform_real_distribution<float>(0.0f, 13.0f)(lootRandom)) * 100.0f));
+                        const int earned = static_cast<int>(std::round(
+                            static_cast<float>(amount) * (hasTalent("crime2") ? 1.3f : 1.0f)));
+                        money += static_cast<float>(earned);
+                        needs[5] = std::min(100.0f, needs[5] + (rare ? 6.0f : 2.0f));
+                        awardXp(rare ? 8 : 4);
+                        ui.SetPickupNotification(rare
+                            ? "Una persona generosa te dio $" + std::to_string(earned) + " COP."
+                            : "Recibiste $" + std::to_string(earned) + " COP de limosna.");
+                    }
                 }
             }
         }
@@ -1015,6 +1095,50 @@ int main(int argc, char** argv) {
             }
         }
 
+        // Construir piezas del cambuche
+        {
+            const std::string buildRequest = ui.ConsumeCambucheBuildRequest();
+            if (!buildRequest.empty()) {
+                const auto countItem = [&](const std::string& id) {
+                    int qty = 0;
+                    for (const auto& entry : inventory) if (lootTable[entry.itemIndex].id == id) qty += entry.quantity;
+                    return qty;
+                };
+                const auto consumeItem = [&](const std::string& id, int qty = 1) {
+                    for (int rem = 0; rem < qty; ++rem) {
+                        auto it = std::find_if(inventory.begin(), inventory.end(),
+                            [&](const InventoryEntry& e) { return lootTable[e.itemIndex].id == id; });
+                        if (it == inventory.end()) break;
+                        inventoryWeight = std::max(0.0f, inventoryWeight - lootTable[it->itemIndex].weight);
+                        if (--it->quantity == 0) inventory.erase(it);
+                    }
+                };
+                bool canBuild = false;
+                if (buildRequest == "base"    && countItem("madera") >= 4 && countItem("carton") >= 3) { consumeItem("madera", 4); consumeItem("carton", 3); canBuild = true; }
+                else if (buildRequest == "techo"   && countItem("lona") >= 1 && countItem("plastico") >= 2)  { consumeItem("lona", 1); consumeItem("plastico", 2); canBuild = true; }
+                else if (buildRequest == "paredes" && countItem("carton") >= 4 && countItem("alambre") >= 1) { consumeItem("carton", 4); consumeItem("alambre", 1); canBuild = true; }
+                else if (buildRequest == "cama"    && countItem("carton") >= 2 && countItem("tela") >= 2)    { consumeItem("carton", 2); consumeItem("tela", 2); canBuild = true; }
+                else if (buildRequest == "fogon"   && countItem("lata") >= 2 && countItem("madera") >= 1)    { consumeItem("lata", 2); consumeItem("madera", 1); canBuild = true; }
+                else if (buildRequest == "vela"    && countItem("vela") >= 1)                                { consumeItem("vela", 1); canBuild = true; }
+                if (canBuild && simulation.BuildCambuchePiece(buildRequest)) {
+                    awardXp(15);
+                    audio.Play(AudioCue::Treasure);
+                    ui.SetPickupNotification("Construiste: " + buildRequest + ". ¡El cambuche crece!");
+                    saveGame("Cambuche actualizado");
+                }
+            }
+        }
+
+        // Dormir en el cambuche
+        if (ui.ConsumeSleepRequest() && simulation.GetCambucheState().base) {
+            needs[2] = std::min(100.0f, needs[2] + 60.0f); // Recupera energía
+            needs[3] = std::min(100.0f, needs[3] + 20.0f); // Recupera algo de salud
+            needs[5] = std::min(100.0f, needs[5] + 15.0f); // Mejora el ánimo
+            simulation.SetDayProgress(0.30f);               // Avanza al día siguiente
+            ui.SetPickupNotification("Dormiste en el cambuche. Energía y salud recuperadas. ¡Buenos días!");
+            saveGame("Partida guardada al despertar");
+        }
+
         if (simulation.IsMissionComplete()) objective = "Mision completada: recibiste $5000 y 20 XP";
         else if (simulation.IsMissionStarted()) objective = "Mision: entrega 5 reciclables en El Progreso [F] (" + std::to_string(simulation.GetMissionProgress()) + "/5)";
         else if (itemsCollected < 5) objective = "Rebusca y recoge 5 objetos [Q]";
@@ -1022,6 +1146,11 @@ int main(int argc, char** argv) {
         else if (level < 2) objective = "Sigue rebuscando para alcanzar nivel 2";
         else if (level >= 2) objective = "Sobrevive en Bogotá y mejora tu vida";
 
+        // Informar direcci\u00f3n de vista para el spawn fuera de c\u00e1mara de bolsas de basura
+        {
+            const float facingYaw = camera.GetMode() == CameraMode::ThirdPerson ? camera.GetYaw() : playerYaw;
+            simulation.SetPlayerFacing({std::sin(facingYaw), std::cos(facingYaw)});
+        }
         simulation.Update(dt, playerPos);
         poopCooldown = std::max(0.0f, poopCooldown - dt);
         poopAnimationRemaining = std::max(0.0f, poopAnimationRemaining - dt);
@@ -1079,7 +1208,7 @@ int main(int argc, char** argv) {
         renderer.BeginScene(camera, clock.GetElapsedTime());
 
         // Renderizar ciudad de Bogotá
-        city.Render(renderer);
+        city.Render(renderer, playerPos);
         simulation.Render(renderer, clock.GetElapsedTime(), playerPos);
 
         // Renderizar personaje
@@ -1164,7 +1293,8 @@ int main(int argc, char** argv) {
                      needs, money, inventoryWeight, inventoryCapacity(),
                      simulation.GetDayProgress(), simulation.GetPedestrianCount(), simulation.GetTrafficCount(), inventorySummary, diseaseSummary, level, xp, objective,
                      simulation.GetMissionProgress(), simulation.GetMissionTarget(), craftingOptions,
-                     inventoryOptions, talentPoints, talentOptions, simulation.IsDogFriend(), dealerOptions);
+                     inventoryOptions, talentPoints, talentOptions, simulation.IsDogFriend(), dealerOptions,
+                     boostActive, boostTimer, psychosisSeverity);
 
         const std::string dealerPurchase = ui.ConsumeDealerPurchaseRequest();
         if (!dealerPurchase.empty()) {
@@ -1243,7 +1373,51 @@ int main(int argc, char** argv) {
             characterManager.ApplyLook(changedLook, false);
         }
 
+        // Menú del cambuche (refugio progresivo)
+        {
+            const auto countItem = [&](const std::string& id) {
+                int qty = 0;
+                for (const auto& entry : inventory) if (lootTable[entry.itemIndex].id == id) qty += entry.quantity;
+                return qty;
+            };
+            const auto& cs = simulation.GetCambucheState();
+            const std::vector<CambuchePieceOption> cambuchePieces{
+                {"base",    "Base (tarima de madera y cartón)",
+                 "Madera (" + std::to_string(countItem("madera")) + "/4) · Cartón (" + std::to_string(countItem("carton")) + "/3)",
+                 "",
+                 cs.base, false,
+                 !cs.base && countItem("madera") >= 4 && countItem("carton") >= 3},
+                {"techo",   "Techo (lona y plástico)",
+                 "Lona (" + std::to_string(countItem("lona")) + "/1) · Plástico (" + std::to_string(countItem("plastico")) + "/2)",
+                 "Requiere base",
+                 cs.techo, !cs.base,
+                 cs.base && !cs.techo && countItem("lona") >= 1 && countItem("plastico") >= 2},
+                {"paredes", "Paredes (cartón y alambre)",
+                 "Cartón (" + std::to_string(countItem("carton")) + "/4) · Alambre (" + std::to_string(countItem("alambre")) + "/1)",
+                 "Requiere base",
+                 cs.paredes, !cs.base,
+                 cs.base && !cs.paredes && countItem("carton") >= 4 && countItem("alambre") >= 1},
+                {"cama",    "Cama (cartón y tela)",
+                 "Cartón (" + std::to_string(countItem("carton")) + "/2) · Tela (" + std::to_string(countItem("tela")) + "/2)",
+                 "Requiere base",
+                 cs.cama, !cs.base,
+                 cs.base && !cs.cama && countItem("carton") >= 2 && countItem("tela") >= 2},
+                {"fogon",   "Fogón de latas (latas y madera)",
+                 "Lata (" + std::to_string(countItem("lata")) + "/2) · Madera (" + std::to_string(countItem("madera")) + "/1)",
+                 "Requiere base",
+                 cs.fogon, !cs.base,
+                 cs.base && !cs.fogon && countItem("lata") >= 2 && countItem("madera") >= 1},
+                {"vela",    "Vela encendida",
+                 "Vela (" + std::to_string(countItem("vela")) + "/1)",
+                 "Requiere base",
+                 cs.vela, !cs.base,
+                 cs.base && !cs.vela && countItem("vela") >= 1}
+            };
+            ui.RenderCambucheMenu(cambuchePieces, cs.base, simulation.IsNight());
+        }
+
         ui.EndFrame();
+
 
         window.SwapBuffers();
 

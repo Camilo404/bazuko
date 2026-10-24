@@ -1,5 +1,6 @@
 #include "Renderer.hpp"
 #include "../core/Paths.hpp"
+#include "Texture.hpp"
 #include <glad/gl.h>
 #include <algorithm>
 
@@ -60,12 +61,14 @@ void Renderer::EndScene() {
     m_DefaultShader->Unbind();
 }
 
-void Renderer::Submit(const Mesh& mesh, const glm::mat4& transform, const glm::vec4& albedo, bool useTexture, bool doubleSided, const std::vector<glm::mat4>* skinMatrices, int alphaMode, float alphaCutoff) {
+void Renderer::Submit(const Mesh& mesh, const glm::mat4& transform, const glm::vec4& albedo, bool useTexture, bool doubleSided, const std::vector<glm::mat4>* skinMatrices, int alphaMode, float alphaCutoff, const Texture* specularTexture) {
     m_DefaultShader->SetMat4("uModel", transform);
     m_DefaultShader->SetVec4("uAlbedo", albedo);
     m_DefaultShader->SetInt("uUseTexture", useTexture ? 1 : 0);
     m_DefaultShader->SetInt("uAlphaMode", alphaMode);
     m_DefaultShader->SetFloat("uAlphaCutoff", alphaCutoff);
+    m_DefaultShader->SetInt("uUseSpecularTexture", specularTexture ? 1 : 0);
+    if (specularTexture) specularTexture->BindUnit(1);
     const bool skinned = skinMatrices && !skinMatrices->empty();
     m_DefaultShader->SetInt("uSkinned", skinned ? 1 : 0);
     const size_t boneCount = skinned ? std::min<size_t>(skinMatrices->size(), 128) : 0;

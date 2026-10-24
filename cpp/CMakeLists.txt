@@ -80,6 +80,18 @@ FetchContent_Declare(opusfile
 FetchContent_MakeAvailable(ogg opus opusfile)
 unset(CMAKE_SKIP_INSTALL_RULES)
 
+set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(assimp
+    GIT_REPOSITORY https://github.com/assimp/assimp.git
+    GIT_TAG v5.4.3
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(assimp)
+
 add_library(glad STATIC third_party/glad/src/gl.c)
 target_include_directories(glad PUBLIC third_party/glad/include)
 
@@ -139,13 +151,18 @@ add_executable(bazuko
 )
 if(WIN32)
     set_target_properties(bazuko PROPERTIES WIN32_EXECUTABLE TRUE)
+    if(MSVC)
+        target_link_options(bazuko PRIVATE "/SUBSYSTEM:WINDOWS" "/ENTRY:mainCRTStartup")
+    elseif(MINGW)
+        target_link_options(bazuko PRIVATE "-mwindows")
+    endif()
 endif()
 target_include_directories(bazuko PRIVATE src third_party/include third_party/glad/include ${BAZUKO_WEBP_INCLUDE_DIR})
 target_compile_definitions(bazuko PRIVATE BAZUKO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 if(MINGW)
     target_link_options(bazuko PRIVATE -static -static-libgcc -static-libstdc++)
 endif()
-target_link_libraries(bazuko PRIVATE glfw glm::glm glad imgui Threads::Threads opusfile ${BAZUKO_WEBP_TARGET} ${CMAKE_DL_LIBS})
+target_link_libraries(bazuko PRIVATE glfw glm::glm glad imgui Threads::Threads opusfile assimp ${BAZUKO_WEBP_TARGET} ${CMAKE_DL_LIBS})
 
 option(BAZUKO_BUILD_OPUS_TESTS "Build the Opus audio decoding smoke test" OFF)
 if(BAZUKO_BUILD_OPUS_TESTS)

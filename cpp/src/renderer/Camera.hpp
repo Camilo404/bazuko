@@ -28,6 +28,7 @@ public:
     const glm::mat4& GetViewProjectionMatrix() const { return m_ViewProjectionMatrix; }
     const glm::vec3& GetPosition() const { return m_Position; }
     float GetYaw() const { return m_Yaw; }
+    void SetPsychosisFovOffset(float offset) { m_PsychosisFovOffset = offset; }
 
     // Posiciona la cámara directamente (usado por CharacterPreview)
     void LookAt(const glm::vec3& eye, const glm::vec3& center, const glm::vec3& up) {
@@ -58,6 +59,7 @@ private:
 
     float m_BobTime = 0.0f;
     float m_BobAmount = 0.0f;
+    float m_PsychosisFovOffset = 0.0f;
 
     glm::mat4 m_ViewMatrix{1.0f};
     glm::mat4 m_ProjectionMatrix{1.0f};

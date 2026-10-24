@@ -52,10 +52,11 @@ std::shared_ptr<Texture> MakeSurfaceTexture(int surface, uint32_t seed) {
 
 }
 
-CityLayout::CityLayout()
+CityLayout::CityLayout(const CityLoadProgress& progressCallback)
     : m_Grid(WIDTH * HEIGHT, TileType::Building) {
+    if (progressCallback) progressCallback(1, 7, "Generando trazado urbano y calles de Bogotá...");
     GenerateCityMap();
-    BuildMeshes();
+    BuildMeshes(progressCallback);
 }
 
 TileType CityLayout::GetTileAt(int x, int z) const {
@@ -199,8 +200,36 @@ void CityLayout::GenerateCityMap() {
     }
 }
 
-void CityLayout::BuildMeshes() {
+void CityLayout::BuildMeshes(const CityLoadProgress& progressCallback) {
     m_Buildings.clear();
+    if (progressCallback) progressCallback(2, 7, "Cargando arquitectura: Edificio 1 (Only_Building.fbx)...");
+    m_BuildingModels[0] = Model::LoadFromFile(Paths::Find("public/models/Edificio 1/Only_Building.fbx"));
+    if (progressCallback) progressCallback(3, 7, "Cargando arquitectura: Edificio 3 (highrise.fbx)...");
+    m_BuildingModels[1] = Model::LoadFromFile(Paths::Find("public/models/Edificio 3/highrise.fbx"));
+    constexpr std::array<const char*, 3> modularBuildingFiles{{
+        "Building_LevelModularShell_Bottom.fbx",
+        "Building_LevelModularShell_Mid.fbx",
+        "Building_LevelModularShell_Top.fbx"
+    }};
+    for (size_t index = 0; index < modularBuildingFiles.size(); ++index) {
+        if (progressCallback) {
+            progressCallback(4 + index, 7, "Cargando módulos urbanos (" + std::to_string(index + 1) + "/3: " + modularBuildingFiles[index] + ")...");
+        }
+        m_ModularBuildingModels[index] = Model::LoadFromFile(Paths::Find(
+            std::string("public/models/Edificio 2/Models/FBX/") + modularBuildingFiles[index]));
+    }
+    if (progressCallback) progressCallback(7, 7, "Construyendo mallas de calzadas, andenes y señalética...");
+    const auto availableBuildingVariant = [&](int preferred) {
+        for (int offset = 0; offset < 3; ++offset) {
+            const int variant = (preferred + offset) % 3;
+            const bool available = variant == 1
+                ? std::all_of(m_ModularBuildingModels.begin(), m_ModularBuildingModels.end(),
+                              [](const auto& model) { return static_cast<bool>(model); })
+                : static_cast<bool>(m_BuildingModels[variant == 0 ? 0 : 1]);
+            if (available) return variant;
+        }
+        return -1;
+    };
     std::vector<Vertex> groundVertices;
     std::vector<uint32_t> groundIndices;
     std::vector<Vertex> sidewalkVertices;
@@ -237,81 +266,62 @@ void CityLayout::BuildMeshes() {
     std::vector<uint32_t> detailIndices;
     std::vector<Vertex> signVertices;
     std::vector<uint32_t> signIndices;
-    struct UrbanLot {
-        int tileX = 0;
-        int tileZ = 0;
-        int tiles = 0;
-        int floors = 0;
-        int design = 0;
-        uint32_t seed = 0;
-    };
-    std::vector<UrbanLot> urbanLots;
-    std::vector<uint8_t> urbanOccupied(static_cast<size_t>(WIDTH * HEIGHT), 0);
-    constexpr std::array<int, 12> floorSequence{{3, 5, 8, 12, 4, 18, 6, 24, 10, 30, 7, 16}};
+    std::vector<uint8_t> modelOccupied(static_cast<size_t>(WIDTH * HEIGHT), 0);
+    std::vector<uint8_t> visitedBuildingTiles(static_cast<size_t>(WIDTH * HEIGHT), 0);
     const auto urbanHash = [](int x, int z) {
         return static_cast<uint32_t>((static_cast<uint32_t>(x + 17) * 73856093u)
             ^ (static_cast<uint32_t>(z + 31) * 19349663u));
     };
-    const auto lotFits = [&](int x, int z, int size) {
-        for (int dz = 0; dz < size; ++dz) for (int dx = 0; dx < size; ++dx) {
-            const int tileX = x + dx;
-            const int tileZ = z + dz;
-            if (GetTileAt(tileX, tileZ) != TileType::Building
-                || urbanOccupied[static_cast<size_t>(tileZ * WIDTH + tileX)] != 0) return false;
-        }
-        return true;
-    };
-    const auto hasStreetFrontage = [&](int x, int z, int size) {
-        const int middleX = x + size / 2;
-        const int middleZ = z + size / 2;
-        const auto isStreetOrSidewalk = [&](TileType type) {
-            return type == TileType::Sidewalk || type == TileType::Road || type == TileType::Busway;
-        };
-        return isStreetOrSidewalk(GetTileAt(middleX, z - 1))
-            || isStreetOrSidewalk(GetTileAt(middleX, z + size))
-            || isStreetOrSidewalk(GetTileAt(x - 1, middleZ))
-            || isStreetOrSidewalk(GetTileAt(x + size, middleZ));
-    };
-    for (int z = 2; z < HEIGHT - 6; ++z) {
-        for (int x = 2; x < WIDTH - 6; ++x) {
-            const uint32_t seed = urbanHash(x, z);
-            if (seed % 100u > 54u) continue;
-            int size = lotFits(x, z, 6) ? 6 : (lotFits(x, z, 4) ? 4 : 0);
-            if (size == 0 || !hasStreetFrontage(x, z, size)) continue;
-            const bool crowded = std::any_of(urbanLots.begin(), urbanLots.end(), [&](const UrbanLot& lot) {
-                return x <= lot.tileX + lot.tiles + 2 && x + size + 2 >= lot.tileX
-                    && z <= lot.tileZ + lot.tiles + 2 && z + size + 2 >= lot.tileZ;
-            });
-            if (crowded) continue;
-            int floors = floorSequence[urbanLots.size() % floorSequence.size()];
-            if (size < 6 && floors > 12) floors = 8 + static_cast<int>(seed % 5u);
-            urbanLots.push_back({x, z, size, floors,
-                                 static_cast<int>(urbanLots.size() % 5), seed});
-            for (int dz = 0; dz < size; ++dz) for (int dx = 0; dx < size; ++dx)
-                urbanOccupied[static_cast<size_t>((z + dz) * WIDTH + x + dx)] = 1;
-        }
-    }
-    std::vector<size_t> towerSites;
-    for (size_t i = 0; i < urbanLots.size(); ++i)
-        if (urbanLots[i].tiles >= 6) towerSites.push_back(i);
-    std::sort(towerSites.begin(), towerSites.end(), [&](size_t a, size_t b) {
-        return urbanLots[a].seed < urbanLots[b].seed;
-    });
-    constexpr std::array<int, 4> towerFloors{{30, 24, 18, 12}};
-    for (size_t i = 0; i < std::min(towerSites.size(), towerFloors.size()); ++i)
-        urbanLots[towerSites[i]].floors = towerFloors[i];
     constexpr std::array<glm::vec4, 4> urbanColors{{
         {0.78f, 0.40f, 0.27f, 1.0f}, {0.65f, 0.67f, 0.67f, 1.0f},
         {0.81f, 0.77f, 0.68f, 1.0f}, {0.60f, 0.64f, 0.66f, 1.0f}
     }};
-    for (const UrbanLot& lot : urbanLots) {
-        const float width = static_cast<float>(lot.tiles) * TILE_SIZE;
-        const float height = static_cast<float>(lot.floors) * 3.2f;
-        const float centerX = static_cast<float>(lot.tileX) * TILE_SIZE + width * 0.5f - WIDTH;
-        const float centerZ = static_cast<float>(lot.tileZ) * TILE_SIZE + width * 0.5f - HEIGHT;
-        const auto& color = urbanColors[lot.seed % urbanColors.size()];
-        m_Buildings.push_back({{centerX, height * 0.5f, centerZ},
-                               {width, height, width}, color, lot.design, lot.floors});
+    constexpr std::array<int, 8> blockFloorCounts{{5, 6, 7, 8, 10, 12, 16, 24}};
+    std::vector<size_t> componentQueue;
+    for (int startZ = 1; startZ < HEIGHT - 1; ++startZ) {
+        for (int startX = 1; startX < WIDTH - 1; ++startX) {
+            const size_t startIndex = static_cast<size_t>(startZ * WIDTH + startX);
+            if (m_Grid[startIndex] != TileType::Building || visitedBuildingTiles[startIndex]) continue;
+            componentQueue.clear();
+            componentQueue.push_back(startIndex);
+            visitedBuildingTiles[startIndex] = 1;
+            int minX = startX, maxX = startX, minZ = startZ, maxZ = startZ;
+            for (size_t current = 0; current < componentQueue.size(); ++current) {
+                const int x = static_cast<int>(componentQueue[current] % WIDTH);
+                const int z = static_cast<int>(componentQueue[current] / WIDTH);
+                minX = std::min(minX, x);
+                maxX = std::max(maxX, x);
+                minZ = std::min(minZ, z);
+                maxZ = std::max(maxZ, z);
+                for (const auto [dx, dz] : {std::pair{-1, 0}, std::pair{1, 0},
+                                            std::pair{0, -1}, std::pair{0, 1}}) {
+                    const int nextX = x + dx, nextZ = z + dz;
+                    if (GetTileAt(nextX, nextZ) != TileType::Building) continue;
+                    const size_t nextIndex = static_cast<size_t>(nextZ * WIDTH + nextX);
+                    if (visitedBuildingTiles[nextIndex]) continue;
+                    visitedBuildingTiles[nextIndex] = 1;
+                    componentQueue.push_back(nextIndex);
+                }
+            }
+            const int tilesX = maxX - minX + 1;
+            const int tilesZ = maxZ - minZ + 1;
+            const size_t boundingArea = static_cast<size_t>(tilesX * tilesZ);
+            const float coverage = static_cast<float>(componentQueue.size()) / static_cast<float>(boundingArea);
+            const uint32_t seed = urbanHash(minX, minZ);
+            const int variant = availableBuildingVariant(static_cast<int>(seed % 3u));
+            if (variant < 0 || tilesX < 4 || tilesZ < 4 || coverage < 1.0f) continue;
+            for (const size_t tile : componentQueue) modelOccupied[tile] = 1;
+            const int floors = seed % 17u == 0u ? 24
+                : blockFloorCounts[static_cast<size_t>((seed >> 8) % blockFloorCounts.size())];
+            const float width = std::max(0.5f, static_cast<float>(tilesX) * TILE_SIZE - 0.5f);
+            const float depth = std::max(0.5f, static_cast<float>(tilesZ) * TILE_SIZE - 0.5f);
+            const float height = static_cast<float>(floors) * 3.2f;
+            const float centerX = (static_cast<float>(minX + maxX + 1) * TILE_SIZE - WIDTH * TILE_SIZE) * 0.5f;
+            const float centerZ = (static_cast<float>(minZ + maxZ + 1) * TILE_SIZE - HEIGHT * TILE_SIZE) * 0.5f;
+            m_Buildings.push_back({{centerX, height * 0.5f, centerZ},
+                                   {width, height, depth},
+                                   urbanColors[seed % urbanColors.size()], -1, floors, variant});
+        }
     }
     // Rotulos con texto: si no hay fuente se vuelve a los letreros de color liso.
     const bool hasSigns = m_SignAtlas.Build(Paths::Find("assets/fonts/Roboto-Medium.ttf"));
@@ -351,7 +361,8 @@ void CityLayout::BuildMeshes() {
     for (int z = 0; z < HEIGHT; ++z) {
         for (int x = 0; x < WIDTH; ++x) {
             TileType type = m_Grid[z * WIDTH + x];
-            if (type == TileType::Building && urbanOccupied[static_cast<size_t>(z * WIDTH + x)] != 0) continue;
+            const size_t tileIndex = static_cast<size_t>(z * WIDTH + x);
+            if (type == TileType::Building && modelOccupied[tileIndex] != 0) continue;
 
             float x0 = x * TILE_SIZE - halfWidth;
             float z0 = z * TILE_SIZE - halfHeight;
@@ -359,7 +370,6 @@ void CityLayout::BuildMeshes() {
             float z1 = z0 + TILE_SIZE;
 
             if (type == TileType::Building) {
-                // Generar edificio
                 float bHeight = heightDist(rng);
                 int colorVariant = colorTypeDist(rng);
                 glm::vec4 bColor;
@@ -373,12 +383,14 @@ void CityLayout::BuildMeshes() {
                     bColor = glm::vec4(0.78f, 0.80f, 0.82f, 1.0f);
                 }
 
-                const float buildingWidth = TILE_SIZE;
-                const float buildingDepth = TILE_SIZE;
+                constexpr float buildingWidth = TILE_SIZE;
+                const float buildingDepth = buildingWidth;
                 m_Buildings.push_back({
-                    glm::vec3(x0 + TILE_SIZE * 0.5f, bHeight * 0.5f, z0 + TILE_SIZE * 0.5f),
+                    glm::vec3(x0 + buildingWidth * 0.5f, bHeight * 0.5f,
+                              z0 + buildingDepth * 0.5f),
                     glm::vec3(buildingWidth, bHeight, buildingDepth),
-                    bColor
+                    bColor,
+                    -1
                 });
                 const std::array<std::pair<TileType, glm::vec3>,4> facadeSides{{
                     {GetTileAt(x,z-1),{0,0,-1}}, {GetTileAt(x,z+1),{0,0,1}},
@@ -519,6 +531,7 @@ void CityLayout::BuildMeshes() {
         appendFace(center, half, color, {0,-1,0}, {{{-1,-1,-1},{1,-1,-1},{1,-1,1},{-1,-1,1}}});
     };
     for (const auto& building : m_Buildings) {
+        if (building.modelVariant >= 0) continue;
         if (building.urbanDesign >= 0) {
             const float width = building.size.x;
             const float depth = building.size.z;
@@ -629,10 +642,9 @@ void CityLayout::BuildMeshes() {
     if (!buildingVertices.empty()) m_BuildingMesh = std::make_shared<Mesh>(buildingVertices, buildingIndices);
     if (!detailVertices.empty()) m_FacadeDetailMesh = std::make_shared<Mesh>(detailVertices, detailIndices);
     if (!signVertices.empty()) m_SignMesh = std::make_shared<Mesh>(signVertices, signIndices);
-    std::vector<BuildingInstance>().swap(m_Buildings);
 }
 
-void CityLayout::Render(Renderer& renderer) {
+void CityLayout::Render(Renderer& renderer, const glm::vec3& focusPosition) {
     if (m_GroundMesh) {
         m_AsphaltTexture->BindUnit(0);
         renderer.Submit(*m_GroundMesh, glm::mat4(1.0f), glm::vec4(1.0f), true);
@@ -654,6 +666,50 @@ void CityLayout::Render(Renderer& renderer) {
     if (m_SignMesh && m_SignAtlas.GetTexture()) {
         m_SignAtlas.GetTexture()->BindUnit(0);
         renderer.Submit(*m_SignMesh, glm::mat4(1.0f), glm::vec4(1.0f), true, false, nullptr, 2); // mezcla alfa: grafitis con fondo transparente
+    }
+    for (const auto& building : m_Buildings) {
+        if (building.modelVariant < 0) continue;
+        const glm::vec2 offset(building.position.x - focusPosition.x,
+                               building.position.z - focusPosition.z);
+        if (glm::dot(offset, offset) > 85.0f * 85.0f) continue;
+        const glm::vec3 boundsCenter = building.position;
+        const float groundY = boundsCenter.y - building.size.y * 0.5f;
+        const glm::vec3 targetFootprint(
+            std::max(0.5f, building.size.x - 1.0f),
+            building.size.y,
+            std::max(0.5f, building.size.z - 1.0f));
+        const auto fittedTransform = [&](const Model& model, const glm::vec3& position,
+                                         const glm::vec3& targetSize) {
+            const glm::vec3 extent = model.GetBoundsMaximum() - model.GetBoundsMinimum();
+            if (glm::any(glm::lessThanEqual(extent, glm::vec3(0.0001f)))) return glm::mat4(1.0f);
+            return glm::translate(glm::mat4(1.0f), position)
+                * glm::scale(glm::mat4(1.0f), targetSize / extent)
+                * glm::translate(glm::mat4(1.0f),
+                    {-((model.GetBoundsMinimum().x + model.GetBoundsMaximum().x) * 0.5f),
+                     -model.GetBoundsMinimum().y,
+                     -((model.GetBoundsMinimum().z + model.GetBoundsMaximum().z) * 0.5f)});
+        };
+        if (building.modelVariant == 1) {
+            const float bottomHeight = building.size.y * 0.25f;
+            const float middleHeight = building.size.y * 0.5f;
+            const float topHeight = building.size.y - bottomHeight - middleHeight;
+            const std::array<float, 3> sectionHeights{{bottomHeight, middleHeight, topHeight}};
+            float sectionY = groundY;
+            for (size_t section = 0; section < m_ModularBuildingModels.size(); ++section) {
+                const float height = sectionHeights[section];
+                const glm::vec3 targetSize(targetFootprint.x, height, targetFootprint.z);
+                m_ModularBuildingModels[section]->Draw(
+                    renderer, fittedTransform(*m_ModularBuildingModels[section],
+                                              {boundsCenter.x, sectionY, boundsCenter.z}, targetSize));
+                sectionY += height;
+            }
+        } else {
+            const auto& model = m_BuildingModels[building.modelVariant == 0 ? 0 : 1];
+            if (!model) continue;
+            model->Draw(renderer, fittedTransform(*model,
+                                                   {boundsCenter.x, groundY, boundsCenter.z},
+                                                   targetFootprint));
+        }
     }
 }
 
