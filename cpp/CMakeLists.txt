@@ -146,7 +146,7 @@ add_executable(bazuko
     src/renderer/Texture.cpp src/renderer/Model.cpp
     src/ui/UIManager.cpp src/ui/CharacterCreatorUI.cpp
     src/character/CharacterManager.cpp src/character/CharacterPreview.cpp src/character/Ragdoll.cpp
-    src/world/CityLayout.cpp src/world/Simulation.cpp
+    src/world/CityLayout.cpp src/world/Simulation.cpp src/world/BirdFlock.cpp
     src/world/TextRaster.cpp src/world/SignAtlas.cpp
 )
 if(WIN32)
@@ -174,6 +174,13 @@ if(BAZUKO_BUILD_OPUS_TESTS)
     )
     add_test(NAME bazuko_opus_audio COMMAND bazuko_opus_audio_test)
 endif()
+
+# Pruebas de logica pura (sin ventana ni GPU): ctest --test-dir build -C Release --output-on-failure
+enable_testing()
+add_executable(bazuko_birds_test tests/BirdFlockTest.cpp src/world/BirdFlock.cpp)
+target_include_directories(bazuko_birds_test PRIVATE src)
+target_link_libraries(bazuko_birds_test PRIVATE glm::glm)
+add_test(NAME bazuko_birds COMMAND bazuko_birds_test)
 
 add_custom_command(TARGET bazuko POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:bazuko>/assets"

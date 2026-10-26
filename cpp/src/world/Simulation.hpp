@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CityLayout.hpp"
+#include "BirdFlock.hpp"
 #include "../renderer/Model.hpp"
 #include <glm/glm.hpp>
 #include <array>
@@ -209,15 +210,7 @@ public:
     const std::vector<ShadowPerson>& GetShadowPeople() const { return m_ShadowPeople; }
 
 private:
-    struct Pigeon {
-        glm::vec3 position{0.0f};
-        glm::vec3 target{0.0f};
-        float flightRemaining = 0.0f;
-        float phase = 0.0f;
-        size_t parkIndex = 0;
-        size_t modelIndex = 0;
-        float yaw = 0.0f;
-    };
+    // Las aves viven en BirdFlock (world/BirdFlock.hpp): posan en suelo, arboles y postes por todo el mapa.
     enum class RatState {
         Idle,
         Scurrying,
@@ -260,6 +253,7 @@ private:
     void UpdateBus(float dt);
     void UpdatePickups(float dt, const glm::vec3& playerPosition);
     void UpdatePigeons(float dt, const glm::vec3& playerPosition);
+    void BuildBirdSpots();
     void UpdateRats(float dt, const glm::vec3& playerPosition);
     void UpdatePoop(float dt);
 
@@ -382,7 +376,8 @@ private:
     std::vector<glm::vec3> m_TreePositions;
     std::vector<glm::vec3> m_GrassPositions;
     std::array<std::vector<glm::vec3>, 3> m_ParkGrassPositions;
-    std::vector<Pigeon> m_Pigeons;
+    BirdFlock m_Birds{11};
+    std::vector<glm::vec2> m_BirdDisturbances;
     std::vector<glm::vec3> m_RatWalkPoints;
     std::vector<Rat> m_Rats;
     std::vector<glm::vec3> m_RainOffsets;

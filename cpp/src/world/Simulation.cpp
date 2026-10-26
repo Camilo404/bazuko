@@ -478,17 +478,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
             }
         }
     }
-    for (size_t parkIndex = 0; parkIndex < m_ParkGrassPositions.size(); ++parkIndex) {
-        const auto& grass = m_ParkGrassPositions[parkIndex];
-        for (size_t pigeonIndex = 0; pigeonIndex < 10 && !grass.empty(); ++pigeonIndex) {
-            const size_t grassIndex = pigeonIndex * grass.size() / 10;
-            const glm::vec3 point = grass[grassIndex];
-            const float offset = static_cast<float>(pigeonIndex % 4) * 0.07f;
-            m_Pigeons.push_back({point + glm::vec3(offset, 0.0f, -offset), point, 0.0f,
-                                 static_cast<float>(parkIndex * 10 + pigeonIndex) * 0.83f, parkIndex,
-                                 (parkIndex + pigeonIndex) % m_BirdModels.size(), 0.0f});
-        }
-    }
+    // Las aves se reparten por todo el mapa al final del constructor (BuildBirdSpots)
     for (int z = 1; z < CityLayout::HEIGHT - 1; ++z) {
         for (int x = 1; x < CityLayout::WIDTH - 1; ++x) {
             if (m_City.GetTileAt(x, z) != TileType::Sidewalk) continue;
@@ -901,6 +891,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
     m_RecyclerPosition = findMarketSidewalk({-5.0f, 0.15f, 0.0f}, 0.0f);
     m_MissionNpcPosition = findMarketSidewalk(m_RecyclerPosition + glm::vec3(2.0f, 0.0f, 0.0f), 1.0f);
     m_DealerPosition = findMarketSidewalk({-45.0f, 0.15f, -20.0f}, 0.0f);
+    BuildBirdSpots();
 }
 
 bool Simulation::FindSidewalkPoint(glm::vec3& point, const glm::vec3& center, float radius) {
@@ -1214,37 +1205,49 @@ void Simulation::Update(float dt, const glm::vec3& playerPosition) {
     UpdatePickups(dt, playerPosition);
 }
 
-void Simulation::UpdatePigeons(float dt, const glm::vec3& playerPosition) {
-    for (auto& pigeon : m_Pigeons) {
-        pigeon.phase += dt;
-        if (pigeon.flightRemaining <= 0.0f) {
-            const bool playerNear = glm::distance(glm::vec2(playerPosition.x, playerPosition.z),
-                                                  glm::vec2(pigeon.position.x, pigeon.position.z)) < 3.5f;
-            const bool pedestrianNear = std::any_of(m_Pedestrians.begin(), m_Pedestrians.end(),
-                [&](const Pedestrian& pedestrian) {
-                    return glm::distance(glm::vec2(pedestrian.position.x, pedestrian.position.z),
-                                         glm::vec2(pigeon.position.x, pigeon.position.z)) < 3.5f;
-                });
-            if (!playerNear && !pedestrianNear) continue;
-            const auto& parkGrass = m_ParkGrassPositions[pigeon.parkIndex];
-            if (parkGrass.empty()) continue;
-            std::uniform_int_distribution<size_t> landing(0, parkGrass.size() - 1);
-            pigeon.target = parkGrass[landing(m_Random)];
-            pigeon.target.y = 1.4f;
-            pigeon.flightRemaining = 2.0f;
-        }
-        const glm::vec3 delta = pigeon.target - pigeon.position;
-        const float distance = glm::length(delta);
-        if (distance > 0.01f) {
-            pigeon.yaw = std::atan2(delta.x, delta.z);
-            pigeon.position += delta * std::min(1.0f, 4.0f * dt / distance);
-        }
-        pigeon.flightRemaining = std::max(0.0f, pigeon.flightRemaining - dt);
-        if (pigeon.flightRemaining <= 0.0f) {
-            pigeon.position = pigeon.target;
-            pigeon.position.y = 0.0f;
+void Simulation::BuildBirdSpots() {
+    // Alturas de posado (m sobre el suelo). Ajustalas si cambia el tamano de la farola o del semaforo.
+    constexpr float kLampPerchHeight = 4.2f;
+    constexpr float kSignalPerchHeight = 3.45f;
+
+    std::vector<BirdSpot> spots;
+    // Suelo: prados y andenes de toda la ciudad (1 de cada 4 baldosas de anden o plaza)
+    for (const glm::vec3& grass : m_GrassPositions) spots.push_back({grass, BirdPerch::Ground});
+    for (int z = 1; z < CityLayout::HEIGHT - 1; ++z) {
+        for (int x = 1; x < CityLayout::WIDTH - 1; ++x) {
+            const TileType tile = m_City.GetTileAt(x, z);
+            if (tile != TileType::Sidewalk && tile != TileType::Plaza) continue;
+            if ((x * 5 + z * 3) % 4 != 0) continue;
+            const glm::vec3 point((static_cast<float>(x) + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH, 0.0f,
+                                  (static_cast<float>(z) + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT);
+            if (!m_City.IsWalkable(point.x, point.z)) continue;
+            spots.push_back({point, BirdPerch::Ground});
         }
     }
+    // Ramas: cuatro puntos en la copa de cada arbol (copa entre 3.5 y 4.9 m)
+    for (size_t tree = 0; tree < m_TreePositions.size(); ++tree) {
+        for (size_t branch = 0; branch < 4; ++branch) {
+            const float angle = (static_cast<float>(branch) + 0.37f * static_cast<float>(tree % 5)) * glm::half_pi<float>();
+            const float radius = 0.45f + 0.15f * static_cast<float>((tree + branch) % 4);
+            const float height = 3.5f + 0.35f * static_cast<float>((tree * 3 + branch) % 5);
+            spots.push_back({m_TreePositions[tree] + glm::vec3(std::cos(angle) * radius, height, std::sin(angle) * radius),
+                             BirdPerch::Tree});
+        }
+    }
+    // Postes: farolas y semaforos
+    for (const StreetLamp& lamp : m_StreetLamps)
+        spots.push_back({lamp.position + glm::vec3(0.0f, kLampPerchHeight, 0.0f), BirdPerch::Pole});
+    for (const TrafficSignal& signal : m_TrafficSignals)
+        spots.push_back({signal.polePosition + glm::vec3(0.0f, kSignalPerchHeight, 0.0f), BirdPerch::Pole});
+
+    m_Birds.SetSpots(std::move(spots), m_BirdModels.size());
+}
+
+void Simulation::UpdatePigeons(float dt, const glm::vec3& playerPosition) {
+    m_BirdDisturbances.clear();
+    for (const Pedestrian& pedestrian : m_Pedestrians)
+        m_BirdDisturbances.emplace_back(pedestrian.position.x, pedestrian.position.z);
+    m_Birds.Update(dt, playerPosition, m_BirdDisturbances);
 }
 
 void Simulation::UpdateRats(float dt, const glm::vec3& playerPosition) {
@@ -2058,18 +2061,28 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
             drawLens(2.72f, greenColor);
         }
     }
-    for (const auto& pigeon : m_Pigeons) {
+    for (const Bird& pigeon : m_Birds.Birds()) {
         if (glm::distance(glm::vec2(focusPosition.x, focusPosition.z),
-                          glm::vec2(pigeon.position.x, pigeon.position.z)) > 45.0f) continue;
+                          glm::vec2(pigeon.position.x, pigeon.position.z)) > 70.0f) continue;
+        const bool flying = pigeon.IsFlying();
         glm::mat4 bird = glm::translate(glm::mat4(1.0f), pigeon.position);
         bird = glm::rotate(bird, pigeon.yaw, {0.0f, 1.0f, 0.0f});
-        if (pigeon.flightRemaining > 0.0f && m_BirdModels[pigeon.modelIndex]) {
+        if (flying) {
+            bird = glm::rotate(bird, pigeon.pitch, {1.0f, 0.0f, 0.0f});
+            bird = glm::rotate(bird, std::sin(time * pigeon.flapRate * 0.5f + pigeon.phase) * 0.12f, {0.0f, 0.0f, 1.0f});
+        }
+        if (flying && m_BirdModels[pigeon.modelIndex]) {
             m_BirdModels[pigeon.modelIndex]->Draw(
                 renderer, bird * m_BirdModelFits[pigeon.modelIndex]);
             continue;
         }
+        if (!flying && pigeon.perch == BirdPerch::Ground) {
+            // picotea el suelo
+            const float peck = std::pow(std::max(0.0f, std::sin(pigeon.phase * 2.3f)), 6.0f) * 0.55f;
+            bird = glm::rotate(bird, peck, {1.0f, 0.0f, 0.0f});
+        }
         renderer.Submit(*m_PigeonBody, glm::translate(bird, {0.0f, 0.18f, 0.0f}));
-        const float wingLift = pigeon.flightRemaining > 0.0f ? std::sin(time * 18.0f + pigeon.phase) * 0.20f : 0.0f;
+        const float wingLift = flying ? std::sin(time * pigeon.flapRate + pigeon.phase) * 0.35f : 0.0f;
         for (float side : {-1.0f, 1.0f}) {
             glm::mat4 wing = glm::translate(bird, {side * 0.14f, 0.24f, 0.0f});
             wing = glm::rotate(wing, side * wingLift, {0.0f, 0.0f, 1.0f});
