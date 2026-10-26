@@ -142,6 +142,8 @@ El ambiente usa `city_atmosphere_soun.opus` y los pasos usan `Sounds_of_a_steps.
 
 ## Compilación y pruebas
 
+Para medir el rendimiento en cinco vistas del juego con Playwright y un navegador aislado, deja Vite activo y ejecuta `npm run benchmark:performance`. Genera un informe JSON y capturas en `work/performance/`. Consulta el método, los requisitos y los resultados en [rendimiento y medición](docs/rendimiento.md).
+
 Para generar la versión de producción y verla localmente:
 
 ```sh

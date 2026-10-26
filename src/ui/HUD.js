@@ -199,7 +199,7 @@ export class HUD {
     // Barras de stats
     for (const k of NEEDS) {
       const el = this.bars[k];
-      if (el) el.style.width = `${Math.max(0, Math.min(100, stats[k]))}%`;
+      if (el) this._setWidth(el, stats[k]);
     }
     this.bars.vicio?.parentElement.parentElement.classList.toggle('critical', stats.inWithdrawal);
     this.bars.vicio?.parentElement.parentElement.classList.toggle('high-withdrawal', !!stats.isHighWithdrawal);
@@ -232,7 +232,7 @@ export class HUD {
     this._setText(this.nameEl, window.__game?.look?.nombre ?? '');
     const xpNeeded = XP_PER_LEVEL * stats.level;
     if (this.xpFillEl) {
-      this.xpFillEl.style.width = `${Math.min(100, (stats.xp / xpNeeded) * 100)}%`;
+      this._setWidth(this.xpFillEl, (stats.xp / xpNeeded) * 100);
     }
     if (this.talentPointsEl) {
       this._setText(this.talentPointsEl, `🌟 ${talentSystem?.points ?? 0}`);
@@ -314,6 +314,14 @@ export class HUD {
 
   _setText(element, text) {
     if (element && element.textContent !== text) element.textContent = text;
+  }
+
+  _setWidth(element, percent) {
+    this._widthCache ??= new WeakMap();
+    const width = `${Math.max(0, Math.min(100, percent)).toFixed(1)}%`;
+    if (this._widthCache.get(element) === width) return;
+    this._widthCache.set(element, width);
+    element.style.width = width;
   }
 
   /** Mantiene los nodos, el foco y sus listeners mientras el contenido no cambie. */

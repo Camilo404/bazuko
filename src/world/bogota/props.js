@@ -6,7 +6,14 @@ import { signTexture } from '../../utils/signs.js';
 import { trashBag, cardboard } from './textures.js';
 
 const lam = (color, opts = {}) => new THREE.MeshLambertMaterial({ color, ...opts });
-const std = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, ...opts });
+const std = (color, opts = {}) => {
+  const parameters = { color, roughness: 0.85, ...opts };
+  const material = new THREE.MeshStandardMaterial(parameters);
+  // Solo estos materiales inmutables pueden compartir lote entre objetos.
+  // Las llamas y las partes que cambian de opacidad mantienen sus materiales propios.
+  material.userData.staticMergeKey = `prop:${JSON.stringify(Object.keys(parameters).sort().map(key => [key, parameters[key]?.uuid ?? parameters[key]]))}`;
+  return material;
+};
 const shadow = (o) => { o.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } }); return o; };
 const rand = (a, b) => a + Math.random() * (b - a);
 
