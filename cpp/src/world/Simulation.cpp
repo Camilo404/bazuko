@@ -1691,6 +1691,17 @@ void Simulation::UpdateTraffic(float dt) {
                 }
             }
             const size_t vehicleIndex = static_cast<size_t>(&vehicle - m_Traffic.data());
+            // Un carro que cruza y ya tiene el cuerpo en el corredor del bus termina de cruzar: si frenara
+            // por el bus, ambos quedarian esperandose. El bus frena para el (UpdateBus) y los demas ceden.
+            bool committedInBusLane = false;
+            if (std::abs(forward.y) < 0.7f) {
+                const float busLookAhead = std::max(5.0f, m_BusSpeed * m_BusSpeed / 8.0f + m_BusSpeed * 0.2f + 2.0f);
+                for (float busAhead = 0.0f; busAhead <= busLookAhead && !committedInBusLane; busAhead += probeStep) {
+                    committedInBusLane = OrientedBoxesOverlap(m_BusPosition + glm::vec3(0.0f, 0.0f, -busAhead), {0.0f, -1.0f},
+                                                              18.2f, 2.52f, vehicle.position, forward,
+                                                              vehicle.length, vehicle.width);
+                }
+            }
             for (float ahead = 0.0f; ahead <= std::min(lookAhead, clearance); ahead += probeStep) {
                 glm::vec3 probePosition, probeDirection;
                 size_t probeWaypoint = 0;
@@ -1728,8 +1739,9 @@ void Simulation::UpdateTraffic(float dt) {
                     }
                 }
                 if (blockedByVehicle) break;
-                if (OrientedBoxesOverlap(probePosition, probeForward, vehicle.length, vehicle.width,
-                                         m_BusPosition, {0.0f, -1.0f}, 18.2f, 2.52f)) {
+                if (!committedInBusLane
+                    && OrientedBoxesOverlap(probePosition, probeForward, vehicle.length, vehicle.width,
+                                            m_BusPosition, {0.0f, -1.0f}, 18.2f, 2.52f)) {
                     clearance = std::min(clearance, std::max(0.0f, ahead - probeStep));
                     break;
                 }
