@@ -411,6 +411,10 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
     m_DogEar = Mesh::CreateRoundedBox({0.14f, 0.25f, 0.16f}, 0.04f, 2);
     m_DogLeg = Mesh::CreateRoundedBox({0.15f, 0.34f, 0.16f}, 0.04f, 2);
     m_DogCollar = Mesh::CreateCube({0.80f, 0.10f, 0.18f}, {0.78f, 0.12f, 0.12f, 1.0f});
+    m_DogScarf = Mesh::CreateCube({0.40f, 0.14f, 0.12f}, {0.78f, 0.12f, 0.12f, 1.0f});
+    m_DogBand = Mesh::CreateCube({0.36f, 0.06f, 0.10f}, {0.16f, 0.36f, 0.82f, 1.0f});
+    m_DogCap = Mesh::CreateCube({0.24f, 0.08f, 0.22f}, {0.14f, 0.22f, 0.50f, 1.0f});
+    m_DogVisor = Mesh::CreateCube({0.20f, 0.025f, 0.11f}, {0.95f, 0.78f, 0.10f, 1.0f});
     m_DogTail = Mesh::CreateCylinder(0.055f, 0.38f, 8);
     m_TreeTrunk = Mesh::CreateCylinder(0.17f, 1.6f, 8, {0.30f, 0.18f, 0.10f, 1.0f});
     m_TreeCanopy = Mesh::CreateRoundedBox({1.25f, 1.55f, 1.25f}, 0.45f, 3, {0.18f, 0.36f, 0.17f, 1.0f});
@@ -2274,8 +2278,16 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
         const glm::vec4 coat = coats[static_cast<size_t>(std::clamp(m_DogCoat, 0, 3))];
         glm::mat4 dog = glm::translate(glm::mat4(1.0f), m_DogPosition);
         dog = glm::rotate(dog, m_DogYaw, {0.0f, 1.0f, 0.0f});
+        dog = glm::scale(dog, glm::vec3(m_DogSize));
         if (m_PetModel) {
             m_PetModel->Draw(renderer, dog * m_PetModelFit, coat);
+            const float bounce = m_DogIsFriend ? std::abs(std::sin(m_DogTime * 8.0f)) * 0.012f : 0.0f;
+            if (m_DogAccessory == 1) renderer.Submit(*m_DogScarf, glm::translate(dog, {0.0f, 0.37f + bounce, 0.20f}));
+            else if (m_DogAccessory == 3) renderer.Submit(*m_DogBand, glm::translate(dog, {0.0f, 0.35f + bounce, 0.21f}));
+            else if (m_DogAccessory == 2) {
+                renderer.Submit(*m_DogCap, glm::translate(dog, {0.0f, 0.57f + bounce, 0.34f}));
+                renderer.Submit(*m_DogVisor, glm::translate(dog, {0.0f, 0.545f + bounce, 0.48f}));
+            }
         } else {
         const float bounce = m_DogIsFriend ? std::abs(std::sin(m_DogTime * 8.0f)) * 0.025f : 0.0f;
         renderer.Submit(*m_DogBody, glm::translate(dog, {0.0f, 0.39f + bounce, 0.0f}), coat);

@@ -143,6 +143,8 @@ public:
     void SetSortProgress(float fraction) { m_SortProgress = fraction; }
     // Calidad grafica: 0 baja, 1 media, 2 alta (escala de resolucion interna)
     void SetGraphicsQuality(int quality) { m_GraphicsQuality = quality; }
+    // Escala de resolucion que se esta usando de verdad (la adaptativa puede bajarla) y la presion de rendimiento
+    void SetEffectiveRenderScale(float scale, int pressure) { m_EffectiveScale = scale; m_RenderPressure = pressure; }
     int ConsumeGraphicsQualityRequest();
     std::string ConsumeShopPurchaseRequest();
     bool ConsumeRecyclerSellRequest();
@@ -180,9 +182,11 @@ public:
     std::string ConsumeTalentUnlockRequest();
     std::string ConsumeDealerPurchaseRequest();
     bool ConsumePetRequest();
-    void SetCompanionCustomization(const std::string& name, int coat);
+    void SetCompanionCustomization(const std::string& name, int coat, float size = 1.0f, int accessory = 0);
     std::string GetCompanionName() const;
     int GetCompanionCoat() const { return m_CompanionCoat; }
+    float GetCompanionSize() const { return m_CompanionSize; }
+    int GetCompanionAccessory() const { return m_CompanionAccessory; }
     void RenderLoadingScreen(Window& window, float progress, const std::string& stageText, const std::string& tipText = "");
 
     void OpenCambucheMenu() { m_CambucheMenuOpen = true; }
@@ -260,6 +264,8 @@ private:
     std::string m_DealerPurchaseRequest;
     float m_SortProgress = -1.0f;
     int m_GraphicsQuality = 1;
+    float m_EffectiveScale = 1.0f;
+    int m_RenderPressure = 0;
     int m_GraphicsQualityRequest = -1;
     std::array<HotbarSlot, 5> m_Hotbar{};
     int m_HotbarUseRequest = -1;
@@ -286,6 +292,8 @@ private:
     bool m_PetRequest = false;
     std::array<char, 32> m_CompanionName{{'E', 'l', ' ', 'C', 'h', 'a', 't', 'o', '\0'}};
     int m_CompanionCoat = 0;
+    float m_CompanionSize = 1.0f;
+    int m_CompanionAccessory = 0;
     std::vector<RadioStation> m_RadioStations;
     size_t m_SelectedRadioStation = 0;
     std::array<std::shared_ptr<Texture>, 4> m_LoadingBackgrounds{};

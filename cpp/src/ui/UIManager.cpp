@@ -368,7 +368,9 @@ bool UIManager::ConsumePetRequest() {
     return requested;
 }
 
-void UIManager::SetCompanionCustomization(const std::string& name, int coat) {
+void UIManager::SetCompanionCustomization(const std::string& name, int coat, float size, int accessory) {
+    m_CompanionSize = std::clamp(size, 0.6f, 1.6f);
+    m_CompanionAccessory = std::clamp(accessory, 0, 3);
     m_CompanionName.fill('\0');
     const size_t count = std::min(name.size(), m_CompanionName.size() - 1);
     std::copy_n(name.begin(), count, m_CompanionName.begin());
@@ -1029,7 +1031,7 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                 if (SignUI::BeginSection("Nombre y pelaje", Icon::Paw)) {
                     ImGui::SetNextItemWidth(-1.0f);
                     if (ImGui::InputText("##CompanionName", m_CompanionName.data(), m_CompanionName.size())) {
-                        if (m_CompanionName[0] == '\0') SetCompanionCustomization("El Chato", m_CompanionCoat);
+                        if (m_CompanionName[0] == '\0') SetCompanionCustomization("El Chato", m_CompanionCoat, m_CompanionSize, m_CompanionAccessory);
                     }
                     ImGui::Spacing();
                     const std::array<const char*, 4> coatNames{"Canela", "Marrón", "Gris", "Negro"};
@@ -1037,12 +1039,28 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                     for (int coat = 0; coat < static_cast<int>(coatNames.size()); ++coat) {
                         if (SignUI::Button(coatNames[static_cast<size_t>(coat)], Icon::None, m_CompanionCoat == coat)) m_CompanionCoat = coat;
                     }
+                    ImGui::Spacing();
+                    ImGui::TextColored(gold, "Accesorio");
+                    const std::array<const char*, 4> accessoryNames{"Ninguno", "Bufanda roja", "Gorra bogotana", "Collar azul"};
+                    SignUI::FlexReset();
+                    for (int accessory = 0; accessory < static_cast<int>(accessoryNames.size()); ++accessory) {
+                        if (SignUI::Button(accessoryNames[static_cast<size_t>(accessory)], Icon::None, m_CompanionAccessory == accessory))
+                            m_CompanionAccessory = accessory;
+                    }
+                    ImGui::Spacing();
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted("Tamaño:");
+                    ImGui::SameLine(0.0f, 12.0f);
+                    float sizeFraction = (m_CompanionSize - 0.6f) / 1.0f;
+                    if (SignUI::Slider("tamanoChato", &sizeFraction, 220.0f)) m_CompanionSize = 0.6f + std::clamp(sizeFraction, 0.0f, 1.0f);
+                    ImGui::SameLine(0.0f, 10.0f);
+                    ImGui::TextColored(gold, "%.1f×", m_CompanionSize);
                 }
                 SignUI::EndSection();
                 SignUI::FlexReset();
                 if (SignUI::Button("Acariciar a El Chato", Icon::Heart) && companionIsFriend) m_PetRequest = true;
                 if (!companionIsFriend) SignUI::NoteText("Hazte amigo de El Chato (E) para acariciarlo.");
-                SignUI::NoteText("La amistad, el nombre y el pelaje se guardan con la partida.");
+                SignUI::NoteText("La amistad, el nombre, el pelaje, el accesorio y el tamaño se guardan con la partida.");
                 SignUI::BeginFooter();
                 if (SignUI::PrimaryButton("Cerrar ficha")) TogglePause();
             } else if (m_PauseSection == 4) {
@@ -1799,13 +1817,13 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
             else std::snprintf(buffer, sizeof(buffer), "—");
             return std::string(buffer);
         };
-        char lines[512];
+        char lines[640];
         std::snprintf(lines, sizeof(lines),
             "FPS actual %s%s\nMín %s · Máx %s\nPromedio %s · %.1f ms\nÚltimos %zu cuadros · p95 %.1f ms · p99 %.1f ms\n"
-            "1%% bajos %.1f FPS · Tirones >100 ms %d\nX %.2f  Y %.2f  Z %.2f",
+            "1%% bajos %.1f FPS · Tirones >100 ms %d\nX %.2f  Y %.2f  Z %.2f\nResolución %.2f×%s",
             fps(m_Metrics.current).c_str(), m_Paused ? " · pausa" : "", fps(m_Metrics.min).c_str(), fps(m_Metrics.max).c_str(),
             fps(m_Metrics.average).c_str(), m_Metrics.frameMs, recent.frames, recent.p95, recent.p99, recent.low1Percent,
-            recent.over100ms, playerPos.x, playerPos.y, playerPos.z);
+            recent.over100ms, playerPos.x, playerPos.y, playerPos.z, m_EffectiveScale, m_RenderPressure > 0 ? " · bajo presión" : "");
         ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 12.0f, ImGui::GetIO().DisplaySize.y - 48.0f), ImGuiCond_Always, ImVec2(1.0f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.035f, 0.067f, 0.082f, 0.88f));
         ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.33f, 0.47f, 0.42f, 1.0f));

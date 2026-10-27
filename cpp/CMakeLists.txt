@@ -149,7 +149,7 @@ add_executable(bazuko
     src/world/CityLayout.cpp src/world/Simulation.cpp src/world/BirdFlock.cpp
     src/world/TextRaster.cpp src/world/SignAtlas.cpp
     src/game/GameData.cpp src/game/Harvest.cpp
-    src/audio/RadioSynth.cpp
+    src/audio/RadioSynth.cpp src/world/SafeSpawn.cpp
 )
 if(WIN32)
     set_target_properties(bazuko PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -210,6 +210,17 @@ add_executable(bazuko_radio_test tests/RadioSynthTest.cpp src/audio/RadioSynth.c
 target_include_directories(bazuko_radio_test PRIVATE src)
 add_test(NAME bazuko_radio COMMAND bazuko_radio_test)
 
+# Resolucion adaptativa (calidad efectiva bajo carga)
+add_executable(bazuko_adaptive_test tests/AdaptiveResolutionTest.cpp)
+target_include_directories(bazuko_adaptive_test PRIVATE src)
+add_test(NAME bazuko_adaptive COMMAND bazuko_adaptive_test)
+
+# Regla de aparicion segura: el jugador nunca queda dentro de un edificio ni de un recinto sin salida
+add_executable(bazuko_safespawn_test tests/SafeSpawnTest.cpp src/world/SafeSpawn.cpp)
+target_include_directories(bazuko_safespawn_test PRIVATE src)
+target_link_libraries(bazuko_safespawn_test PRIVATE glm::glm)
+add_test(NAME bazuko_safespawn COMMAND bazuko_safespawn_test)
+
 # Prueba de trafico con la simulacion real (ventana oculta para el contexto GL). No esta en CTest por defecto:
 #   build\Release\bazuko_traffic_test.exe [segundos] [semilla]
 add_executable(bazuko_traffic_test
@@ -225,6 +236,23 @@ add_executable(bazuko_traffic_test
 target_include_directories(bazuko_traffic_test PRIVATE src third_party/include third_party/glad/include ${BAZUKO_WEBP_INCLUDE_DIR})
 target_compile_definitions(bazuko_traffic_test PRIVATE BAZUKO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(bazuko_traffic_test PRIVATE glfw glm::glm glad imgui Threads::Threads opusfile assimp ${BAZUKO_WEBP_TARGET} ${CMAKE_DL_LIBS})
+
+# Regla de aparicion segura sobre la ciudad real (ventana oculta para el contexto GL):
+#   build\Release\bazuko_spawn_city_test.exe
+add_executable(bazuko_spawn_city_test
+    tests/SpawnCityTest.cpp
+    src/world/SafeSpawn.cpp
+    src/core/Paths.cpp
+    src/renderer/Buffer.cpp src/renderer/VertexArray.cpp src/renderer/Shader.cpp
+    src/renderer/Mesh.cpp src/renderer/Camera.cpp src/renderer/Renderer.cpp
+    src/renderer/Texture.cpp src/renderer/Model.cpp
+    src/world/CityLayout.cpp src/world/Simulation.cpp src/world/BirdFlock.cpp
+    src/world/TextRaster.cpp src/world/SignAtlas.cpp
+    src/game/GameData.cpp src/game/Harvest.cpp
+)
+target_include_directories(bazuko_spawn_city_test PRIVATE src third_party/include third_party/glad/include ${BAZUKO_WEBP_INCLUDE_DIR})
+target_compile_definitions(bazuko_spawn_city_test PRIVATE BAZUKO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(bazuko_spawn_city_test PRIVATE glfw glm::glm glad imgui Threads::Threads opusfile assimp ${BAZUKO_WEBP_TARGET} ${CMAKE_DL_LIBS})
 
 add_custom_command(TARGET bazuko POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:bazuko>/assets"

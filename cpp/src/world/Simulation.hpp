@@ -180,6 +180,11 @@ public:
     const glm::vec3& GetDogPosition() const { return m_DogPosition; }
     void SetDogState(bool isFriend, const glm::vec3& position, int coat);
     void SetDogCoat(int coat) { m_DogCoat = std::clamp(coat, 0, 3); }
+    // Tamano (0,6 a 1,6) y accesorio de El Chato: 0 ninguno, 1 bufanda roja, 2 gorra bogotana, 3 collar azul
+    void SetDogLook(float size, int accessory) {
+        m_DogSize = std::clamp(size, 0.6f, 1.6f);
+        m_DogAccessory = std::clamp(accessory, 0, 3);
+    }
     bool StealCar(size_t index);
     bool StealParkedCar(size_t index);
     RobberyOutcome RobPedestrian(size_t index, bool direct, const glm::vec3& source);
@@ -397,6 +402,12 @@ private:
     float m_DogTime = 0.0f;
     float m_DogPetCooldown = 0.0f;
     int m_DogCoat = 0;
+    float m_DogSize = 1.0f;
+    int m_DogAccessory = 0;
+    std::shared_ptr<Mesh> m_DogScarf;
+    std::shared_ptr<Mesh> m_DogBand;
+    std::shared_ptr<Mesh> m_DogCap;
+    std::shared_ptr<Mesh> m_DogVisor;
     bool m_DogIsFriend = false;
     glm::vec3 m_BusPosition{0.0f};
     glm::vec3 m_BusPreviousPosition{0.0f};

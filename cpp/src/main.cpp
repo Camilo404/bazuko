@@ -15,6 +15,8 @@
 #include "renderer/Model.hpp"
 #include "ui/UIManager.hpp"
 #include "game/GameData.hpp"
+#include "world/SafeSpawn.hpp"
+#include "core/AdaptiveResolution.hpp"
 #include "game/Harvest.hpp"
 #include "audio/AudioManager.hpp"
 #include "world/CityLayout.hpp"
@@ -110,6 +112,20 @@ int main(int argc, char** argv) {
                            "💡 Consejo: Puedes personalizar tu aspecto, sexo, corte y ropa con la tecla [P].");
     glm::vec3 playerPos = city.GetSpawnPoint();
     playerPos.y = 0.0f;
+    // Regla estricta: el jugador nunca aparece ni se carga dentro de un edificio, un modelo o un recinto sin salida.
+    // Toda posicion que se le asigna (inicio, partida guardada, partida nueva, recuperacion, fin de una caida)
+    // pasa por aqui: si esta bloqueada o encerrada se mueve al lugar libre con salida mas cercano.
+    const auto isFreeForPlayer = [&](float x, float z) {
+        return city.IsWalkable(x, z) && !simulation.IsBlocked({x, 0.0f, z}, 0.5f);
+    };
+    const auto placeSafely = [&](const glm::vec3& wanted) {
+        glm::vec3 safe = FindSafePlayerPosition(wanted, isFreeForPlayer, city.GetSpawnPoint());
+        safe.y = 0.0f;
+        if (glm::distance(glm::vec2(safe.x, safe.z), glm::vec2(wanted.x, wanted.z)) > 0.05f)
+            LogWarn("Posicion del jugador bloqueada ({:.1f}, {:.1f}): se movio a ({:.1f}, {:.1f})", wanted.x, wanted.z, safe.x, safe.z);
+        return safe;
+    };
+    playerPos = placeSafely(playerPos);
     float playerYaw = 0.0f;
     bool playerKnockedDown = false;
     float knockdownRemaining = 0.0f;
@@ -222,11 +238,13 @@ int main(int argc, char** argv) {
                 }
                 companionName = state.value("companionName", companionName);
                 companionCoat = std::clamp(state.value("companionCoat", 0), 0, 3);
+                const float savedCompanionSize = state.value("companionSize", 1.0f);
+                const int savedCompanionAccessory = state.value("companionAccessory", 0);
                 companionIsFriend = state.value("companionIsFriend", false);
                 companionPosition.x = state.value("companionX", companionPosition.x);
                 companionPosition.z = state.value("companionZ", companionPosition.z);
                 simulation.SetDogState(companionIsFriend, companionPosition, companionCoat);
-                ui.SetCompanionCustomization(companionName, companionCoat);
+                ui.SetCompanionCustomization(companionName, companionCoat, savedCompanionSize, savedCompanionAccessory);
                 itemsCollected = state.value("itemsCollected", 0);
                 itemsSold = state.value("itemsSold", 0);
                 missionProgress = state.value("missionProgress", size_t{0});
@@ -252,6 +270,12 @@ int main(int argc, char** argv) {
                 if (state.contains("dayProgress")) simulation.SetDayProgress(state.value("dayProgress", 0.30f));
                 playerPos.x = state.value("playerX", playerPos.x);
                 playerPos.z = state.value("playerZ", playerPos.z);
+                {
+                    const glm::vec3 savedPosition = playerPos;
+                    playerPos = placeSafely(savedPosition);
+                    if (glm::distance(glm::vec2(savedPosition.x, savedPosition.z), glm::vec2(playerPos.x, playerPos.z)) > 0.05f)
+                        ui.Notify("Tu posición guardada estaba bloqueada: te movimos al lugar libre más cercano.", ToastType::Warn);
+                }
                 for (const auto& entry : state.value("inventory", nlohmann::json::array())) {
                     size_t itemIndex = entry.value("item", lootTable.size());
                     int quantity = entry.value("quantity", 0);
@@ -324,6 +348,8 @@ int main(int argc, char** argv) {
         state["playerZ"] = playerPos.z;
         state["companionName"] = ui.GetCompanionName();
         state["companionCoat"] = ui.GetCompanionCoat();
+        state["companionSize"] = ui.GetCompanionSize();
+        state["companionAccessory"] = ui.GetCompanionAccessory();
         state["companionIsFriend"] = simulation.IsDogFriend();
         state["companionX"] = simulation.GetDogPosition().x;
         state["companionZ"] = simulation.GetDogPosition().z;
@@ -356,8 +382,7 @@ int main(int argc, char** argv) {
         std::error_code ec;
         fs::remove(savePath, ec);
 
-        playerPos = city.GetSpawnPoint();
-        playerPos.y = 0.0f;
+        playerPos = placeSafely(city.GetSpawnPoint());
         playerYaw = 0.0f;
         needs = {100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 80.0f};
         money = 0.0f;
@@ -728,7 +753,7 @@ int main(int argc, char** argv) {
             playerVelocity = glm::vec3(0.0f);
             if (knockdownRemaining <= 0.0f) {
                 playerKnockedDown = false;
-                playerPos.y = 0.0f;
+                playerPos = placeSafely(playerPos);   // la caida no puede dejarlo dentro de un modelo
             }
         } else if (const bool moving = glm::length(moveDir) > 0.001f; moving || glm::dot(playerVelocity, playerVelocity) > 0.0005f) {
             if (moving) moveDir = glm::normalize(moveDir);
@@ -1276,7 +1301,22 @@ int main(int argc, char** argv) {
                 ui.Notify(std::string("Calidad gráfica: ") + qualityNames[static_cast<size_t>(requested)], ToastType::Info);
             }
             ui.SetGraphicsQuality(graphicsQuality);
-            renderer.SetRenderScale(renderScales[static_cast<size_t>(graphicsQuality)]);
+            // Resolucion adaptativa: la calidad elegida es el techo; si los FPS reales se mantienen bajos la escala baja
+            // y se recupera sola, sin cambiar la preferencia guardada
+            static AdaptiveResolution adaptiveResolution(1.0f);
+            static int adaptiveQuality = -1;
+            static auto previousFrame = std::chrono::steady_clock::now();
+            const auto now = std::chrono::steady_clock::now();
+            const float frameMs = std::chrono::duration<float, std::milli>(now - previousFrame).count();
+            previousFrame = now;
+            if (adaptiveQuality != graphicsQuality) {
+                adaptiveQuality = graphicsQuality;
+                adaptiveResolution.SetLimit(renderScales[static_cast<size_t>(graphicsQuality)]);
+            }
+            if (!ui.IsPaused() && frameMs < 1000.0f && adaptiveResolution.Sample(frameMs) && adaptiveResolution.ratio < renderScales[static_cast<size_t>(graphicsQuality)])
+                ui.Notify("Resolución ajustada por rendimiento", ToastType::Warn);
+            renderer.SetRenderScale(adaptiveResolution.ratio);
+            ui.SetEffectiveRenderScale(adaptiveResolution.ratio, adaptiveResolution.pressure);
         }
         renderer.BeginScaledTarget();
         renderer.BeginScene(camera, clock.GetElapsedTime());
@@ -1360,6 +1400,7 @@ int main(int argc, char** argv) {
                 && (talent.requirement.empty() || hasTalent(talent.requirement));
         }
         simulation.SetDogCoat(ui.GetCompanionCoat());
+        simulation.SetDogLook(ui.GetCompanionSize(), ui.GetCompanionAccessory());
         {
             std::vector<ShopOption> shopOptions;
             if (ui.IsShopMenuOpen()) {
@@ -1677,7 +1718,7 @@ int main(int argc, char** argv) {
             }
             for (float& need : needs) need = std::max(60.0f, need);
             diseases.clear();
-            playerPos = {respawnPosition.x, 0.0f, respawnPosition.y};
+            playerPos = placeSafely({respawnPosition.x, 0.0f, respawnPosition.y});
             playerYaw = 0.0f;
             playerKnockedDown = false;
             knockdownRemaining = 0.0f;

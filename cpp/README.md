@@ -95,6 +95,14 @@ comunes (4 con adrenalina) y 5 % de uno raro; manteniendo `Q` 1,5 s se clasifica
 de enfermar. Lo que no cabe en el costal se queda en la bolsa. Los materiales de un cambuche completo (cartón, tablas, latas,
 lona, colchón y vela) viajan en las bolsas y vuelven a aparecer cuando se recogen.
 
+### Aparición segura del jugador
+
+Regla estricta: el jugador nunca aparece ni se carga dentro de un edificio, un modelo o un recinto sin salida. Al iniciar,
+cargar una partida, empezar una nueva, recuperarse de la muerte o terminar una caída, la posición pasa por `world/SafeSpawn`:
+si está bloqueada, o desde ella no se puede llegar a una zona abierta, se mueve al lugar libre con salida más cercano (hasta
+80 m; si no hay, al punto de inicio) y, al cargar una partida, se avisa en pantalla. `bazuko_safespawn` prueba la lógica y
+`bazuko_spawn_city_test.exe` la comprueba sobre la ciudad real (todas las baldosas no caminables y cientos de puntos al azar).
+
 ### Radio transistor
 
 `R` o el botón de radio abren el sintonizador: encender/apagar, batería (100 % dura unos 40 min; las pilas AA suman 50 %),
