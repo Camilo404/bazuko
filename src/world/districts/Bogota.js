@@ -195,9 +195,11 @@ export class Bogota {
     }));
 
     const cer = P.cerros();
+    cer.userData.noMerge = true;
     cer.position.set(-130, 0, W(this.height / 2) - 30);
     cer.rotation.y = Math.PI / 2;
     this.group.add(cer);
+    this.cerros = cer;
     this._mergeStatic();
     this.group.add(this.buildingVisibility.buildClosedView());
     const closedView = this.buildingVisibility.closedView;
@@ -324,16 +326,34 @@ export class Bogota {
     const walk = TX.sidewalk(11);
     const dirt = TX.dirt(31);
     const concrete = TX.concrete(41);
-    const tex = (t, scale) => { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.userData = { scale }; return t; };
+    const tex = (t, scale) => { if (!t) return t; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.userData = { scale }; return t; };
     const mats = {
       // sin roughnessMap: los charcos espejo se ven como huecos negros con cámara cenital
-      road: new THREE.MeshStandardMaterial({ map: tex(asphalt.map, 14), roughness: 0.82, color: '#b4b4b4' }),
-      busway: new THREE.MeshStandardMaterial({ bumpMap: asphalt.map, bumpScale: .06, roughness: 1, color: '#9c3030' }),
-      sidewalk: new THREE.MeshStandardMaterial({ map: tex(walk.map, 6), bumpMap: walk.bumpMap, bumpScale: 0.3, roughness: 0.75, color: '#b9b4aa' }),
+      road: new THREE.MeshStandardMaterial({
+        map: tex(asphalt.map, 14),
+        bumpMap: tex(asphalt.bumpMap, 14),
+        bumpScale: 0.16,
+        roughness: 0.82,
+        color: '#b4b4b4'
+      }),
+      busway: new THREE.MeshStandardMaterial({
+        map: tex(asphalt.map, 14),
+        bumpMap: tex(asphalt.bumpMap, 14),
+        bumpScale: 0.14,
+        roughness: 1,
+        color: '#a8726a'
+      }),
+      sidewalk: new THREE.MeshStandardMaterial({
+        map: tex(walk.map, 6),
+        bumpMap: tex(walk.bumpMap, 6),
+        bumpScale: 0.28,
+        roughness: 0.75,
+        color: '#b9b4aa'
+      }),
       floor: new THREE.MeshStandardMaterial({ map: tex(concrete.map, 6), roughness: 0.9, color: '#8a8a86' }),
       dirt: new THREE.MeshStandardMaterial({ map: tex(dirt.map, 8), roughness: 1, color: '#8a7a64' }),
       grass: new THREE.MeshStandardMaterial({ map: dirt.map, roughness: 1, color: '#3e5a2c' }),
-      plaza: new THREE.MeshStandardMaterial({ map: walk.map, roughness: 0.8, color: '#c9b9a0' }),
+      plaza: new THREE.MeshStandardMaterial({ map: tex(walk.map, 6), roughness: 0.8, color: '#c9b9a0' }),
       water: new THREE.MeshStandardMaterial({ color: '#267d8b', roughness: .24, metalness: .18 })
     };
     const scaleOf = { road: 14, busway: 14, sidewalk: 6, floor: 6, dirt: 8, grass: 8, plaza: 6, water: 16 };
@@ -366,7 +386,12 @@ export class Bogota {
         }
       }
     }
-    mats.curb = new THREE.MeshStandardMaterial({ color: '#d8d4c8', roughness: 0.8 });
+    mats.curb = new THREE.MeshStandardMaterial({
+      color: '#d8d4c8',
+      roughness: 0.8,
+      bumpMap: tex(concrete.map, 4),
+      bumpScale: 0.12
+    });
     this.groundMaterials = mats;
     this.group.add(buildLakeWater(mats.water));
     for (const [t, list] of Object.entries(quads)) {
@@ -379,18 +404,24 @@ export class Bogota {
 
   /** Ajusta el acabado del asfalto y andenes según la lluvia o humedad ambiental */
   setWetness(amount = 0) {
+    this.wetness = amount;
+    this.isRaining = amount > 0.05;
     if (!this.groundMaterials) return;
     const wet = THREE.MathUtils.clamp(amount, 0, 1);
     if (this.groundMaterials.road) {
-      this.groundMaterials.road.roughness = THREE.MathUtils.lerp(0.82, 0.42, wet);
-      this.groundMaterials.road.metalness = THREE.MathUtils.lerp(0.0, 0.18, wet);
+      this.groundMaterials.road.roughness = THREE.MathUtils.lerp(0.82, 0.28, wet);
+      this.groundMaterials.road.metalness = THREE.MathUtils.lerp(0.0, 0.24, wet);
+      this.groundMaterials.road.envMapIntensity = THREE.MathUtils.lerp(0.3, 1.8, wet);
     }
     if (this.groundMaterials.busway) {
-      this.groundMaterials.busway.roughness = THREE.MathUtils.lerp(1.0, 0.55, wet);
-      this.groundMaterials.busway.metalness = THREE.MathUtils.lerp(0.0, 0.12, wet);
+      this.groundMaterials.busway.roughness = THREE.MathUtils.lerp(1.0, 0.42, wet);
+      this.groundMaterials.busway.metalness = THREE.MathUtils.lerp(0.0, 0.18, wet);
+      this.groundMaterials.busway.envMapIntensity = THREE.MathUtils.lerp(0.25, 1.5, wet);
     }
     if (this.groundMaterials.sidewalk) {
-      this.groundMaterials.sidewalk.roughness = THREE.MathUtils.lerp(0.75, 0.48, wet);
+      this.groundMaterials.sidewalk.roughness = THREE.MathUtils.lerp(0.75, 0.38, wet);
+      this.groundMaterials.sidewalk.metalness = THREE.MathUtils.lerp(0.0, 0.15, wet);
+      this.groundMaterials.sidewalk.envMapIntensity = THREE.MathUtils.lerp(0.2, 1.2, wet);
     }
   }
 
@@ -569,16 +600,24 @@ export class Bogota {
     const textureKey = `${widthM}:${floors}:${style}:${variant}`;
     let tex = this._facadeTextures.get(textureKey);
     if (!tex) {
-      tex = TX.facade({ seed: Math.floor(Math.random() * 1e6), width: widthM, floors, pxPerM: style === 'pintada' ? 28 : 40, shopFront: true, style });
+      tex = TX.facade({ seed: Math.floor(Math.random() * 1e6), width: widthM, floors, pxPerM: style === 'pintada' ? 36 : 48, shopFront: true, style });
       this._facadeTextures.set(textureKey, tex);
     }
-    for (const t of [tex.map, tex.emissiveMap, tex.bumpMap]) { t.anisotropy = 8; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; }
+    for (const t of [tex.map, tex.emissiveMap, tex.bumpMap, tex.roughnessMap]) {
+      if (t) { t.anisotropy = 8; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; }
+    }
     let facadeMat = this._facadeMaterials.get(textureKey);
     if (!facadeMat) {
       facadeMat = new THREE.MeshStandardMaterial({
-        map: tex.map, emissiveMap: tex.emissiveMap, emissive: '#ffffff', emissiveIntensity: 0,
-        bumpMap: tex.bumpMap, bumpScale: 0.4, roughness: 0.85
+        map: tex.map,
+        emissiveMap: tex.emissiveMap,
+        emissive: '#ffffff',
+        emissiveIntensity: 0,
+        bumpMap: tex.bumpMap,
+        bumpScale: 0.35,
+        roughness: 0.85
       });
+      if (tex.roughnessMap) facadeMat.roughnessMap = tex.roughnessMap;
       this._facadeMaterials.set(textureKey, facadeMat);
       this.facadeMats.push(facadeMat);
     }
@@ -694,6 +733,13 @@ export class Bogota {
     return obj;
   }
 
+  getGroundTypeAt(x, z) {
+    if (!this.map) return 'sidewalk';
+    const row = Math.round(z / T);
+    const col = Math.round(x / T);
+    return this.map[row]?.[col] ?? 'sidewalk';
+  }
+
   getGroundHeight(x, z) {
     if (inTerminal(x,z)) return terminalGroundHeight(x,z);
     if (onLakeBridge(x, z)) return bridgeHeight(z);
@@ -772,6 +818,21 @@ export class Bogota {
     this.reverseBusService.group.name = 'TransMilenio hacia el sur';
     this.group.add(this.reverseBusService.group);
     this.busServices = [this.busService, this.reverseBusService];
+
+    // Avisos de neón comerciales en esquinas principales
+    const neons = [
+      { title: 'DROGUERÍA', sub: '24 HORAS', color: '#00ff88', accent: '#ff2255', x: W(CARRERAS[0][0] - 1), z: W(CALLES[0][0] - 1), ry: 0 },
+      { title: 'PANADERÍA', sub: 'Y PASTELERÍA', color: '#ffb020', accent: '#ffe066', x: W(CARRERAS[1][1] + 1), z: W(CALLES[1][0] - 1), ry: Math.PI / 2 },
+      { title: 'CIGARRERÍA', sub: 'LICORES Y DULCES', color: '#00d4ff', accent: '#ff0077', x: W(CARACAS.lanes[1][1] + 2), z: W(CALLES[0][1] + 1), ry: -Math.PI / 2 },
+      { title: 'BILLAR CLUB', sub: 'TRES BANDAS', color: '#ff00aa', accent: '#00ffee', x: W(CARRERAS[0][1] + 1), z: W(CALLES[1][1] + 1), ry: Math.PI }
+    ];
+    for (const n of neons) {
+      const sign = P.neonSign(n);
+      sign.position.set(n.x, 3.8, n.z);
+      sign.rotation.y = n.ry;
+      this.group.add(sign);
+      if (sign.userData.update) this.animated.push(sign);
+    }
     // cerca de la estación: vendedor de tinto y una chaza
     this.vendors = [];
     this._vendor(WX(21), WZ(18.5), Math.PI / 2, 'chaza', 'Chaza de don Efraín', ['cigarrillo', 'cafe', 'pan', 'agua']);
@@ -978,7 +1039,7 @@ export class Bogota {
       _projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
       frustum = _frustum.setFromProjectionMatrix(_projView);
     }
-    const ctx = { player: playerPos, frustum, animationBudget: this.animationBudget ?? 1 };
+    const ctx = { player: playerPos, frustum, camera, isRaining: (this.wetness ?? 0) > 0.05, animationBudget: this.animationBudget ?? 1 };
     for (const n of this.npcs) n.update(dt, ctx);
     for (const flock of this.pigeonFlocks ?? []) flock.update(dt, playerPos, this.npcs);
   }
@@ -987,6 +1048,7 @@ export class Bogota {
     for (const material of this.towerLights ?? []) material.emissiveIntensity = isNight ? 1.8 : .05;
     for (const p of this.props) p.instance.setNight?.(isNight);
     for (const m of this.facadeMats) m.emissiveIntensity = isNight ? 1.2 : 0;
+    this.cerros?.userData?.setNight?.(isNight);
     for (const material of this.buildingVisibility.closedMaterials.values()) {
       if (material.emissiveMap) material.emissiveIntensity = isNight ? 1.2 : 0;
     }

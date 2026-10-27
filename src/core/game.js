@@ -21,6 +21,8 @@ import { Shop } from '../entities/Shop.js';
 import { Car } from '../entities/Car.js';
 import { DrugDealer } from '../entities/DrugDealer.js';
 import { CraftingStation } from '../entities/CraftingStation.js';
+import { Cart } from '../entities/Cart.js';
+import { CinematicOverlays } from '../ui/CinematicOverlays.js';
 
 import { StatsSystem, NEEDS } from '../systems/StatsSystem.js';
 import { TimeSystem } from '../systems/TimeSystem.js';
@@ -90,7 +92,7 @@ export class Game {
 
     // Mundo + jugador
     this.world = new World(this.sceneMgr.scene);
-    this.player = new Player(this.sceneMgr.scene, this.input, this.stats);
+    this.player = new Player(this.sceneMgr.scene, this.input, this.stats, this.audio);
 
     // Sistemas de nuevas mecánicas: Popó y Psicosis por abstinencia
     this.poopSystem = new PoopSystem(
@@ -158,6 +160,8 @@ export class Game {
     this.dealer = null;
     this.craftingStation = null;
     this.dog = null;
+    this.cart = null;
+    this.overlays = new CinematicOverlays();
 
     // Estado
     this.look = null;       // apariencia + nombre + origen (creador)
@@ -454,6 +458,10 @@ export class Game {
     );
     this.interaction.register(this.craftingStation);
 
+    // ===== Carreta de balineras de reciclaje =====
+    this.cart = new Cart(this.sceneMgr.scene, new THREE.Vector3(25, 0, 31));
+    this.interaction.register(this.cart);
+
 
     // ===== Cambuche (refugio por piezas) =====
     const bedX = district.reserved?.bed.x ?? 16;
@@ -518,6 +526,9 @@ export class Game {
       if (data.dog?.isFriend && this.dog) {
         this.dog.befriend();
       }
+      if (data.cart && this.cart) {
+        this.cart.loadState(data.cart, this.player, this.inventory);
+      }
 
     }
   }
@@ -535,7 +546,8 @@ export class Game {
       built: this.built,
       costal: this.costal,
       radio: this.radio ? { isOn: this.radio.isOn, freq: this.radio.frequency, battery: this.radio.battery } : null,
-      dog: { isFriend: !!this.dog?.isFriend }
+      dog: { isFriend: !!this.dog?.isFriend },
+      cart: this.cart ? this.cart.saveState() : null
     });
   }
 
@@ -731,13 +743,23 @@ export class Game {
     this.time.update(dt, this.clock);
 
     // 2. Día/noche: cielo nublado de Bogotá y sol que sigue al jugador (sombras nítidas)
-    this.sceneMgr.setTimeOfDay(this.clock.hour);
-    this.sceneMgr.followTarget(this.player.position);
+    this.sceneMgr.setTimeOfDay(this.clock.hour, this.weather?.isRaining, this.weather?.wetness);
+    this.sceneMgr.followTarget(this.player.position, this.clock.hour);
+    this.sceneMgr.update(dt);
     const isNight = this.clock.isNight;
-    if (this._wasNight !== isNight) {
+    const isRainingNow = this.weather?.isRaining ?? false;
+    if (this._wasNight !== isNight || this._wasRaining !== isRainingNow) {
       this._wasNight = isNight;
+      this._wasRaining = isRainingNow;
       this.world.active?.setNightMode?.(isNight);
       this.dealer?.setNight(isNight);
+      for (const car of this.cars) car.setNight?.(isNight, isRainingNow);
+      if (this.traffic) {
+        for (const v of this.traffic.vehicles) v.car?.setNight?.(isNight, isRainingNow);
+      }
+      if (typeof document !== 'undefined') {
+        document.body?.classList?.toggle('night-mode', isNight);
+      }
     }
 
     // 3. Jugador
@@ -745,8 +767,8 @@ export class Game {
     // Actualiza el rumbo antes de calcular WASD en relación con la cámara.
     this.cameraRig.prepareMovement();
     const previousX = this.player.position.x, previousZ = this.player.position.z;
-    this._syncVehicleColliders();
-    this.player.update(dt, this.cameraRig.camera, this.collisions);
+    this._syncVehicleColliders?.();
+    this.player.update(dt, this.cameraRig.camera, this.collisions, (x, z) => this.world.active?.getGroundHeight?.(x, z) ?? 0, this.world.active?.npcs ?? []);
     if (!this.player.isStunned) {
       const district = this.world.active;
       const ground = district?.getMovementGroundHeight?.(this.player.position.x, this.player.position.z, this.player.position.y)
@@ -754,7 +776,7 @@ export class Game {
       if (Number.isFinite(ground)) this.player.position.y = ground;
       this.player.root.position.y = this.player.position.y;
     }
-    this.profiler?.mark('jugadorCamaraColisiones');
+    this.profiler?.mark?.('jugadorCamaraColisiones');
 
     // 4. Stats
     this.stats.update(dt, this.player, this.diseases, this.clock, this.talents);
@@ -763,7 +785,8 @@ export class Game {
 
     // 4b. Aplicar bono de peso por talentos
     const maxWeightBonus = this.talents.getEffect('maxWeightBonus', 0);
-    this.inventory.maxWeight = INVENTORY_MAX_WEIGHT + maxWeightBonus + (this.costal ? COSTAL_BONUS : 0);
+    const cartBonus = (this.cart?.isAttached) ? this.cart.capacityBonus : 0;
+    this.inventory.maxWeight = INVENTORY_MAX_WEIGHT + maxWeightBonus + (this.costal ? COSTAL_BONUS : 0) + cartBonus;
     this.player.load = this.inventory.totalWeight / this.inventory.maxWeight;
 
     // 5. Debuff por salud mental baja (el desgaste se calcula en StatsSystem).
@@ -818,14 +841,18 @@ export class Game {
     this.cambuche?.update(dt);
     this.dealer?.update(dt);
     this.dog?.update(dt, this.player.position, this.pickups);
+    this.cart?.update(dt, this.player, this.audio);
 
     // 10. Audio
-    const moving = !this.player.isStunned && Math.hypot(this.player.position.x - previousX, this.player.position.z - previousZ) > .001;
-    this.audio.updateWorld(dt, this.player.position, this.cameraRig.camera, this.traffic?.vehicles ?? [], this.world.active?.busServices ?? this.world.active?.busService);
-    this.audio.setRaining(!!this.weather?.isRaining);
-    this.audio.updateSteps(moving, this.input.isRunning);
+    const moving = !this.player.isStunned && (this.input.axis.x !== 0 || this.input.axis.z !== 0 || Math.hypot(this.player.position.x - previousX, this.player.position.z - previousZ) > .001);
+    const groundType = this.world.active?.getGroundTypeAt?.(this.player.position.x, this.player.position.z) ?? 'sidewalk';
+    const isRaining = !!this.weather?.isRaining;
+    this.audio.updateWorld?.(dt, this.player.position, this.cameraRig.camera, this.traffic?.vehicles ?? [], this.world.active?.busServices ?? this.world.active?.busService);
+    this.audio.setRaining?.(isRaining);
+    this.audio.updateSteps(moving, this.input.isRunning, groundType, isRaining);
     this.audio.updateBoost(this.interaction.boostActive);
-    this.profiler?.mark('entidadesClimaAudio');
+    this.overlays?.update?.(dt, this.weather, this.clock, this.psychosis);
+    this.profiler?.mark?.('entidadesClimaAudio');
 
     // 12. Render
     this._renderFrame(now, true);
@@ -889,6 +916,7 @@ export class Game {
       if (this.world?.active?.stationGroup) this._poiCache.push({ name: 'Portal del Centro', icon: '🚏', x: 75, z: -2, color: '#e45960' });
       if (this.world?.active?.colpatria) this._poiCache.push({ name: 'Torre Colpatria', icon: '🏙️', x: 81, z: 154, color: '#ffcb45' });
       if (this.world?.active?.lakePark) this._poiCache.push({ name: 'Parque del Lago', icon: '🌊', x: 138, z: 238, color: '#5ed4dc' });
+      if (this.cart) this._poiCache.push({ name: 'Carreta', icon: '🛒', x: this.cart.position.x, z: this.cart.position.z, color: '#f39c12' });
       this._dogPOI = friend ? { name: 'El Chato', icon: '🐕', color: '#e6b566' } : null;
       if (this._dogPOI) this._poiCache.push(this._dogPOI);
       this._poiCacheTime = now;

@@ -265,6 +265,7 @@ export class HUD {
         }
         else if (type === 'cambuche') text = '[E] Tu cambuche · Armar / Dormir';
         else if (type === 'dealer') text = '[Q / E] Tienda del Dealer · Comprar / Vender';
+else if (type === 'cart') text = interaction.currentTarget?.isAttached ? '[E] Soltar carreta de balineras 🛒' : '[E] Agarrar carreta de balineras 🛒 (+120kg)';
 
         if (text) {
           this._setText(this.promptEl, text);

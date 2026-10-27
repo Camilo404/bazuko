@@ -9,6 +9,16 @@ const ACCELERATION = 1.8;
 const BRAKING = 2;
 const PROBE_STEP = 0.5;
 
+function emitHonk(x, z) {
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    try {
+      const detail = { x, z };
+      const event = typeof CustomEvent !== 'undefined' ? new CustomEvent('car-honk', { detail }) : { type: 'car-honk', detail };
+      window.dispatchEvent(event);
+    } catch {}
+  }
+}
+
 export class TrafficSystem {
   constructor(scene, routes, { carsPerRoute = 4, random = Math.random } = {}) {
     this.vehicles = [];
@@ -37,7 +47,8 @@ export class TrafficSystem {
         this.vehicles.push({ car, route, distance, speed: 0, cruiseSpeed, nextDistance: distance, nextSpeed: 0,
           acceleration: 0, accelerationLimit: 1.8 + random() * .7, braking: 2.2 + random() * .6,
           reactionTime: .18 + random() * .35, resumeDelay: 0, stopped: false,
-          routeTimer: 3 + random() * 5, recentRoutes: [route.key], routeChanges: 0 });
+          routeTimer: 3 + random() * 5, recentRoutes: [route.key], routeChanges: 0,
+          lastHonkTime: 0 });
       }
     }
   }
@@ -388,6 +399,14 @@ export class TrafficSystem {
           vehicle.nextDistance = (vehicle.distance + travel) % vehicle.route.length;
           vehicle.nextSpeed = travel / stepTime;
           vehicle.nextTravel = travel;
+
+          if (clearance < 3.5 && vehicle.speed > 0.8) {
+            const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            if (now - (vehicle.lastHonkTime || 0) > 4000) {
+              vehicle.lastHonkTime = now;
+              emitHonk(vehicle.car.position.x, vehicle.car.position.z);
+            }
+          }
         }
       } finally {
         this._updating = false;
