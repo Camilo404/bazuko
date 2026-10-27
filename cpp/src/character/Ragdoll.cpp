@@ -1,6 +1,7 @@
 #include "Ragdoll.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/quaternion.hpp>
@@ -70,8 +71,12 @@ void Ragdoll::Update(float dt) {
             m_Velocities[i] += glm::vec3(0.0f, -9.8f, 0.0f) * step;
             m_Velocities[i] *= std::exp(-0.18f * step);
             m_Positions[i] += m_Velocities[i] * step;
-            if (m_Positions[i].y < m_FloorHeights[i]) {
-                m_Positions[i].y = m_FloorHeights[i];
+            if (m_HalfWidth > 0.0f && std::fabs(m_Positions[i].x) > m_HalfWidth) {   // las barandas contienen el cuerpo
+                m_Positions[i].x = std::clamp(m_Positions[i].x, -m_HalfWidth, m_HalfWidth);
+                m_Velocities[i].x = 0.0f;
+            }
+            if (m_Positions[i].y < m_GroundY + m_FloorHeights[i]) {
+                m_Positions[i].y = m_GroundY + m_FloorHeights[i];
                 if (m_Velocities[i].y < 0.0f) m_Velocities[i].y *= -0.12f;
                 m_Velocities[i].x *= 0.78f;
                 m_Velocities[i].z *= 0.78f;
@@ -91,7 +96,7 @@ void Ragdoll::Update(float dt) {
                 m_Velocities[constraint.second] -= correction * (0.08f / step);
             }
             for (size_t i = 0; i < m_Positions.size(); ++i) {
-                m_Positions[i].y = std::max(m_Positions[i].y, m_FloorHeights[i]);
+                m_Positions[i].y = std::max(m_Positions[i].y, m_GroundY + m_FloorHeights[i]);
             }
         }
     }
@@ -127,7 +132,7 @@ void Ragdoll::Draw(Renderer& renderer) const {
 }
 
 glm::vec3 Ragdoll::GetPlayerPosition() const {
-    return {m_Positions[0].x, std::max(0.0f, m_Positions[0].y - 0.92f), m_Positions[0].z};
+    return {m_Positions[0].x, std::max(m_GroundY, m_Positions[0].y - 0.92f), m_Positions[0].z};
 }
 
 glm::mat4 Ragdoll::GetCharacterTransform(float yaw, float recovery) const {
@@ -139,7 +144,7 @@ glm::mat4 Ragdoll::GetCharacterTransform(float yaw, float recovery) const {
     const glm::quat bodyRotation = glm::normalize(glm::slerp(
         fallenRotation, facing, std::clamp(recovery, 0.0f, 1.0f)));
     const glm::vec3 playerPosition = GetPlayerPosition();
-    const glm::vec3 standingPelvis(playerPosition.x, 0.92f, playerPosition.z);
+    const glm::vec3 standingPelvis(playerPosition.x, m_GroundY + 0.92f, playerPosition.z);
     const glm::vec3 pelvis = glm::mix(m_Positions[0], standingPelvis,
                                       std::clamp(recovery, 0.0f, 1.0f));
     const glm::vec3 modelOrigin = pelvis - bodyRotation * glm::vec3(0.0f, 0.92f * 1.08f, 0.0f);

@@ -853,8 +853,8 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
         {30, 14, false, "Chaza de don Efraín", {"cigarrillo", "cafe", "pan", "agua"}},
         {48, 22, true, "Fritanga La Mona", {"lataComida", "pan", "refresco"}},
         {76, 36, false, "Dulces y minutos", {"cigarrillo", "refresco", "agua"}},
-        {96, 58, false, "Chaza de la Carrera 8", {"agua", "pan", "cafe"}},
-        {30, 92, true, "Fritanga del Sur", {"lataComida", "pan", "refresco"}},
+        {83, 55, false, "Chaza de la Carrera 8", {"agua", "pan", "cafe"}},   // junto a la gasolinera, como en el original (baldosa X 82,5, Z 55)
+        {52, 70, true, "Fritanga del Sur", {"lataComida", "pan", "refresco"}},   // baldosa X 52, Z 70,5 del original
         {76, 80, false, "Chaza de la avenida", {"cigarrillo", "pan", "agua"}}
     }};
     for (const VendorSite& site : vendorSites) {
@@ -1990,6 +1990,25 @@ void Simulation::UpdateTraffic(float dt) {
             vehicle.horizontalLane = std::abs(vehicle.direction.x) > std::abs(vehicle.direction.z);
             vehicle.laneCoordinate = vehicle.horizontalLane ? vehicle.position.z : vehicle.position.x;
             vehicle.yaw = std::atan2(-vehicle.direction.z, vehicle.direction.x);
+        }
+        // Ultimo recurso: dos carros que llevan segundos detenidos y atravesados (el paso forzado los dejo uno dentro
+        // del otro y ninguno puede avanzar) se separan: el que lleva mas tiempo parado avanza por su ruta.
+        constexpr float kOverlapStall = 6.0f;
+        for (size_t first = 0; first < m_Traffic.size(); ++first) {
+            for (size_t second = first + 1; second < m_Traffic.size(); ++second) {
+                TrafficVehicle& a = m_Traffic[first];
+                TrafficVehicle& b = m_Traffic[second];
+                if (a.speed >= 0.1f || b.speed >= 0.1f || a.stalledTime < kOverlapStall || b.stalledTime < kOverlapStall) continue;
+                if (glm::distance(a.position, b.position) >= 2.4f) continue;
+                TrafficVehicle& mover = a.stalledTime >= b.stalledTime ? a : b;
+                mover.distance = std::fmod(mover.distance + 0.5f, mover.routeLength);
+                mover.nextDistance = mover.distance;
+                SampleCircuit(mover.route, mover.routeCumulative, mover.routeLength, mover.distance,
+                              mover.position, mover.direction, mover.nextWaypoint);
+                mover.horizontalLane = std::abs(mover.direction.x) > std::abs(mover.direction.z);
+                mover.laneCoordinate = mover.horizontalLane ? mover.position.z : mover.position.x;
+                mover.yaw = std::atan2(-mover.direction.z, mover.direction.x);
+            }
         }
         remaining -= stepTime;
     }

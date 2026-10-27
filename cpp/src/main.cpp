@@ -115,6 +115,7 @@ int main(int argc, char** argv) {
                            "💡 Consejo: Puedes personalizar tu aspecto, sexo, corte y ropa con la tecla [P].");
     glm::vec3 playerPos = city.GetSpawnPoint();
     playerPos.y = 0.0f;
+    bool knockedOnDeck = false;  // la caida empezo sobre el tablero: se levanta alli
     bool playerOnDeck = false;   // sobre el tablero del viaducto (capa elevada); en la calle pasa por debajo
     // Regla estricta: el jugador nunca aparece ni se carga dentro de un edificio, un modelo o un recinto sin salida.
     // Toda posicion que se le asigna (inicio, partida guardada, partida nueva, recuperacion, fin de una caida)
@@ -189,9 +190,10 @@ int main(int argc, char** argv) {
         knockdownRemaining = 1.8f;
         const glm::vec3 impactVelocity = impactDirection * std::max(2.0f, impactSpeed * 0.8f)
             + glm::vec3(0.0f, std::max(2.0f, impactSpeed * 0.55f), 0.0f);
+        // sobre el tablero cae sobre el tablero (contenido por las barandas); en la calle, sobre la calzada
+        knockedOnDeck = playerOnDeck;
+        playerRagdoll.SetSurface(playerOnDeck ? playerPos.y : 0.0f, playerOnDeck ? Viaduct::kWalkHalfWidth : 0.0f);
         playerRagdoll.Begin(playerPos, playerYaw, impactVelocity, characterManager.GetLook());
-        playerOnDeck = false;
-        playerPos.y = 0.0f;
         ui.SetPickupNotification("¡Atropellamiento! Recupera salud y espera a que termine la caída.");
     };
     std::string objective = "Recoge 5 objetos para empezar";
@@ -788,8 +790,15 @@ int main(int argc, char** argv) {
             playerVelocity = glm::vec3(0.0f);
             if (knockdownRemaining <= 0.0f) {
                 playerKnockedDown = false;
-                playerOnDeck = false;
-                playerPos = placeSafely(playerPos);   // la caida no puede dejarlo dentro de un modelo
+                float deckY = 0.0f;
+                if (knockedOnDeck && Viaduct::StepLayer(true, playerPos.x, playerPos.z, deckY)) {
+                    playerOnDeck = true;   // se levanta sobre el tablero
+                    playerPos.y = deckY;
+                } else {
+                    playerOnDeck = false;
+                    playerPos = placeSafely(playerPos);   // la caida no puede dejarlo dentro de un modelo
+                }
+                playerRagdoll.SetSurface(0.0f);
             }
         } else if (const bool moving = glm::length(moveDir) > 0.001f; moving || glm::dot(playerVelocity, playerVelocity) > 0.0005f) {
             if (moving) moveDir = glm::normalize(moveDir);

@@ -5,6 +5,7 @@
 #include "renderer/GL.hpp"
 #include "world/CityLayout.hpp"
 #include "world/SafeSpawn.hpp"
+#include "world/Station.hpp"
 #include "world/Simulation.hpp"
 
 #include <GLFW/glfw3.h>
@@ -90,6 +91,24 @@ int main() {
            && city.GetGroundHeight(0.0f, -105.0f) > 0.0f && city.GetGroundHeight(5.0f, -90.0f) == 0.0f,
            "la isla de la estacion sube por rampas y solo existe entre los carriles");
     expect(!city.IsWalkable(0.0f, 2.0f * 160.0f - CityLayout::ORIGIN_Z + 1.0f), "el borde sur es un muro");
+    // Recorrer a pie la isla de la estacion por su eje (de la rampa norte a la sur y de vuelta): nada la bloquea y la
+    // cota sube y baja sin saltos
+    {
+        bool blocked = false;
+        float previousHeight = 0.0f, worstStep = 0.0f, peak = 0.0f;
+        for (int pass = 0; pass < 2; ++pass) {
+            for (float step = 0.0f; step <= 36.0f; step += 0.1f) {
+                const float z = pass == 0 ? Station::kNorthEnd + 0.5f + step : Station::kSouthEnd - 0.5f - step;
+                const float height = city.GetGroundHeight(0.0f, z);
+                if (!city.IsWalkable(0.0f, z) || city.IsBlocked(0.0f, z, 0.35f) || simulation.IsBlocked({0.0f, height, z}, 0.35f)) blocked = true;
+                if (step > 0.0f) worstStep = std::max(worstStep, std::fabs(height - previousHeight));
+                peak = std::max(peak, height);
+                previousHeight = height;
+            }
+        }
+        expect(!blocked, "la isla de la estacion se recorre de punta a punta sin bloqueos");
+        expect(worstStep < 0.05f && std::fabs(peak - Station::kPlatformHeight) < 0.001f, "la isla sube y baja por rampas suaves hasta 0,92 m");
+    }
     std::printf("Ampliacion del mapa: %d fallos\n", layoutFailures);
     failures += layoutFailures;
     glfwDestroyWindow(window);
