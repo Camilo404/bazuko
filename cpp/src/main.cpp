@@ -132,6 +132,11 @@ int main(int argc, char** argv) {
     int level = 1;
     int talentPoints = 0;
     bool bigSack = false;   // Costal grande comprado en la tienda
+    bool radioOn = false;          // radio transistor: encendida, volumen propio y bateria (100 % dura unos 40 min)
+    float radioVolume = 0.7f;
+    float radioBattery = 100.0f;
+    int graphicsQuality = 1;   // 0 baja, 1 media, 2 alta: escala de resolucion interna 0,75 / 1 / 1,25
+    glm::vec3 playerVelocity{0.0f};   // inercia de movimiento (como Player.js: 22/s al moverse, 18/s al frenar)
     std::array<std::string, 5> hotbar{};   // objetos de la barra de acceso rapido (teclas 1-5)
     bool sorting = false;   // manteniendo Q sobre una bolsa
     float sortProgress = 0.0f;
@@ -202,6 +207,14 @@ int main(int argc, char** argv) {
                     if (gameData.FindTalent(id)) unlockedTalents.insert(id);
                 }
                 bigSack = state.value("bigSack", false);
+                graphicsQuality = std::clamp(state.value("graphicsQuality", 1), 0, 2);
+                if (state.contains("radio") && state["radio"].is_object()) {
+                    const auto& savedRadio = state["radio"];
+                    radioOn = savedRadio.value("on", false);
+                    radioVolume = std::clamp(savedRadio.value("volume", 0.7f), 0.0f, 1.0f);
+                    radioBattery = std::clamp(savedRadio.value("battery", 100.0f), 0.0f, 100.0f);
+                    ui.SelectRadioStation(savedRadio.value("station", std::string{}));
+                }
                 {
                     const auto savedHotbar = state.value("hotbar", std::vector<std::string>{});
                     for (size_t slot = 0; slot < std::min(hotbar.size(), savedHotbar.size()); ++slot)
@@ -293,6 +306,8 @@ int main(int argc, char** argv) {
         state["talentPoints"] = talentPoints;
         state["bigSack"] = bigSack;
         state["hotbar"] = hotbar;
+        state["graphicsQuality"] = graphicsQuality;
+        state["radio"] = {{"on", radioOn}, {"volume", radioVolume}, {"battery", radioBattery}, {"station", ui.SelectedRadioStationId()}};
         state["talents"] = std::vector<std::string>(unlockedTalents.begin(), unlockedTalents.end());
         state["itemsCollected"] = itemsCollected;
         state["itemsSold"] = itemsSold;
@@ -351,6 +366,8 @@ int main(int argc, char** argv) {
         talentPoints = 0;
         bigSack = false;
         hotbar = {};
+        radioOn = false;
+        radioBattery = 100.0f;
         unlockedTalents.clear();
         companionName = "El Chato";
         companionCoat = 0;
@@ -708,15 +725,20 @@ int main(int argc, char** argv) {
             knockdownRemaining = std::max(0.0f, knockdownRemaining - dt);
             playerRagdoll.Update(dt);
             playerPos = playerRagdoll.GetPlayerPosition();
+            playerVelocity = glm::vec3(0.0f);
             if (knockdownRemaining <= 0.0f) {
                 playerKnockedDown = false;
                 playerPos.y = 0.0f;
             }
-        } else if (glm::length(moveDir) > 0.001f) {
-            moveDir = glm::normalize(moveDir);
-            currentSpeed = moveSpeed;
+        } else if (const bool moving = glm::length(moveDir) > 0.001f; moving || glm::dot(playerVelocity, playerVelocity) > 0.0005f) {
+            if (moving) moveDir = glm::normalize(moveDir);
+            const glm::vec3 targetVelocity = moving ? moveDir * moveSpeed : glm::vec3(0.0f);
+            const float accelerationRate = moving ? 22.0f : 18.0f;
+            playerVelocity = glm::mix(playerVelocity, targetVelocity, 1.0f - std::exp(-accelerationRate * std::max(0.0f, dt)));
+            if (!moving && glm::dot(playerVelocity, playerVelocity) < 0.0005f) playerVelocity = glm::vec3(0.0f);
+            currentSpeed = glm::length(playerVelocity);
 
-            glm::vec3 nextPos = playerPos + moveDir * (moveSpeed * dt);
+            glm::vec3 nextPos = playerPos + playerVelocity * dt;
             float impactSpeed = 0.0f;
             glm::vec3 impactDirection(0.0f);
             if (vehicleImpactCooldown <= 0.0f && needs[3] > 0.0f
@@ -730,7 +752,7 @@ int main(int argc, char** argv) {
                 playerPos.z = nextPos.z;
             }
 
-            playerYaw = std::atan2(moveDir.x, moveDir.z);
+            if (moving) playerYaw = std::atan2(moveDir.x, moveDir.z);
         }
         audio.Update(currentSpeed > 0.25f, isRunning);
 
@@ -786,8 +808,32 @@ int main(int argc, char** argv) {
         if (psychosisSeverity > 0.0f && !ui.IsPaused()) {
             const float fovPulse = std::sin(clock.GetElapsedTime() * 4.5f) * 3.2f * psychosisSeverity;
             camera.SetPsychosisFovOffset(fovPulse);
+            // Filtro del original: contraste +40 %, saturacion +45 % y tono oscilante de hasta 14 grados
+            renderer.SetColorGrade(1.0f + 0.4f * psychosisSeverity, 1.0f + 0.45f * psychosisSeverity,
+                                   std::sin(clock.GetElapsedTime() * 3.0f) * 14.0f * psychosisSeverity);
+            camera.SetPsychosisRoll(psychosisSeverity > 0.6f
+                ? (std::uniform_real_distribution<float>(-0.5f, 0.5f)(lootRandom)) * 0.014f * psychosisSeverity : 0.0f);
+            // Latidos taquicardicos y delirios verbales
+            static float heartbeatTimer = 0.0f;
+            static float mutteringTimer = 18.0f;
+            heartbeatTimer -= dtClamped;
+            if (heartbeatTimer <= 0.0f) {
+                audio.PlayHeartbeat(psychosisSeverity);
+                heartbeatTimer = 0.95f - 0.42f * psychosisSeverity;
+            }
+            mutteringTimer -= dtClamped;
+            if (mutteringTimer <= 0.0f) {
+                static const std::array<const char*, 5> mutterings{{
+                    "\"¡¡Dejen de vigilarme, sé quiénes son!!\"", "\"¡¡Están en las sombras... nos tienen acorralados!!\"",
+                    "\"¡¡No me toquen, aléjense de mí!!\"", "\"¿Quién anda susurrando mi nombre?\"",
+                    "\"¡¡Esos peatones son policías encubiertos!!\""}};
+                ui.Notify(mutterings[static_cast<size_t>(std::uniform_int_distribution<int>(0, 4)(lootRandom))], ToastType::Warn);
+                mutteringTimer = 16.0f + std::uniform_real_distribution<float>(0.0f, 12.0f)(lootRandom);
+            }
         } else {
             camera.SetPsychosisFovOffset(0.0f);
+            camera.SetPsychosisRoll(0.0f);
+            renderer.SetColorGrade(1.0f, 1.0f, 0.0f);
         }
         simulation.UpdatePsychosis(dtClamped, playerPos, psychosisSeverity);
 
@@ -1222,6 +1268,17 @@ int main(int argc, char** argv) {
         camera.Follow(playerPos, dt, currentSpeed, isRunning);
 
         // 8. Renderizado 3D con OpenGL 4.5 DSA
+        {
+            static const std::array<float, 3> renderScales{0.75f, 1.0f, 1.25f};
+            if (const int requested = ui.ConsumeGraphicsQualityRequest(); requested >= 0 && requested <= 2 && requested != graphicsQuality) {
+                graphicsQuality = requested;
+                static const std::array<const char*, 3> qualityNames{"baja", "media", "alta"};
+                ui.Notify(std::string("Calidad gráfica: ") + qualityNames[static_cast<size_t>(requested)], ToastType::Info);
+            }
+            ui.SetGraphicsQuality(graphicsQuality);
+            renderer.SetRenderScale(renderScales[static_cast<size_t>(graphicsQuality)]);
+        }
+        renderer.BeginScaledTarget();
         renderer.BeginScene(camera, clock.GetElapsedTime());
 
         // Renderizar ciudad de Bogotá
@@ -1250,6 +1307,7 @@ int main(int argc, char** argv) {
         }
 
         renderer.EndScene();
+        renderer.EndScaledTarget();
 
         // 9. Interfaz gráfica (Dear ImGui)
         ui.BeginFrame();
@@ -1278,7 +1336,8 @@ int main(int argc, char** argv) {
             const Item& item = lootTable[entry.itemIndex];
             const auto hotbarSlot = std::find(hotbar.begin(), hotbar.end(), item.id);
             inventoryOptions.push_back({entry.itemIndex, item.id, item.name, entry.quantity, item.weight,
-                item.consumableNeed >= 0 || !item.cure.empty() || item.id == "vendaje" || item.id == "curita",
+                item.consumableNeed >= 0 || !item.cure.empty() || item.id == "vendaje" || item.id == "curita"
+                    || item.id == "pilas" || item.id == "radioTransistor",
                 item.desc, DescribeItemEffects(item), item.rarityLabel,
                 hotbarSlot == hotbar.end() ? -1 : static_cast<int>(hotbarSlot - hotbar.begin())});
         }
@@ -1397,12 +1456,70 @@ int main(int argc, char** argv) {
             }
         }
 
+        {
+            // Radio transistor: peticiones del sintonizador, bateria, bienestar y sintesis
+            if (ui.ConsumeRadioPowerToggle()) {
+                radioOn = !radioOn;
+                if (radioOn && radioBattery <= 0.0f) {
+                    radioOn = false;
+                    ui.Notify("La radio no tiene pilas.", ToastType::Warn);
+                } else {
+                    ui.Notify(radioOn ? "Radio encendida" : "Radio apagada", ToastType::Info);
+                }
+            }
+            if (ui.ConsumeRadioTuned() && !radioOn && radioBattery > 0.0f) {
+                radioOn = true;
+                ui.Notify("Radio encendida", ToastType::Info);
+            }
+            if (ui.ConsumeRadioBatteryRequest() && radioBattery < 100.0f) {
+                const int pilasIndex = gameData.ItemIndex("pilas");
+                auto pilas = std::find_if(inventory.begin(), inventory.end(),
+                    [&](const InventoryEntry& value) { return static_cast<int>(value.itemIndex) == pilasIndex; });
+                if (pilas != inventory.end()) {
+                    radioBattery = std::min(100.0f, radioBattery + 50.0f);
+                    inventoryWeight = std::max(0.0f, inventoryWeight - lootTable[pilas->itemIndex].weight);
+                    if (--pilas->quantity == 0) inventory.erase(pilas);
+                    ui.Notify("¡Pilas nuevas colocadas en la radio! (+50%)", ToastType::Info);
+                }
+            }
+            if (float requestedVolume = 0.0f; ui.ConsumeRadioVolume(requestedVolume)) radioVolume = std::clamp(requestedVolume, 0.0f, 1.0f);
+            const RadioProgram radioProgram = RadioProgramFromId(ui.SelectedRadioStationId());
+            const float radioSignal = radioProgram == RadioProgram::None ? 0.0f : 1.0f;
+            if (radioOn) {
+                radioBattery = std::max(0.0f, radioBattery - dtClamped / 24.0f);
+                if (radioBattery <= 0.0f) {
+                    radioOn = false;
+                    ui.Notify("La radio se quedó sin pilas.", ToastType::Warn);
+                } else if (radioSignal > 0.4f) {
+                    needs[5] = std::min(100.0f, needs[5] + dtClamped * 0.8f * radioSignal);   // escuchar radio sube el ánimo
+                }
+            }
+            audio.UpdateRadio(radioOn && !ui.IsDeathScreenOpen(), radioProgram, radioSignal, radioVolume);
+            const int batteriesIndex = gameData.ItemIndex("pilas");
+            const bool hasBatteries = std::any_of(inventory.begin(), inventory.end(), [&](const InventoryEntry& value) {
+                return static_cast<int>(value.itemIndex) == batteriesIndex && value.quantity > 0;
+            });
+            ui.SetRadioView({radioOn, radioBattery, radioVolume, radioSignal, hasBatteries});
+        }
         const auto useInventoryItem = [&](size_t itemIndex) {
             auto entry = std::find_if(inventory.begin(), inventory.end(),
                 [&](const InventoryEntry& value) { return value.itemIndex == itemIndex; });
             if (entry == inventory.end()) return;
             const Item& item = lootTable[entry->itemIndex];
-            if (!applyItemEffect(item)) return;
+            if (item.id == "radioTransistor") {
+                ui.OpenRadioMenu(false);
+                return;
+            }
+            if (item.id == "pilas") {
+                if (radioBattery >= 100.0f) {
+                    ui.Notify("La radio ya tiene la batería llena.", ToastType::Warn);
+                    return;
+                }
+                radioBattery = std::min(100.0f, radioBattery + 50.0f);
+                ui.Notify("¡Pilas nuevas colocadas en la radio! (+50%)", ToastType::Info);
+            } else if (!applyItemEffect(item)) {
+                return;
+            }
             inventoryWeight = std::max(0.0f, inventoryWeight - item.weight);
             if (--entry->quantity == 0) inventory.erase(entry);
             audio.Play(AudioCue::Pickup);

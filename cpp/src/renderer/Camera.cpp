@@ -92,7 +92,12 @@ void Camera::Follow(const glm::vec3& targetPos, float dt, float speed, bool isRu
         }
     }
 
-    m_ViewMatrix = glm::lookAt(m_Position, lookAt, glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::vec3 up(0.0f, 1.0f, 0.0f);
+    if (m_PsychosisRoll != 0.0f) {
+        const glm::vec3 forward = glm::normalize(lookAt - m_Position);
+        up = glm::vec3(glm::rotate(glm::mat4(1.0f), m_PsychosisRoll, forward) * glm::vec4(up, 0.0f));
+    }
+    m_ViewMatrix = glm::lookAt(m_Position, lookAt, up);
     m_ViewProjectionMatrix = m_ProjectionMatrix * m_ViewMatrix;
 }
 

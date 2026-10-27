@@ -95,12 +95,12 @@ comunes (4 con adrenalina) y 5 % de uno raro; manteniendo `Q` 1,5 s se clasifica
 de enfermar. Lo que no cabe en el costal se queda en la bolsa. Los materiales de un cambuche completo (cartón, tablas, latas,
 lona, colchón y vela) viajan en las bolsas y vuelven a aparecer cuando se recogen.
 
-### Emisoras de radio
+### Radio transistor
 
-Las emisoras disponibles se configuran en `assets/radio_stations.json`. Para añadir una, agrega un objeto a
-`stations` con un `id` único, `name`, `frequency`, `genre`, `program` y `url`. La URL puede quedar vacía para
-emisoras ficticias; la selección ya funciona en el menú de pausa (`R`), pero la reproducción de streams online
-aún no está implementada. El mismo archivo incluye instrucciones y un ejemplo de los campos.
+`R` o el botón de radio abren el sintonizador: encender/apagar, batería (100 % dura unos 40 min; las pilas AA suman 50 %),
+volumen propio y las cuatro emisoras de `assets/radio_stations.json`. Suena una síntesis lo-fi como la del juego web
+(`audio/RadioSynth`: cumbia, boletín con campana, corneta de estadio y rock), con ruido de estática y filtro de altavoz;
+escucharla sube el ánimo. Las emisoras con otro `id` solo dan estática. No hay reproducción de streams en línea.
 
 ### Windows desde WSL (compilación cruzada con MinGW-w64)
 

@@ -49,6 +49,43 @@ std::string FindAudioPath(const char* filename) {
 
 } // namespace
 
+namespace {
+
+// Fuente de datos de miniaudio que pide muestras a la sintesis de la radio (se llama desde el hilo de audio)
+struct RadioSource {
+    ma_data_source_base base;
+    RadioSynth* synth = nullptr;
+    ma_uint32 sampleRate = 48000;
+    std::vector<float> mono;
+};
+
+ma_result RadioRead(ma_data_source* source, void* out, ma_uint64 frameCount, ma_uint64* framesRead) {
+    auto* radio = reinterpret_cast<RadioSource*>(source);
+    auto* samples = static_cast<float*>(out);
+    radio->mono.resize(static_cast<size_t>(frameCount));
+    radio->synth->Render(radio->mono.data(), static_cast<size_t>(frameCount));
+    for (ma_uint64 frame = 0; frame < frameCount; ++frame) {
+        samples[frame * 2] = radio->mono[static_cast<size_t>(frame)];
+        samples[frame * 2 + 1] = radio->mono[static_cast<size_t>(frame)];
+    }
+    if (framesRead) *framesRead = frameCount;
+    return MA_SUCCESS;
+}
+
+ma_result RadioFormat(ma_data_source* source, ma_format* format, ma_uint32* channels, ma_uint32* sampleRate,
+                      ma_channel* channelMap, size_t channelMapCap) {
+    auto* radio = reinterpret_cast<RadioSource*>(source);
+    *format = ma_format_f32;
+    *channels = 2;
+    *sampleRate = radio->sampleRate;
+    if (channelMap) ma_channel_map_init_standard(ma_standard_channel_map_default, channelMap, channelMapCap, 2);
+    return MA_SUCCESS;
+}
+
+ma_data_source_vtable g_radioVtable = {RadioRead, nullptr, RadioFormat, nullptr, nullptr, nullptr, 0};
+
+} // namespace
+
 struct AudioManager::Impl {
     struct Sound {
         ma_sound value{};
@@ -81,6 +118,11 @@ struct AudioManager::Impl {
     std::array<VehicleChannel, MaxTrafficAudio + 1> vehicleChannels{};
     std::array<Sound, 3> horns{};
     Sound carAlarm;
+    Sound heartbeat;
+    std::unique_ptr<RadioSynth> radioSynth;
+    RadioSource radioSource{};
+    ma_sound radioSound{};
+    bool radioReady = false;
     std::array<Sound, 12> driverVoices{};
     std::array<Sound, 5> theftVoices{};
     std::mt19937 random{std::random_device{}()};
@@ -93,6 +135,44 @@ struct AudioManager::Impl {
         }
         ready = true;
         ma_engine_set_volume(&engine, masterVolume);
+        {
+            // La radio suena siempre (en silencio si esta apagada): evita latencia al encenderla
+            const ma_uint32 engineRate = ma_engine_get_sample_rate(&engine);
+            radioSynth = std::make_unique<RadioSynth>(static_cast<float>(engineRate));
+            ma_data_source_config sourceConfig = ma_data_source_config_init();
+            sourceConfig.vtable = &g_radioVtable;
+            radioSource.synth = radioSynth.get();
+            radioSource.sampleRate = engineRate;
+            if (ma_data_source_init(&sourceConfig, &radioSource.base) == MA_SUCCESS
+                && ma_sound_init_from_data_source(&engine, &radioSource.base, 0, nullptr, &radioSound) == MA_SUCCESS) {
+                ma_sound_start(&radioSound);
+                radioReady = true;
+            }
+        }
+        {
+            // dos golpes sinusoidales con caida de frecuencia exponencial (como playHeartbeat del juego web)
+            constexpr float rate = 48000.0f;
+            const size_t frames = static_cast<size_t>(rate * 0.30f);
+            heartbeat.samples.assign(frames * 2, 0.0f);
+            const auto thump = [&](float offset, float volume) {
+                const size_t start = static_cast<size_t>(offset * rate);
+                const size_t length = static_cast<size_t>(0.13f * rate);
+                float phase = 0.0f;
+                for (size_t index = 0; index < length && start + index < frames; ++index) {
+                    const float t = static_cast<float>(index) / rate;
+                    const float frequency = 65.0f * std::pow(28.0f / 65.0f, t / 0.12f);
+                    phase += 6.2831853f * frequency / rate;
+                    const float envelope = volume * 0.45f * std::pow(0.001f, t / 0.12f);
+                    const float value = std::sin(phase) * envelope;
+                    heartbeat.samples[(start + index) * 2] += value;
+                    heartbeat.samples[(start + index) * 2 + 1] += value;
+                }
+            };
+            thump(0.0f, 1.0f);
+            thump(0.14f, 0.7f);
+            heartbeat.sampleSource = &heartbeat.samples;
+            InitializeOpusBuffer(heartbeat, heartbeat.samples, false, false);
+        }
 
         const std::array<std::pair<SoundSlot, const char*>, static_cast<size_t>(SoundSlot::Count)> files{{
             {SoundSlot::Pickup, "pickup.wav"},
@@ -381,6 +461,12 @@ struct AudioManager::Impl {
                 if (sound.initialized) ma_sound_uninit(&sound.value);
                 if (sound.bufferInitialized) ma_audio_buffer_uninit(&sound.buffer);
             }
+            if (radioReady) {
+                ma_sound_uninit(&radioSound);
+                ma_data_source_uninit(&radioSource.base);
+            }
+            if (heartbeat.initialized) ma_sound_uninit(&heartbeat.value);
+            if (heartbeat.bufferInitialized) ma_audio_buffer_uninit(&heartbeat.buffer);
             if (carAlarm.initialized) ma_sound_uninit(&carAlarm.value);
             if (carAlarm.bufferInitialized) ma_audio_buffer_uninit(&carAlarm.buffer);
             for (Sound& sound : driverVoices) if (sound.initialized) ma_sound_uninit(&sound.value);
@@ -436,6 +522,22 @@ void AudioManager::Play(AudioCue cue) {
     ma_sound_stop(&sound.value);
     ma_sound_seek_to_pcm_frame(&sound.value, 0);
     ma_sound_start(&sound.value);
+}
+
+void AudioManager::UpdateRadio(bool on, RadioProgram program, float signal, float volume) {
+    if (!m_Impl || !m_Impl->ready || !m_Impl->radioReady) return;
+    m_Impl->radioSynth->SetOn(on);
+    m_Impl->radioSynth->SetStation(program);
+    m_Impl->radioSynth->SetSignal(signal);
+    m_Impl->radioSynth->SetVolume(volume);
+}
+
+void AudioManager::PlayHeartbeat(float intensity) {
+    if (!m_Impl || !m_Impl->ready || m_Impl->muted || !m_Impl->heartbeat.initialized) return;
+    ma_sound_set_volume(&m_Impl->heartbeat.value, std::clamp(0.4f + 0.6f * intensity, 0.0f, 1.0f));
+    ma_sound_stop(&m_Impl->heartbeat.value);
+    ma_sound_seek_to_pcm_frame(&m_Impl->heartbeat.value, 0);
+    ma_sound_start(&m_Impl->heartbeat.value);
 }
 
 void AudioManager::PlayTheftRemark(float distance) {

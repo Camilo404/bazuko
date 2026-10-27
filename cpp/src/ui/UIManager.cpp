@@ -318,6 +318,12 @@ size_t UIManager::ConsumeInventoryUseRequest() {
     return request;
 }
 
+int UIManager::ConsumeGraphicsQualityRequest() {
+    const int request = m_GraphicsQualityRequest;
+    m_GraphicsQualityRequest = -1;
+    return request;
+}
+
 int UIManager::ConsumeHotbarUseRequest() {
     const int request = m_HotbarUseRequest;
     m_HotbarUseRequest = -1;
@@ -805,9 +811,37 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
         if (SignUI::BeginMenu(pauseTitle.c_str(), pauseTitle.c_str(), pauseSubtitle.c_str(), pauseIcon, &closeRequested,
                                560.0f, m_PauseSection == 7 ? 312.0f : 680.0f)) {
             if (m_RadioMenuOpen) {
-                ImGui::PushStyleColor(ImGuiCol_Text, blueText);
-                ImGui::TextWrapped("Selecciona una emisora. La reproducción de audio en línea se conectará en una etapa posterior.");
-                ImGui::PopStyleColor();
+                const RadioView& radio = m_RadioView;
+                if (SignUI::BeginSection("Radio transistor", Icon::Radio)) {
+                    SignUI::FlexReset();
+                    if (SignUI::Button(radio.on ? "Apagar radio" : "Encender radio", Icon::Radio, radio.on)) m_RadioPowerRequest = true;
+                    ImGui::SameLine(0.0f, 14.0f);
+                    ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 11.0f);
+                    ImGui::PushFont(fonts.monoBold12);
+                    ImGui::TextColored(radio.on ? ImVec4(0.30f, 0.90f, 0.50f, 1.0f) : ImVec4(0.65f, 0.70f, 0.78f, 1.0f),
+                                       radio.on ? "• TRANSMISIÓN ACTIVA" : "• APAGADA");
+                    ImGui::PopFont();
+                    ImGui::Spacing();
+                    const int batteryPercent = static_cast<int>(radio.battery + 0.5f);
+                    ImGui::Text("Batería: %d%%", batteryPercent);
+                    ImGui::SameLine(0.0f, 12.0f);
+                    SignUI::StatBar(radio.battery / 100.0f,
+                                    batteryPercent > 30 ? IM_COL32(39, 174, 96, 255) : batteryPercent > 10 ? IM_COL32(243, 156, 18, 255) : IM_COL32(231, 76, 60, 255),
+                                    180.0f, 10.0f, batteryPercent <= 10);
+                    SignUI::FlexReset();
+                    if (SignUI::Button("Poner pilas AA (+50%)", Icon::Bolt) && radio.hasBatteries && radio.battery < 100.0f) m_RadioBatteryRequest = true;
+                    if (!radio.hasBatteries) SignUI::NoteText("No tienes pilas AA en el costal: cómpralas en la tienda o encuéntralas en la basura.");
+                    ImGui::Spacing();
+                    ImGui::AlignTextToFramePadding();
+                    ImGui::TextUnformatted("Volumen:");
+                    ImGui::SameLine(0.0f, 12.0f);
+                    float radioVolume = radio.volume;
+                    if (SignUI::Slider("volumenRadio", &radioVolume, 200.0f)) m_RadioVolumeRequest = radioVolume;
+                    ImGui::SameLine(0.0f, 10.0f);
+                    ImGui::TextColored(gold, "%d%%", static_cast<int>(radioVolume * 100.0f + 0.5f));
+                    ImGui::Text("Señal: %d%%", static_cast<int>(radio.signal * 100.0f + 0.5f));
+                }
+                SignUI::EndSection();
                 if (m_RadioStations.empty()) {
                     ImGui::TextWrapped("No hay emisoras cargadas. Revisa assets/radio_stations.json y los mensajes de inicio.");
                 }
@@ -821,7 +855,10 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                         ImGui::Text("%s  ·  %s", station.frequency.c_str(), station.name.c_str());
                         ImGui::PopFont();
                         SignUI::RowCluster(rowTop, rowRight(buttonWidth));
-                        if (SignUI::RowButton(selected ? "Sintonizada" : "Sintonizar", !selected, selected)) m_SelectedRadioStation = index;
+                        if (SignUI::RowButton(selected ? "Sintonizada" : "Sintonizar", !selected, selected)) {
+                            m_SelectedRadioStation = index;
+                            m_RadioTuned = true;
+                        }
                         SignUI::RowBelow(rowTop);
                         ImGui::PushStyleColor(ImGuiCol_Text, blueText);
                         ImGui::PushTextWrapPos(rowRight(buttonWidth + 8.0f));
@@ -830,13 +867,6 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                         ImGui::PopStyleColor();
                     }
                     SignUI::EndRow();
-                }
-                if (!m_RadioStations.empty()) {
-                    const RadioStation& selected = m_RadioStations[m_SelectedRadioStation];
-                    ImGui::Spacing();
-                    ImGui::TextColored(gold, "Sintonizada: %s (%s)", selected.name.c_str(), selected.frequency.c_str());
-                    SignUI::NoteText(selected.streamUrl.empty() ? "Emisora ficticia: sin URL configurada." : selected.streamUrl.c_str());
-                    SignUI::NoteText("La URL se guarda como configuración; todavía no se reproduce audio en línea.");
                 }
                 SignUI::BeginFooter();
                 if (SignUI::PrimaryButton(m_RadioReturnsToPause ? "Volver a pausa" : "Cerrar radio")) CloseRadioMenu();
@@ -1154,6 +1184,19 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                 }
                 SignUI::EndSection();
 
+                // ---- Rendimiento y calidad ----
+                if (SignUI::BeginSection("Rendimiento y Calidad (FPS)", Icon::Bolt)) {
+                    SignUI::FlexReset();
+                    static const char* const qualityLabels[3] = {"Baja (Máx FPS)", "Media", "Alta (Detalle)"};
+                    for (int quality = 0; quality < 3; ++quality)
+                        if (SignUI::Button(qualityLabels[quality], quality == 1 ? Icon::Gear : Icon::Bolt, m_GraphicsQuality == quality))
+                            m_GraphicsQualityRequest = quality;
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.78f, 0.84f, 0.95f, 0.65f));
+                    ImGui::TextWrapped("Resolución interna: baja 0,75×, media 1×, alta 1,25×. El panel de rendimiento muestra el efecto en los FPS.");
+                    ImGui::PopStyleColor();
+                }
+                SignUI::EndSection();
+
                 // ---- Estado actual ----
                 if (SignUI::BeginSection("Estado Actual", Icon::Chart)) {
                     const float columnX = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x * 0.5f;
@@ -1423,6 +1466,9 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
             if (hudButton("inventario", nullptr, Icon::Bag, 38.0f, "Inventario [I]")) OpenPauseSection(1);
             ImGui::SameLine();
             if (hudButton("sonido", nullptr, audio.IsMuted() ? Icon::Mute : Icon::Sound, 38.0f, "Silenciar o activar el audio")) audio.SetMuted(!audio.IsMuted());
+            ImGui::SameLine();
+            ImGui::SameLine();
+            if (hudButton("radio", nullptr, Icon::Radio, 38.0f, "Radio transistor [R]")) OpenRadioMenu(false);
             ImGui::SameLine();
             if (hudButton("pausa", nullptr, Icon::Pause, 38.0f, "Pausa [Esc]")) TogglePause();
 

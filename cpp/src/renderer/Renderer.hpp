@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <memory>
 #include <vector>
 #include <glm/glm.hpp>
@@ -38,9 +39,21 @@ public:
     void SetViewport(int x, int y, int width, int height);
     void BeginScene(const Camera& camera, float time);
     void EndScene();
+    // Escala de resolucion interna (calidad grafica): la escena se dibuja en un buffer de ese tamano y se escala a la ventana.
+    // Va alrededor de BeginScene/EndScene del mundo; la vista previa del personaje no lo usa.
+    void SetRenderScale(float scale) { m_RenderScale = std::clamp(scale, 0.5f, 2.0f); }
+    float GetRenderScale() const { return m_RenderScale; }
+    void BeginScaledTarget();
+    void EndScaledTarget();
 
     void Submit(const Mesh& mesh, const glm::mat4& transform, const glm::vec4& albedo = glm::vec4(1.0f), bool useTexture = false, bool doubleSided = false, const std::vector<glm::mat4>* skinMatrices = nullptr, int alphaMode = 0, float alphaCutoff = 0.5f, const Texture* specularTexture = nullptr);
     void SetWireframe(bool wireframe);
+    // Filtro de color de toda la escena (1, 1, 0 = sin cambios)
+    void SetColorGrade(float contrast, float saturation, float hueDegrees) {
+        m_Contrast = contrast;
+        m_Saturation = saturation;
+        m_HueDegrees = hueDegrees;
+    }
 
     Shader& GetDefaultShader() { return *m_DefaultShader; }
     LightBlockData& GetLighting() { return m_LightingData; }
@@ -54,6 +67,17 @@ private:
     CameraBlockData m_CameraData{};
     LightBlockData m_LightingData{};
     bool m_Wireframe = false;
+    float m_RenderScale = 1.0f;
+    unsigned int m_ScaledFbo = 0;
+    unsigned int m_ScaledColor = 0;
+    unsigned int m_ScaledDepth = 0;
+    int m_ScaledWidth = 0;
+    int m_ScaledHeight = 0;
+    int m_ScreenViewport[4] = {0, 0, 0, 0};
+    bool m_ScaledActive = false;
+    float m_Contrast = 1.0f;
+    float m_Saturation = 1.0f;
+    float m_HueDegrees = 0.0f;
 };
 
 } // namespace Bazuko

@@ -149,6 +149,7 @@ add_executable(bazuko
     src/world/CityLayout.cpp src/world/Simulation.cpp src/world/BirdFlock.cpp
     src/world/TextRaster.cpp src/world/SignAtlas.cpp
     src/game/GameData.cpp src/game/Harvest.cpp
+    src/audio/RadioSynth.cpp
 )
 if(WIN32)
     set_target_properties(bazuko PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -204,6 +205,11 @@ add_executable(bazuko_framemetrics_test tests/FrameMetricsTest.cpp)
 target_include_directories(bazuko_framemetrics_test PRIVATE src)
 add_test(NAME bazuko_framemetrics COMMAND bazuko_framemetrics_test)
 
+# Sintesis de la radio transistor
+add_executable(bazuko_radio_test tests/RadioSynthTest.cpp src/audio/RadioSynth.cpp)
+target_include_directories(bazuko_radio_test PRIVATE src)
+add_test(NAME bazuko_radio COMMAND bazuko_radio_test)
+
 # Prueba de trafico con la simulacion real (ventana oculta para el contexto GL). No esta en CTest por defecto:
 #   build\Release\bazuko_traffic_test.exe [segundos] [semilla]
 add_executable(bazuko_traffic_test
@@ -214,6 +220,7 @@ add_executable(bazuko_traffic_test
     src/renderer/Texture.cpp src/renderer/Model.cpp
     src/world/CityLayout.cpp src/world/Simulation.cpp src/world/BirdFlock.cpp
     src/world/TextRaster.cpp src/world/SignAtlas.cpp
+    src/game/GameData.cpp src/game/Harvest.cpp
 )
 target_include_directories(bazuko_traffic_test PRIVATE src third_party/include third_party/glad/include ${BAZUKO_WEBP_INCLUDE_DIR})
 target_compile_definitions(bazuko_traffic_test PRIVATE BAZUKO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")

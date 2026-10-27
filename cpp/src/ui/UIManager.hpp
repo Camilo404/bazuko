@@ -49,6 +49,15 @@ struct InventoryOption {
     int hotbarSlot = -1;      // 0..4 si esta en la barra rapida
 };
 
+// Estado de la radio transistor que muestra el sintonizador
+struct RadioView {
+    bool on = false;
+    float battery = 100.0f;     // 0..100
+    float volume = 0.7f;        // volumen propio de la radio
+    float signal = 1.0f;        // 0..1
+    bool hasBatteries = false;  // hay pilas AA en el costal
+};
+
 // Casilla de la barra de acceso rapido (teclas 1-5)
 struct HotbarSlot {
     std::string id;
@@ -132,6 +141,9 @@ public:
                           float money, float weight, float capacity);
     // Progreso (0..1) de la clasificacion de basura con Q; negativo = no se esta clasificando.
     void SetSortProgress(float fraction) { m_SortProgress = fraction; }
+    // Calidad grafica: 0 baja, 1 media, 2 alta (escala de resolucion interna)
+    void SetGraphicsQuality(int quality) { m_GraphicsQuality = quality; }
+    int ConsumeGraphicsQualityRequest();
     std::string ConsumeShopPurchaseRequest();
     bool ConsumeRecyclerSellRequest();
     void ToggleCraftMenu();
@@ -147,6 +159,22 @@ public:
     // Barra de acceso rapido: main publica las casillas y recoge las peticiones de uso y de asignacion
     void SetHotbar(const std::array<HotbarSlot, 5>& slots) { m_Hotbar = slots; }
     int ConsumeHotbarUseRequest();
+    // Radio: main publica el estado y recoge lo que el jugador pide en el sintonizador
+    void SetRadioView(const RadioView& view) { m_RadioView = view; }
+    bool ConsumeRadioPowerToggle() { return std::exchange(m_RadioPowerRequest, false); }
+    bool ConsumeRadioBatteryRequest() { return std::exchange(m_RadioBatteryRequest, false); }
+    bool ConsumeRadioVolume(float& volume) {
+        if (m_RadioVolumeRequest < 0.0f) return false;
+        volume = std::exchange(m_RadioVolumeRequest, -1.0f);
+        return true;
+    }
+    // Emisora sintonizada: id del archivo de emisoras ("" si no hay ninguna) y aviso de que se acaba de elegir otra
+    std::string SelectedRadioStationId() const { return m_RadioStations.empty() ? std::string{} : m_RadioStations[m_SelectedRadioStation].id; }
+    bool ConsumeRadioTuned() { return std::exchange(m_RadioTuned, false); }
+    void SelectRadioStation(const std::string& id) {
+        for (size_t index = 0; index < m_RadioStations.size(); ++index)
+            if (m_RadioStations[index].id == id) m_SelectedRadioStation = index;
+    }
     bool ConsumeHotbarAssign(int& slot, size_t& itemIndex);
     bool ConsumeInventorySortRequest();
     std::string ConsumeTalentUnlockRequest();
@@ -231,8 +259,15 @@ private:
     std::string m_TalentUnlockRequest;
     std::string m_DealerPurchaseRequest;
     float m_SortProgress = -1.0f;
+    int m_GraphicsQuality = 1;
+    int m_GraphicsQualityRequest = -1;
     std::array<HotbarSlot, 5> m_Hotbar{};
     int m_HotbarUseRequest = -1;
+    RadioView m_RadioView;
+    bool m_RadioPowerRequest = false;
+    bool m_RadioBatteryRequest = false;
+    bool m_RadioTuned = false;
+    float m_RadioVolumeRequest = -1.0f;
     int m_HotbarAssignSlot = -1;
     size_t m_HotbarAssignItem = 0;
     bool m_InventoryDropAll = false;

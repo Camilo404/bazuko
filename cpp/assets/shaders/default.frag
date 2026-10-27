@@ -31,6 +31,10 @@ uniform float uAlphaCutoff;
 layout(binding = 0) uniform sampler2D uTexture;
 layout(binding = 1) uniform sampler2D uSpecularTexture;
 uniform int uUseSpecularTexture;
+// Filtro de color de la psicosis: contrast(), saturate() y hue-rotate() del CSS del juego web
+uniform float uContrast = 1.0;
+uniform float uSaturation = 1.0;
+uniform float uHueDegrees = 0.0;
 
 out vec4 FragColor;
 
@@ -66,5 +70,17 @@ void main() {
     fogFactor = clamp(fogFactor, 0.0, 1.0);
     result = mix(result, uFogColor, fogFactor);
 
+    if (uContrast != 1.0 || uSaturation != 1.0 || uHueDegrees != 0.0) {
+        const vec3 luma = vec3(0.2126, 0.7152, 0.0722);
+        result = mix(vec3(dot(result, luma)), result, uSaturation);
+        const float angle = radians(uHueDegrees);
+        const float c = cos(angle);
+        const float s = sin(angle);
+        result = vec3(
+            dot(vec3(0.213 + 0.787 * c - 0.213 * s, 0.715 - 0.715 * c - 0.715 * s, 0.072 - 0.072 * c + 0.928 * s), result),
+            dot(vec3(0.213 - 0.213 * c + 0.143 * s, 0.715 + 0.285 * c + 0.140 * s, 0.072 - 0.072 * c - 0.283 * s), result),
+            dot(vec3(0.213 - 0.213 * c - 0.787 * s, 0.715 - 0.715 * c + 0.715 * s, 0.072 + 0.928 * c + 0.072 * s), result));
+        result = clamp((result - 0.5) * uContrast + 0.5, 0.0, 1.0);
+    }
     FragColor = vec4(result, baseColor.a);
 }
