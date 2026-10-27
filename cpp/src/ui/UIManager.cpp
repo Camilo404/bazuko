@@ -7,9 +7,12 @@
 #include "../core/Log.hpp"
 #include "../core/Paths.hpp"
 #include "../renderer/Texture.hpp"
+#include "SignStyle.hpp"
 #include <array>
 #include <algorithm>
+#include <cfloat>
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -76,6 +79,7 @@ UIManager::UIManager(GLFWwindow* window) {
     // Evitar que ImGui fuerce el cursor visible cada cuadro
     io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
 
+    SignUI::LoadFonts();
     SetupDarkUrbanBogotaTheme();
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -117,45 +121,8 @@ UIManager::~UIManager() {
 }
 
 void UIManager::SetupDarkUrbanBogotaTheme() {
-    ImGuiStyle& style = ImGui::GetStyle();
-    ImVec4* colors = style.Colors;
-
-    style.WindowRounding = 6.0f;
-    style.FrameRounding = 4.0f;
-    style.GrabRounding = 4.0f;
-    style.PopupRounding = 4.0f;
-    style.ScrollbarRounding = 4.0f;
-    style.FrameBorderSize = 1.0f;
-    style.WindowBorderSize = 1.0f;
-
-    colors[ImGuiCol_Text]                  = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
-    colors[ImGuiCol_TextDisabled]          = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
-    colors[ImGuiCol_WindowBg]              = ImVec4(0.10f, 0.11f, 0.12f, 0.88f);
-    colors[ImGuiCol_ChildBg]               = ImVec4(0.12f, 0.13f, 0.14f, 0.60f);
-    colors[ImGuiCol_PopupBg]               = ImVec4(0.10f, 0.11f, 0.13f, 0.94f);
-    colors[ImGuiCol_Border]                = ImVec4(0.24f, 0.26f, 0.28f, 0.65f);
-    colors[ImGuiCol_BorderShadow]          = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-    colors[ImGuiCol_FrameBg]               = ImVec4(0.16f, 0.18f, 0.20f, 0.70f);
-    colors[ImGuiCol_FrameBgHovered]        = ImVec4(0.22f, 0.24f, 0.28f, 0.80f);
-    colors[ImGuiCol_FrameBgActive]         = ImVec4(0.28f, 0.30f, 0.35f, 0.90f);
-    colors[ImGuiCol_TitleBg]               = ImVec4(0.14f, 0.15f, 0.17f, 1.00f);
-    colors[ImGuiCol_TitleBgActive]         = ImVec4(0.18f, 0.20f, 0.23f, 1.00f);
-    colors[ImGuiCol_TitleBgCollapsed]      = ImVec4(0.10f, 0.11f, 0.12f, 0.75f);
-    colors[ImGuiCol_MenuBarBg]             = ImVec4(0.12f, 0.13f, 0.14f, 1.00f);
-    colors[ImGuiCol_ScrollbarBg]           = ImVec4(0.08f, 0.09f, 0.10f, 0.60f);
-    colors[ImGuiCol_ScrollbarGrab]         = ImVec4(0.28f, 0.30f, 0.33f, 0.80f);
-    colors[ImGuiCol_ScrollbarGrabHovered]  = ImVec4(0.38f, 0.40f, 0.44f, 0.90f);
-    colors[ImGuiCol_ScrollbarGrabActive]   = ImVec4(0.48f, 0.50f, 0.55f, 1.00f);
-    colors[ImGuiCol_CheckMark]             = ImVec4(0.96f, 0.77f, 0.18f, 1.00f);
-    colors[ImGuiCol_SliderGrab]            = ImVec4(0.10f, 0.36f, 0.70f, 0.95f);
-    colors[ImGuiCol_SliderGrabActive]      = ImVec4(0.16f, 0.49f, 0.89f, 1.00f);
-    colors[ImGuiCol_Button]                = ImVec4(0.05f, 0.22f, 0.44f, 0.92f);
-    colors[ImGuiCol_ButtonHovered]         = ImVec4(0.08f, 0.36f, 0.70f, 0.98f);
-    colors[ImGuiCol_ButtonActive]          = ImVec4(0.10f, 0.43f, 0.80f, 1.00f);
-    colors[ImGuiCol_Header]                = ImVec4(0.05f, 0.26f, 0.53f, 0.88f);
-    colors[ImGuiCol_HeaderHovered]         = ImVec4(0.08f, 0.38f, 0.74f, 0.96f);
-    colors[ImGuiCol_HeaderActive]          = ImVec4(0.10f, 0.45f, 0.84f, 1.00f);
-    colors[ImGuiCol_Separator]             = ImVec4(0.24f, 0.26f, 0.28f, 0.70f);
+    // Mismo aspecto que el juego web: ver SignStyle.cpp
+    SignUI::ApplyTheme();
 }
 
 void UIManager::BeginFrame() {
@@ -583,28 +550,25 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
     const float fps = dt > 0.0f ? 1.0f / dt : 0.0f;
 
     if (m_DeathScreenOpen) {
-        ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), ImGui::GetIO().DisplaySize, IM_COL32(0, 0, 0, 225));
-        ImGui::SetNextWindowSize(ImVec2(520, 0), ImGuiCond_Always);
-        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f,
-                                      ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        if (ImGui::Begin("Fin de la partida", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
-                ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::TextColored(ImVec4(0.88f, 0.18f, 0.16f, 1.0f), "%s",
-                               m_DeathByVehicleImpact ? "TE ATROPELLARON" : "TE QUEDASTE SIN SALUD");
-            ImGui::Separator();
+        SignUI::DrawBackdrop(0.85f);
+        const ImVec4 blueText(0.84f, 0.89f, 1.0f, 1.0f);
+        if (SignUI::BeginMenu("Fin de la partida", m_DeathByVehicleImpact ? "Te atropellaron" : "Te quedaste sin salud",
+                              "La partida permanece pausada hasta que elijas recuperarte.", SignUI::Icon::Heart, nullptr, 520.0f, 440.0f)) {
+            ImGui::PushStyleColor(ImGuiCol_Text, blueText);
             ImGui::TextWrapped("Estado al caer: %s.", m_DeathCauses.empty() ? "salud agotada" : m_DeathCauses.c_str());
             ImGui::Spacing();
-            ImGui::TextWrapped("Volverás al cambuche con salud y necesidades recuperadas al menos al 60 %. Se perderá la mitad de los tipos de objetos del inventario y se curarán las enfermedades.");
+            ImGui::TextWrapped("Volverás al cambuche con salud y necesidades recuperadas al menos al 60 %%. Se perderá la mitad de los tipos de objetos del inventario y se curarán las enfermedades.");
+            ImGui::Spacing();
             if (m_DeathByVehicleImpact) {
                 ImGui::TextWrapped("Mira ambos sentidos antes de cruzar; los vehículos necesitan espacio para frenar.");
             } else {
                 ImGui::TextWrapped("Come, bebe y descansa para mantener tus necesidades.");
             }
-            ImGui::Spacing();
-            if (ImGui::Button("Volver al cambuche", ImVec2(-1, 40))) m_RespawnRequest = true;
-            ImGui::TextDisabled("La partida permanece pausada hasta que elijas recuperarte.");
+            ImGui::PopStyleColor();
+            SignUI::BeginFooter();
+            if (SignUI::PrimaryButton("Volver al cambuche")) m_RespawnRequest = true;
         }
-        ImGui::End();
+        SignUI::EndMenu();
         return;
     }
 
@@ -623,354 +587,472 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
     }
 
     if (m_CraftMenuOpen && !m_Paused) {
-        ImGui::SetNextWindowSize(ImVec2(520, 520), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f,
-                                      ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
-        if (ImGui::Begin("Mesa de crafteo [C]", &m_CraftMenuOpen)) {
-            ImGui::TextWrapped("Selecciona una receta. Los ingredientes se descuentan solo cuando se puede fabricar.");
-            ImGui::Separator();
+        SignUI::DrawBackdrop(0.45f);
+        const ImVec4 blueText(0.84f, 0.89f, 1.0f, 1.0f);
+        bool closeRequested = false;
+        if (SignUI::BeginMenu("Mesa de crafteo", "Mesa de crafteo", "Selecciona una receta · C o Esc para cerrar",
+                              SignUI::Icon::Gear, &closeRequested)) {
+            ImGui::PushStyleColor(ImGuiCol_Text, blueText);
+            ImGui::TextWrapped("Los ingredientes se descuentan solo cuando se puede fabricar.");
+            ImGui::PopStyleColor();
+            ImGui::Spacing();
+            int rowIndex = 0;
             for (const auto& option : craftingOptions) {
-                ImGui::Text("%s", option.name.c_str());
-                ImGui::TextDisabled("Ingredientes: %s", option.ingredients.c_str());
-                ImGui::BeginDisabled(!option.craftable);
                 ImGui::PushID(option.id.c_str());
-                if (ImGui::Button("Craftear")) m_CraftRequest = option.id;
+                if (SignUI::BeginRow("receta", rowIndex++)) {
+                    const float buttonWidth = SignUI::RowButtonWidth("Craftear");
+                    const float rowTop = SignUI::RowBegin();
+                    ImGui::PushFont(SignUI::GetFonts().monoBold14);
+                    ImGui::Text("%s", option.name.c_str());
+                    ImGui::PopFont();
+                    SignUI::RowCluster(rowTop, ImGui::GetWindowWidth() - 10.0f - buttonWidth);
+                    if (SignUI::RowButton("Craftear", option.craftable, true)) m_CraftRequest = option.id;
+                    SignUI::RowBelow(rowTop);
+                    ImGui::PushStyleColor(ImGuiCol_Text, blueText);
+                    ImGui::PushTextWrapPos(ImGui::GetWindowWidth() - 18.0f - buttonWidth);
+                    ImGui::TextWrapped("Ingredientes: %s", option.ingredients.c_str());
+                    ImGui::PopTextWrapPos();
+                    ImGui::PopStyleColor();
+                }
+                SignUI::EndRow();
                 ImGui::PopID();
-                ImGui::EndDisabled();
-                ImGui::Separator();
             }
-            ImGui::TextWrapped("Hierba seca aparece en las recetas originales, pero no tiene resultado definido en items.js.");
-            ImGui::TextDisabled("C o Esc: cerrar");
+            ImGui::Spacing();
+            SignUI::NoteText("Hierba seca aparece en las recetas originales, pero no tiene resultado definido en items.js.");
+            SignUI::BeginFooter();
+            if (SignUI::PrimaryButton("Cerrar")) closeRequested = true;
         }
-        ImGui::End();
+        SignUI::EndMenu();
+        if (closeRequested) m_CraftMenuOpen = false;
     }
 
     if (m_Paused) {
-        ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), ImGui::GetIO().DisplaySize, IM_COL32(0, 0, 0, 115));
-        ImGui::SetNextWindowSize(m_RadioMenuOpen ? ImVec2(620, 0) :
-            (m_PauseSection == 0 ? ImVec2(660, 0) : ImVec2(640, 0)), ImGuiCond_Always);
-        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f,
-                                      ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        const char* pauseTitle = m_RadioMenuOpen ? "Radio · Sintonizador" :
-            (m_PauseSection == 1 ? "Inventario · Costal" :
-             m_PauseSection == 2 ? "Árbol de talentos" :
-             m_PauseSection == 3 ? "El Chato · Compañero" :
-             m_PauseSection == 4 ? "Dealer · El Cartucho" : "Partida en pausa");
-        if (ImGui::Begin(pauseTitle, nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse |
-                ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove)) {
+        using SignUI::Icon;
+        SignUI::DrawBackdrop(0.45f);
+        const SignUI::Fonts& fonts = SignUI::GetFonts();
+        const ImVec4 blueText(0.84f, 0.89f, 1.0f, 1.0f);
+        const ImVec4 gold(0.93f, 0.84f, 0.53f, 1.0f);
+        const auto fmt = [](const char* pattern, auto... values) {
+            char buffer[160];
+            std::snprintf(buffer, sizeof(buffer), pattern, values...);
+            return std::string(buffer);
+        };
+        std::string pauseTitle = "Partida en pausa";
+        std::string pauseSubtitle = "Vagabundo / Habitante de Calle · Bogotá";
+        Icon pauseIcon = Icon::Pause;
+        if (m_RadioMenuOpen) {
+            pauseTitle = "Radio · Sintonizador";
+            pauseSubtitle = "Emisoras AM/FM del barrio";
+            pauseIcon = Icon::Radio;
+        } else if (m_PauseSection == 1) {
+            pauseTitle = "Inventario · Costal";
+            pauseSubtitle = fmt("Peso %.1f / %.0f kg", inventoryWeight, inventoryCapacity);
+            pauseIcon = Icon::Bag;
+        } else if (m_PauseSection == 2) {
+            pauseTitle = "Árbol de talentos";
+            pauseSubtitle = fmt("Puntos disponibles: %d", talentPoints);
+            pauseIcon = Icon::Star;
+        } else if (m_PauseSection == 3) {
+            pauseTitle = "El Chato · Compañero";
+            pauseSubtitle = m_CompanionName.data();
+            pauseIcon = Icon::Paw;
+        } else if (m_PauseSection == 4) {
+            pauseTitle = "Dealer · El Cartucho";
+            pauseSubtitle = "Sustancias disponibles";
+            pauseIcon = Icon::Pill;
+        }
+        // ancho de la columna derecha de una fila: cantidad + botones
+        const auto rowRight = [](float contentWidth) { return ImGui::GetWindowWidth() - 10.0f - contentWidth; };
+        bool closeRequested = false;
+        if (SignUI::BeginMenu(pauseTitle.c_str(), pauseTitle.c_str(), pauseSubtitle.c_str(), pauseIcon, &closeRequested)) {
             if (m_RadioMenuOpen) {
-                ImGui::TextColored(ImVec4(0.96f, 0.72f, 0.16f, 1.0f), "SINTONIZADOR DE RADIO");
-                ImGui::TextWrapped("Selecciona una emisora. La reproduccion de audio online se conectara en una etapa posterior.");
-                ImGui::Separator();
-
+                ImGui::PushStyleColor(ImGuiCol_Text, blueText);
+                ImGui::TextWrapped("Selecciona una emisora. La reproducción de audio en línea se conectará en una etapa posterior.");
+                ImGui::PopStyleColor();
                 if (m_RadioStations.empty()) {
                     ImGui::TextWrapped("No hay emisoras cargadas. Revisa assets/radio_stations.json y los mensajes de inicio.");
-                } else {
-                    ImGui::Text("Emisoras disponibles");
-                    for (size_t index = 0; index < m_RadioStations.size(); ++index) {
-                        const RadioStation& station = m_RadioStations[index];
-                        const std::string label = station.frequency + "  ·  " + station.name;
-                        ImGui::PushID(station.id.c_str());
-                        if (ImGui::Selectable(label.c_str(), m_SelectedRadioStation == index, 0, ImVec2(0.0f, 36.0f))) {
-                            m_SelectedRadioStation = index;
-                        }
-                        ImGui::PopID();
+                }
+                for (size_t index = 0; index < m_RadioStations.size(); ++index) {
+                    const RadioStation& station = m_RadioStations[index];
+                    const bool selected = m_SelectedRadioStation == index;
+                    if (SignUI::BeginRow(station.id.c_str(), static_cast<int>(index))) {
+                        const float buttonWidth = SignUI::RowButtonWidth(selected ? "Sintonizada" : "Sintonizar");
+                        const float rowTop = SignUI::RowBegin();
+                        ImGui::PushFont(fonts.monoBold14);
+                        ImGui::Text("%s  ·  %s", station.frequency.c_str(), station.name.c_str());
+                        ImGui::PopFont();
+                        SignUI::RowCluster(rowTop, rowRight(buttonWidth));
+                        if (SignUI::RowButton(selected ? "Sintonizada" : "Sintonizar", !selected, selected)) m_SelectedRadioStation = index;
+                        SignUI::RowBelow(rowTop);
+                        ImGui::PushStyleColor(ImGuiCol_Text, blueText);
+                        ImGui::PushTextWrapPos(rowRight(buttonWidth + 8.0f));
+                        ImGui::TextWrapped("%s · %s", station.genre.c_str(), station.program.c_str());
+                        ImGui::PopTextWrapPos();
+                        ImGui::PopStyleColor();
                     }
-
+                    SignUI::EndRow();
+                }
+                if (!m_RadioStations.empty()) {
                     const RadioStation& selected = m_RadioStations[m_SelectedRadioStation];
-                    ImGui::Separator();
-                    ImGui::Text("Sintonizada: %s", selected.name.c_str());
-                    ImGui::Text("Frecuencia: %s", selected.frequency.c_str());
-                    ImGui::TextWrapped("Genero: %s", selected.genre.c_str());
-                    ImGui::TextWrapped("Programa: %s", selected.program.c_str());
-                    ImGui::TextWrapped("URL configurada: %s", selected.streamUrl.empty() ? "(sin URL; emisora ficticia)" : selected.streamUrl.c_str());
-                    ImGui::TextDisabled("La URL se guarda como configuracion; todavia no se reproduce audio en linea.");
+                    ImGui::Spacing();
+                    ImGui::TextColored(gold, "Sintonizada: %s (%s)", selected.name.c_str(), selected.frequency.c_str());
+                    SignUI::NoteText(selected.streamUrl.empty() ? "Emisora ficticia: sin URL configurada." : selected.streamUrl.c_str());
+                    SignUI::NoteText("La URL se guarda como configuración; todavía no se reproduce audio en línea.");
                 }
-
-                ImGui::Separator();
-                if (m_RadioReturnsToPause) {
-                    if (ImGui::Button("Volver a pausa", ImVec2(-1, 36))) CloseRadioMenu();
-                    ImGui::TextDisabled("Esc: volver al menu de pausa");
-                } else {
-                    if (ImGui::Button("Cerrar radio", ImVec2(-1, 36))) CloseRadioMenu();
-                    ImGui::TextDisabled("R o Esc: cerrar radio");
-                }
+                SignUI::BeginFooter();
+                if (SignUI::PrimaryButton(m_RadioReturnsToPause ? "Volver a pausa" : "Cerrar radio")) CloseRadioMenu();
             } else if (m_PauseSection == 1) {
-                ImGui::TextColored(ImVec4(0.20f, 0.55f, 0.94f, 1.0f), "INVENTARIO");
-                ImGui::SameLine();
-                ImGui::TextDisabled("Peso %.1f / %.0f kg", inventoryWeight, inventoryCapacity);
-                ImGui::Separator();
                 if (inventoryOptions.empty()) {
-                    ImGui::TextDisabled("El costal está vacío. Rebusca en las bolsas para encontrar objetos.");
+                    ImGui::PushStyleColor(ImGuiCol_Text, blueText);
+                    ImGui::TextWrapped("El costal está vacío. Rebusca en las bolsas para encontrar objetos.");
+                    ImGui::PopStyleColor();
                 } else {
-                    if (ImGui::Button("Ordenar por nombre")) m_InventorySortRequest = true;
-                    ImGui::BeginChild("InventoryGrid", ImVec2(0, 360), true);
+                    SignUI::FlexReset();
+                    if (SignUI::Button("Ordenar por nombre", Icon::Book)) m_InventorySortRequest = true;
+                    ImGui::Spacing();
+                    int rowIndex = 0;
                     for (const auto& item : inventoryOptions) {
                         ImGui::PushID(static_cast<int>(item.itemIndex));
-                        ImGui::Text("%s  x%d", item.name.c_str(), item.quantity);
-                        ImGui::SameLine();
-                        ImGui::TextDisabled("%.1f kg c/u", item.weight);
-                        ImGui::SameLine();
-                        ImGui::BeginDisabled(!item.usable);
-                        if (ImGui::SmallButton("Usar")) m_InventoryUseRequest = item.itemIndex;
-                        ImGui::EndDisabled();
-                        ImGui::SameLine();
-                        if (ImGui::SmallButton("Soltar")) m_InventoryDropRequest = item.itemIndex;
-                        ImGui::Separator();
+                        if (SignUI::BeginRow("fila", rowIndex++)) {
+                            const float useWidth = SignUI::RowButtonWidth("Usar");
+                            const float dropWidth = SignUI::RowButtonWidth("Soltar");
+                            const float cluster = 46.0f + useWidth + dropWidth + 16.0f;
+                            const float rowTop = SignUI::RowBegin();
+                            ImGui::PushFont(fonts.monoBold14);
+                            ImGui::Text("%s", item.name.c_str());
+                            ImGui::PopFont();
+                            ImGui::SameLine(rowRight(cluster));
+                            ImGui::SetCursorPosY(rowTop + 7.0f);
+                            ImGui::TextColored(ImVec4(0.96f, 0.77f, 0.0f, 1.0f), "x%d", item.quantity);
+                            SignUI::RowCluster(rowTop, rowRight(useWidth + dropWidth + 8.0f));
+                            if (SignUI::RowButton("Usar", item.usable, true)) m_InventoryUseRequest = item.itemIndex;
+                            ImGui::SameLine(0.0f, 8.0f);
+                            if (SignUI::RowButton("Soltar")) m_InventoryDropRequest = item.itemIndex;
+                            SignUI::RowBelow(rowTop);
+                            ImGui::PushStyleColor(ImGuiCol_Text, blueText);
+                            ImGui::Text("%.1f kg c/u", item.weight);
+                            ImGui::PopStyleColor();
+                        }
+                        SignUI::EndRow();
                         ImGui::PopID();
                     }
-                    ImGui::EndChild();
                 }
-                ImGui::TextDisabled("I o Esc: cerrar inventario");
-                if (ImGui::Button("Cerrar inventario", ImVec2(-1, 36))) TogglePause();
+                SignUI::BeginFooter();
+                if (SignUI::PrimaryButton("Cerrar inventario")) TogglePause();
             } else if (m_PauseSection == 2) {
-                ImGui::TextColored(ImVec4(0.20f, 0.55f, 0.94f, 1.0f), "PUNTOS DISPONIBLES: %d", talentPoints);
+                ImGui::PushStyleColor(ImGuiCol_Text, blueText);
                 ImGui::TextWrapped("Invierte puntos ganados al subir de nivel. Cada talento puede desbloquearse una sola vez.");
-                ImGui::Separator();
-                ImGui::BeginChild("TalentTree", ImVec2(0, 390), true);
-                const std::array<const char*, 3> branches{"RECOLECCIÓN", "SUPERVIVENCIA", "VIDA EN LA CALLE"};
+                ImGui::PopStyleColor();
+                ImGui::Spacing();
+                const std::array<const char*, 3> branches{"Recolección", "Supervivencia", "Vida en la calle"};
                 const std::array<const char*, 3> branchIds{"collector", "surv", "crime"};
                 for (size_t branch = 0; branch < branches.size(); ++branch) {
-                    ImGui::TextColored(ImVec4(0.24f, 0.58f, 0.93f, 1.0f), "%s", branches[branch]);
+                    if (!SignUI::BeginSection(branches[branch], Icon::Star)) { SignUI::EndSection(); continue; }
+                    int rowIndex = 0;
                     for (const auto& talent : talentOptions) {
                         if (talent.id.rfind(branchIds[branch], 0) != 0) continue;
                         ImGui::PushID(talent.id.c_str());
-                        ImGui::Text("%s · %d punto%s", talent.name.c_str(), talent.cost, talent.cost == 1 ? "" : "s");
-                        ImGui::SameLine();
-                        if (talent.unlocked) {
-                            ImGui::TextColored(ImVec4(0.35f, 0.84f, 0.52f, 1.0f), "APRENDIDO");
-                        } else {
-                            ImGui::BeginDisabled(!talent.available);
-                            if (ImGui::SmallButton("Aprender")) m_TalentUnlockRequest = talent.id;
-                            ImGui::EndDisabled();
+                        if (SignUI::BeginRow("talento", rowIndex++)) {
+                            const float buttonWidth = talent.unlocked ? 90.0f : SignUI::RowButtonWidth("Aprender");
+                            const float rowTop = SignUI::RowBegin();
+                            ImGui::PushFont(fonts.monoBold13);
+                            ImGui::Text("%s", talent.name.c_str());
+                            ImGui::PopFont();
+                            ImGui::SameLine();
+                            ImGui::TextColored(gold, "· %d punto%s", talent.cost, talent.cost == 1 ? "" : "s");
+                            SignUI::RowCluster(rowTop, rowRight(buttonWidth));
+                            if (talent.unlocked) {
+                                ImGui::SetCursorPosY(rowTop + 7.0f);
+                                ImGui::TextColored(ImVec4(0.45f, 0.90f, 0.62f, 1.0f), "APRENDIDO");
+                            } else if (SignUI::RowButton("Aprender", talent.available, true)) {
+                                m_TalentUnlockRequest = talent.id;
+                            }
+                            SignUI::RowBelow(rowTop);
+                            ImGui::PushStyleColor(ImGuiCol_Text, blueText);
+                            ImGui::PushTextWrapPos(rowRight(buttonWidth + 8.0f));
+                            ImGui::TextWrapped("%s", talent.description.c_str());
+                            ImGui::PopTextWrapPos();
+                            ImGui::PopStyleColor();
+                            if (!talent.requirement.empty())
+                                ImGui::TextColored(ImVec4(1.0f, 0.71f, 0.67f, 1.0f), "Requisito: %s", talent.requirement.c_str());
                         }
-                        ImGui::TextWrapped("%s", talent.description.c_str());
-                        if (!talent.requirement.empty()) ImGui::TextDisabled("Requisito: %s", talent.requirement.c_str());
-                        ImGui::Separator();
+                        SignUI::EndRow();
                         ImGui::PopID();
                     }
-                    ImGui::Spacing();
+                    SignUI::EndSection();
                 }
-                ImGui::EndChild();
-                ImGui::TextDisabled("T o Esc: cerrar talentos");
-                if (ImGui::Button("Cerrar talentos", ImVec2(-1, 36))) TogglePause();
+                SignUI::BeginFooter();
+                if (SignUI::PrimaryButton("Cerrar talentos")) TogglePause();
             } else if (m_PauseSection == 3) {
-                ImGui::TextColored(ImVec4(0.20f, 0.55f, 0.94f, 1.0f), "%s", m_CompanionName.data());
+                ImGui::PushStyleColor(ImGuiCol_Text, blueText);
                 ImGui::TextWrapped("%s", companionIsFriend
                     ? "El Chato es tu compañero y te sigue por el barrio."
                     : "El Chato ronda el barrio. Acércate y pulsa E para hacer amistad.");
-                ImGui::Separator();
-                ImGui::Text("Nombre");
-                if (ImGui::InputText("##CompanionName", m_CompanionName.data(), m_CompanionName.size())) {
-                    if (m_CompanionName[0] == '\0') SetCompanionCustomization("El Chato", m_CompanionCoat);
-                }
+                ImGui::PopStyleColor();
                 ImGui::Spacing();
-                ImGui::Text("Pelaje");
-                const std::array<const char*, 4> coatNames{"Canela", "Marrón", "Gris", "Negro"};
-                for (int coat = 0; coat < static_cast<int>(coatNames.size()); ++coat) {
-                    if (coat > 0) ImGui::SameLine();
-                    ImGui::PushID(coat);
-                    if (ImGui::RadioButton(coatNames[static_cast<size_t>(coat)], m_CompanionCoat == coat)) {
-                        m_CompanionCoat = coat;
+                if (SignUI::BeginSection("Nombre y pelaje", Icon::Paw)) {
+                    ImGui::SetNextItemWidth(-1.0f);
+                    if (ImGui::InputText("##CompanionName", m_CompanionName.data(), m_CompanionName.size())) {
+                        if (m_CompanionName[0] == '\0') SetCompanionCustomization("El Chato", m_CompanionCoat);
                     }
-                    ImGui::PopID();
+                    ImGui::Spacing();
+                    const std::array<const char*, 4> coatNames{"Canela", "Marrón", "Gris", "Negro"};
+                    SignUI::FlexReset();
+                    for (int coat = 0; coat < static_cast<int>(coatNames.size()); ++coat) {
+                        if (SignUI::Button(coatNames[static_cast<size_t>(coat)], Icon::None, m_CompanionCoat == coat)) m_CompanionCoat = coat;
+                    }
                 }
-                ImGui::Spacing();
-                ImGui::BeginDisabled(!companionIsFriend);
-                if (ImGui::Button("Acariciar a El Chato", ImVec2(-1, 36))) m_PetRequest = true;
-                ImGui::EndDisabled();
-                ImGui::TextDisabled("La amistad, el nombre y el pelaje se guardan con la partida.");
-                if (ImGui::Button("Cerrar ficha", ImVec2(-1, 36))) TogglePause();
+                SignUI::EndSection();
+                SignUI::FlexReset();
+                if (SignUI::Button("Acariciar a El Chato", Icon::Heart) && companionIsFriend) m_PetRequest = true;
+                if (!companionIsFriend) SignUI::NoteText("Hazte amigo de El Chato (E) para acariciarlo.");
+                SignUI::NoteText("La amistad, el nombre y el pelaje se guardan con la partida.");
+                SignUI::BeginFooter();
+                if (SignUI::PrimaryButton("Cerrar ficha")) TogglePause();
             } else if (m_PauseSection == 4) {
-                ImGui::TextColored(ImVec4(0.70f, 0.38f, 0.88f, 1.0f), "SUSTANCIAS DISPONIBLES");
+                ImGui::PushStyleColor(ImGuiCol_Text, blueText);
                 ImGui::TextWrapped("Compra al dealer. De noche puedes venderle las sustancias que lleves.");
-                ImGui::Separator();
+                ImGui::PopStyleColor();
+                ImGui::Spacing();
+                int rowIndex = 0;
                 for (const DealerOption& option : dealerOptions) {
                     ImGui::PushID(option.id.c_str());
-                    ImGui::Text("%s", option.name.c_str());
-                    ImGui::SameLine();
-                    ImGui::TextDisabled("$ %d COP", option.price);
-                    ImGui::SameLine();
-                    ImGui::BeginDisabled(!option.affordable || !option.canCarry);
-                    if (ImGui::SmallButton("Comprar")) m_DealerPurchaseRequest = option.id;
-                    ImGui::EndDisabled();
-                    if (!option.affordable) ImGui::TextDisabled("No tienes dinero suficiente.");
-                    else if (!option.canCarry) ImGui::TextDisabled("No cabe en el costal.");
-                    ImGui::Separator();
+                    if (SignUI::BeginRow("dealer", rowIndex++)) {
+                        const float buttonWidth = SignUI::RowButtonWidth("Comprar");
+                        const float rowTop = SignUI::RowBegin();
+                        ImGui::PushFont(fonts.monoBold14);
+                        ImGui::Text("%s", option.name.c_str());
+                        ImGui::PopFont();
+                        ImGui::SameLine(rowRight(buttonWidth + 110.0f));
+                        ImGui::SetCursorPosY(rowTop + 7.0f);
+                        ImGui::TextColored(ImVec4(0.96f, 0.77f, 0.0f, 1.0f), "$ %d COP", option.price);
+                        SignUI::RowCluster(rowTop, rowRight(buttonWidth));
+                        if (SignUI::RowButton("Comprar", option.affordable && option.canCarry, true)) m_DealerPurchaseRequest = option.id;
+                        SignUI::RowBelow(rowTop);
+                        if (!option.affordable) ImGui::TextColored(ImVec4(1.0f, 0.71f, 0.67f, 1.0f), "No tienes dinero suficiente.");
+                        else if (!option.canCarry) ImGui::TextColored(ImVec4(1.0f, 0.71f, 0.67f, 1.0f), "No cabe en el costal.");
+                    }
+                    SignUI::EndRow();
                     ImGui::PopID();
                 }
-                ImGui::TextDisabled("Esc: cerrar el puesto");
-                if (ImGui::Button("Cerrar", ImVec2(-1, 36))) TogglePause();
+                SignUI::BeginFooter();
+                if (SignUI::PrimaryButton("Cerrar")) TogglePause();
             } else {
-            ImGui::Text("Bogota · Nivel %d · $ %.0f COP", level, money);
-            ImGui::Text("Salud %.0f%% · Hambre %.0f%% · Sed %.0f%% · Energia %.0f%%",
-                        needs[3], needs[0], needs[1], needs[2]);
-            ImGui::Text("Higiene %.0f%% · Animo %.0f%% · Vicio %.0f%%",
-                        needs[4], needs[5], needs[6]);
-            ImGui::Separator();
-            ImGui::Text("Sonido y volumen");
-            float volume = audio.GetVolume();
-            float volumePercent = volume * 100.0f;
-            if (ImGui::SliderFloat("Volumen maestro", &volumePercent, 0.0f, 100.0f, "%.0f%%")) {
-                volume = volumePercent / 100.0f;
-                audio.SetVolume(volume);
-            }
-            bool muted = audio.IsMuted();
-            if (ImGui::Button(muted ? "Activar audio" : "Silenciar audio")) audio.SetMuted(!muted);
-            ImGui::SameLine();
-            if (ImGui::Button(window.IsFullscreen() ? "Modo ventana [F11]" : "Pantalla completa [F11]")) window.ToggleFullscreen();
-            ImGui::Separator();
-            ImGui::Text("Estado actual · Dia %d - %02d:%02d", static_cast<int>(dayProgress) + 1, hour, minute);
-            ImGui::Text("Nivel %d · XP %d · Salud %.0f%% · Hambre %.0f%% · Sed %.0f%% · Energia %.0f%%",
-                        level, xp, needs[3], needs[0], needs[1], needs[2]);
-            ImGui::Text("Higiene %.0f%% · Animo %.0f%% · Vicio %.0f%%",
-                        needs[4], needs[5], needs[6]);
-            ImGui::Text("Costal %.1f / %.0f kg · Peatones %llu · Trafico %llu", inventoryWeight, inventoryCapacity,
-                        static_cast<unsigned long long>(pedestrians), static_cast<unsigned long long>(traffic));
-            ImGui::Separator();
-
-            // Botones de guardado y partida
-            if (ImGui::Button("Guardar partida ahora")) {
-                m_SaveRequest = true;
-            }
-            if (!m_SaveNotification.empty() && m_SaveNotificationTimer > 0.0f) {
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.35f, 0.90f, 0.45f, 1.0f), "%s", m_SaveNotification.c_str());
-            }
-
-            ImGui::Spacing();
-            if (ImGui::Button("Empezar partida nueva")) {
-                ImGui::OpenPopup("ConfirmNewGameModal");
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Personaje [P]")) {
-                m_CharacterCreatorRequest = true;
-                TogglePause();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Inventario [I]")) OpenPauseSection(1);
-            ImGui::SameLine();
-            if (ImGui::Button("Talentos [T]")) OpenPauseSection(2);
-            ImGui::SameLine();
-            if (ImGui::Button("El Chato [O]")) OpenPauseSection(3);
-            ImGui::SameLine();
-            if (ImGui::Button(m_RadarVisible ? "Ocultar radar [N]" : "Mostrar radar [N]")) m_RadarVisible = !m_RadarVisible;
-            if (ImGui::Button("Sintonizador de radio [R]", ImVec2(-1, 34))) OpenRadioMenu();
-
-            if (ImGui::BeginPopupModal("ConfirmNewGameModal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-                ImGui::Text("¿Deseas empezar una partida completamente nueva?");
-                ImGui::TextColored(ImVec4(0.95f, 0.70f, 0.20f, 1.0f), "Se reiniciara todo el progreso y se abrira el Creador de Personaje.");
-                ImGui::Separator();
-                if (ImGui::Button("Si, iniciar nueva partida", ImVec2(180, 32))) {
-                    m_NewGameRequest = true;
-                    TogglePause();
-                    ImGui::CloseCurrentPopup();
+                // ---- Sonido y volumen ----
+                if (SignUI::BeginSection("Sonido y Volumen", Icon::Sound)) {
+                    const bool muted = audio.IsMuted();
+                    float volume = audio.GetVolume();
+                    const float rowTop = ImGui::GetCursorPosY();
+                    const float available = ImGui::GetContentRegionAvail().x;
+                    const float buttonWidth = 14.0f + 22.0f + SignUI::SpacedTextWidth(fonts.monoBold12, 12.0f,
+                        SignUI::Upper(muted ? "Activar" : "Silenciar").c_str(), 1.0f) + 14.0f;
+                    ImGui::SetCursorPosY(rowTop + 11.0f);
+                    ImGui::TextUnformatted("Volumen maestro:");
+                    ImGui::SameLine(0.0f, 12.0f);
+                    ImGui::SetCursorPosY(rowTop + 9.0f);
+                    const float sliderWidth = std::max(80.0f, available - 118.0f - 12.0f - 12.0f - 44.0f - 12.0f - buttonWidth);
+                    if (SignUI::Slider("volumen", &volume, sliderWidth)) audio.SetVolume(volume);
+                    ImGui::SameLine(0.0f, 10.0f);
+                    ImGui::SetCursorPosY(rowTop + 11.0f);
+                    ImGui::PushFont(fonts.monoBold12);
+                    ImGui::TextColored(gold, "%d%%", static_cast<int>(volume * 100.0f + 0.5f));
+                    ImGui::PopFont();
+                    ImGui::SameLine(available - buttonWidth);
+                    ImGui::SetCursorPosY(rowTop);
+                    SignUI::FlexReset();
+                    if (SignUI::Button(muted ? "Activar" : "Silenciar", muted ? Icon::Mute : Icon::Sound)) audio.SetMuted(!muted);
                 }
-                ImGui::SameLine();
-                if (ImGui::Button("Cancelar", ImVec2(100, 32))) {
-                    ImGui::CloseCurrentPopup();
-                }
-                ImGui::EndPopup();
-            }
+                SignUI::EndSection();
 
-            ImGui::Separator();
-            ImGui::TextColored(ImVec4(0.20f, 0.55f, 0.94f, 1.0f), "MAPA COMPLETO DE TECLAS");
-            ImGui::BeginChild("PauseControlsGuide", ImVec2(0, 236), true);
-            ImGui::TextColored(ImVec4(0.96f, 0.72f, 0.16f, 1.0f), "Movimiento y camara");
-            ImGui::BulletText("W, A, S, D: caminar en la direccion indicada por la camara.");
-            ImGui::BulletText("Shift: correr. Flechas: girar la camara.");
-            ImGui::BulletText("V: alternar tercera persona e isometrica. Rueda del raton: acercar/alejar.");
-            ImGui::BulletText("Tab: capturar o liberar el cursor. Clic izquierdo/derecho: capturarlo; arrastrar con clic para girar.");
-            ImGui::Separator();
-            ImGui::TextColored(ImVec4(0.96f, 0.72f, 0.16f, 1.0f), "Acciones en el mundo");
-            ImGui::BulletText("E: interaccion contextual: hablar, perro, cosquilleo, retrovisores, tienda, auto u objeto.");
-            ImGui::BulletText("Q: recoger objetos; cerca de un peaton, intentar robo directo; junto al dealer, comprar sustancias.");
-            ImGui::BulletText("E: en la recicladora, vender materiales; en el dealer, comprar o vender sustancias por la noche.");
-            ImGui::BulletText("F: entregar reciclables de la mision en la recicladora.");
-            ImGui::BulletText("B / L: pedir limosna (no disponible junto a tiendas).");
-            ImGui::BulletText("Z: hacer popo. X: lanzar un mojón del costal; si no tienes, hacer popo.");
-            ImGui::Separator();
-            ImGui::TextColored(ImVec4(0.96f, 0.72f, 0.16f, 1.0f), "Menus y opciones");
-            ImGui::BulletText("I: inventario. T: arbol de talentos. O: ficha de El Chato; vuelve a pulsar la tecla para cerrar.");
-            ImGui::BulletText("C: abrir/cerrar crafteo. P: abrir el creador de personaje. R: abrir/cerrar la radio.");
-            ImGui::BulletText("N: mostrar/ocultar radar. Esc: cerrar el menu activo o pausar/continuar.");
-            ImGui::BulletText("F11: alternar pantalla completa. En pausa, usa el raton para los botones y guardar.");
-            ImGui::EndChild();
-            ImGui::Separator();
-            if (ImGui::Button("Continuar jugando", ImVec2(-1, 38))) TogglePause();
-            ImGui::Spacing();
-            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.40f, 0.16f, 0.14f, 0.85f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.70f, 0.22f, 0.18f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.85f, 0.25f, 0.20f, 1.0f));
-            if (ImGui::Button("Guardar y salir del juego", ImVec2(-1, 36))) {
-                m_QuitRequest = true;
-            }
-            ImGui::PopStyleColor(3);
-            ImGui::TextDisabled("Esc: continuar jugando");
+                // ---- Estado actual ----
+                if (SignUI::BeginSection("Estado Actual", Icon::Chart)) {
+                    const float columnX = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x * 0.5f;
+                    const auto pair = [&](const char* label, const std::string& value, bool second) {
+                        if (second) ImGui::SameLine(columnX);
+                        ImGui::TextColored(ImVec4(0.67f, 0.67f, 0.67f, 1.0f), "%s ", label);
+                        ImGui::SameLine(0.0f, 0.0f);
+                        ImGui::PushFont(fonts.monoBold13);
+                        ImGui::TextUnformatted(value.c_str());
+                        ImGui::PopFont();
+                    };
+                    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 6.0f));
+                    pair("Personaje:", playerName.empty() ? "Parcero" : playerName, false);
+                    pair("Dinero:", fmt("$ %.0f", money), true);
+                    pair("Tiempo:", fmt("Día %d — %02d:%02d", static_cast<int>(dayProgress) + 1, hour, minute), false);
+                    pair("Nivel:", fmt("Nv %d · XP %d", level, xp), true);
+                    pair("Salud:", fmt("%.0f%%", needs[3]), false);
+                    pair("Sed / Hambre:", fmt("%.0f%% / %.0f%%", needs[1], needs[0]), true);
+                    pair("Energía:", fmt("%.0f%%", needs[2]), false);
+                    pair("Higiene:", fmt("%.0f%%", needs[4]), true);
+                    pair("Ánimo:", fmt("%.0f%%", needs[5]), false);
+                    pair("Vicio:", fmt("%.0f%%", needs[6]), true);
+                    pair("Costal:", fmt("%.1f / %.0f kg", inventoryWeight, inventoryCapacity), false);
+                    pair("Peatones / Tráfico:", fmt("%llu / %llu", static_cast<unsigned long long>(pedestrians),
+                                                    static_cast<unsigned long long>(traffic)), true);
+                    ImGui::PopStyleVar();
+                }
+                SignUI::EndSection();
+
+                // ---- Opciones rápidas ----
+                if (SignUI::BeginSection("Opciones Rápidas", Icon::Gear)) {
+                    SignUI::FlexReset();
+                    if (SignUI::Button("Radio transistor (R)", Icon::Radio)) OpenRadioMenu();
+                    if (SignUI::Button("Guardar partida ahora", Icon::Save)) m_SaveRequest = true;
+                    if (SignUI::Button(m_RadarVisible ? "Ocultar radar (N)" : "Mostrar radar (N)", Icon::Compass)) m_RadarVisible = !m_RadarVisible;
+                    if (SignUI::Button(window.IsFullscreen() ? "Modo ventana (F11)" : "Pantalla completa (F11)", Icon::Camera)) window.ToggleFullscreen();
+                    if (SignUI::Button("Personaje (P)", Icon::Person)) {
+                        m_CharacterCreatorRequest = true;
+                        TogglePause();
+                    }
+                    if (SignUI::Button("Inventario (I)", Icon::Bag)) OpenPauseSection(1);
+                    if (SignUI::Button("Talentos (T)", Icon::Star)) OpenPauseSection(2);
+                    if (SignUI::Button("El Chato (O)", Icon::Paw)) OpenPauseSection(3);
+                    if (SignUI::Button("Empezar partida nueva", Icon::Home, false, true)) ImGui::OpenPopup("ConfirmNewGameModal");
+                    if (!m_SaveNotification.empty() && m_SaveNotificationTimer > 0.0f)
+                        ImGui::TextColored(ImVec4(0.45f, 0.92f, 0.55f, 1.0f), "%s", m_SaveNotification.c_str());
+                }
+                SignUI::EndSection();
+
+                if (ImGui::BeginPopupModal("ConfirmNewGameModal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                    ImGui::Text("¿Deseas empezar una partida completamente nueva?");
+                    ImGui::TextColored(ImVec4(0.95f, 0.70f, 0.20f, 1.0f), "Se reiniciará todo el progreso y se abrirá el Creador de Personaje.");
+                    ImGui::Spacing();
+                    SignUI::FlexReset();
+                    if (SignUI::Button("Sí, iniciar nueva partida", Icon::None, false, true)) {
+                        m_NewGameRequest = true;
+                        TogglePause();
+                        ImGui::CloseCurrentPopup();
+                    }
+                    if (SignUI::Button("Cancelar")) ImGui::CloseCurrentPopup();
+                    ImGui::EndPopup();
+                }
+
+                // ---- Guía de controles ----
+                ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+                ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1, 1, 1, 0.06f));
+                ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(1, 1, 1, 0.10f));
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.88f, 0.60f, 1.0f));
+                ImGui::PushFont(fonts.monoBold13);
+                const bool guideOpen = ImGui::CollapsingHeader("Guía completa de controles y supervivencia", ImGuiTreeNodeFlags_DefaultOpen);
+                ImGui::PopFont();
+                ImGui::PopStyleColor(4);
+                if (guideOpen) {
+                    static const char* const guide[][2] = {
+                        {"WASD", "Desplazarse por el barrio."},
+                        {"Ratón", "Clic para fijar cámara (o arrastrar) · Rueda para zoom."},
+                        {"Flechas", "Girar la cámara."},
+                        {"Shift", "Correr."},
+                        {"V", "Alternar vista tercera persona / isométrica."},
+                        {"E", "Interactuar con basura, tiendas, cambuche o autos."},
+                        {"Q", "Recoger objetos, robo directo a peatones o comprar al dealer."},
+                        {"F", "Entregar reciclables de la misión en la recicladora."},
+                        {"B / L", "Pedir limosna a peatones."},
+                        {"Z / X", "Hacer popo / lanzar un mojón."},
+                        {"I", "Inventario y acceso rápido."},
+                        {"T", "Abrir árbol de talentos."},
+                        {"O", "Ficha de El Chato."},
+                        {"C", "Abrir mesa de crafteo."},
+                        {"P", "Modificar apariencia del personaje."},
+                        {"N", "Alternar radar / minimapa urbano."},
+                        {"R", "Abrir sintonizador de radio transistor AM/FM."},
+                        {"F11", "Alternar pantalla completa."},
+                        {"ESC", "Pausar el juego / cerrar paneles."},
+                    };
+                    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 3.0f));
+                    for (const auto& entry : guide) SignUI::KeyHint(entry[0], entry[1]);
+                    ImGui::PopStyleVar();
+                }
+                SignUI::BeginFooter();
+                if (SignUI::PrimaryButton("Continuar jugando")) TogglePause();
+                ImGui::SameLine(0.0f, 14.0f);
+                SignUI::FlexReset();
+                if (SignUI::Button("Guardar y salir del juego", Icon::None, false, true)) m_QuitRequest = true;
             }
         }
-        ImGui::End();
+        SignUI::EndMenu();
+        if (closeRequested) {
+            if (m_RadioMenuOpen) CloseRadioMenu();
+            else TogglePause();
+        }
     }
 
-    ImGui::SetNextWindowPos(ImVec2(12, 8), ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.62f);
-    if (ImGui::Begin("Topbar", nullptr, hudFlags)) {
-        ImGui::TextColored(ImVec4(0.96f, 0.72f, 0.16f, 1.0f), "%s", playerName.empty() ? "Parcero" : playerName.c_str());
-        if (!playerOrigin.empty()) {
-            ImGui::SameLine();
-            ImGui::TextDisabled("(%s)", playerOrigin.c_str());
-        }
-        ImGui::SameLine(); ImGui::Text("· Bogota - %02d:%02d", hour, minute);
-        ImGui::SameLine(); ImGui::Text("$ %.0f COP", money);
-        ImGui::SameLine(); ImGui::Text("Nv %d", level);
-        ImGui::SameLine(); ImGui::TextDisabled("FPS %.0f", fps);
-        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.82f, 0.61f, 0.12f, 1.0f));
-        ImGui::ProgressBar(std::clamp(static_cast<float>(xp) / std::max(1, level * 100), 0.0f, 1.0f), ImVec2(200, 5), "");
-        ImGui::PopStyleColor();
-        ImGui::End();
-    }
+    {
+        using SignUI::Icon;
+        const SignUI::Fonts& fonts = SignUI::GetFonts();
+        const float displayHeight = ImGui::GetIO().DisplaySize.y;
+        const ImGuiWindowFlags plainFlags = hudFlags | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs;
 
-    ImGui::SetNextWindowPos(ImVec2(12, ImGui::GetIO().DisplaySize.y - 15), ImGuiCond_Always, ImVec2(0, 1));
-    ImGui::SetNextWindowBgAlpha(0.82f);
-    if (ImGui::Begin("Necesidades", nullptr, hudFlags)) {
-        for (size_t i = 0; i < needs.size(); ++i) {
-            const float value = std::clamp(needs[i], 0.0f, 100.0f);
-            const bool warning = value <= warningThresholds[i];
-            const bool critical = i == 3 ? value <= 10.0f
-                : i == 4 ? value <= 20.0f
-                : i == 5 ? value <= 10.0f
-                : i == 6 ? value <= 4.0f : value <= 0.0f;
-            if (critical) ImGui::TextColored(ImVec4(1.0f, 0.32f, 0.25f, 1.0f), "%s", needNames[i]);
-            else if (warning) ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.24f, 1.0f), "%s", needNames[i]);
-            else ImGui::Text("%s", needNames[i]);
-            ImGui::SameLine(76.0f);
-            ImVec4 barColor = needColors[i];
-            if (critical) barColor = ImVec4(0.95f, 0.12f, 0.10f, 1.0f);
-            else if (warning) barColor = ImVec4(0.98f, 0.62f, 0.14f, 1.0f);
-            const std::string overlay = std::to_string(static_cast<int>(value + 0.5f)) + "%";
-            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, barColor);
-            ImGui::ProgressBar(value / 100.0f, ImVec2(170, 14), overlay.c_str());
-            ImGui::PopStyleColor();
-        }
-        if (needs[3] <= 10.0f) {
-            ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.27f, 1.0f), "Salud crítica: usa vendajes o evita los vehículos.");
-        } else if (needs[3] <= 25.0f) {
-            ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.24f, 1.0f), "Salud baja: usa vendajes y evita los vehículos.");
-        }
-        if (boostActive) {
-            ImGui::Spacing();
-            ImGui::TextColored(ImVec4(0.25f, 0.95f, 1.0f, 1.0f), "⚡ ADRENALINA: %.1fs (+35%% vel, +botin)", std::max(0.0f, boostTimer));
-        }
-        const float withdrawal = needs[6] < 20.0f ? (20.0f - needs[6]) * 5.0f : 0.0f;
-        if (withdrawal >= 80.0f) {
-            const float flash = 0.5f + 0.5f * static_cast<float>(std::sin(ImGui::GetTime() * 8.0));
-            ImGui::Spacing();
-            ImGui::TextColored(ImVec4(1.0f, 0.15f * flash, 0.15f * flash, 1.0f), "⚠️ ¡ABSTINENCIA CRÍTICA: PSICOSIS!");
-        } else if (withdrawal >= 50.0f) {
-            ImGui::Spacing();
-            ImGui::TextColored(ImVec4(1.0f, 0.60f, 0.20f, 1.0f), "⚠️ Síndrome de abstinencia: paranoia");
+        // Barra superior plana: nombre, día y hora, dinero, nivel y puntos de talento
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::SetNextWindowPos(ImVec2(12, 12), ImGuiCond_Always);
+        if (ImGui::Begin("Topbar", nullptr, plainFlags)) {
+            ImDrawList* draw = ImGui::GetWindowDrawList();
+            const ImVec2 at = ImGui::GetCursorScreenPos();
+            float x = at.x;
+            const auto item = [&](const std::string& text, ImU32 color) {
+                SignUI::AddShadowText(draw, fonts.mono14, 14.0f, ImVec2(x, at.y), color, text.c_str());
+                x += fonts.mono14->CalcTextSizeA(14.0f, FLT_MAX, 0.0f, text.c_str()).x + 24.0f;
+            };
+            char buffer[96];
+            item(playerName.empty() ? "Parcero" : playerName, IM_COL32(222, 184, 64, 255));
+            std::snprintf(buffer, sizeof(buffer), "Día %d — %02d:%02d", static_cast<int>(dayProgress) + 1, hour, minute);
+            item(buffer, IM_COL32(238, 238, 238, 255));
+            std::snprintf(buffer, sizeof(buffer), "$ %.0f", money);
+            item(buffer, IM_COL32(238, 238, 238, 255));
+            std::snprintf(buffer, sizeof(buffer), "Nv %d", level);
+            item(buffer, IM_COL32(238, 238, 238, 255));
+            SignUI::DrawIcon(draw, Icon::Star, ImVec2(x + 7.0f, at.y + 8.0f), 15.0f);
+            std::snprintf(buffer, sizeof(buffer), "%d", talentPoints);
+            SignUI::AddShadowText(draw, fonts.mono14, 14.0f, ImVec2(x + 22.0f, at.y), IM_COL32(255, 209, 102, 255), buffer);
+            x += 22.0f + 12.0f;
+            ImGui::Dummy(ImVec2(std::max(210.0f, x - at.x), 18.0f));
+            ImGui::SetCursorScreenPos(ImVec2(at.x, at.y + 25.0f));
+            SignUI::StatBar(std::clamp(static_cast<float>(xp) / static_cast<float>(std::max(1, level * 100)), 0.0f, 1.0f),
+                            IM_COL32(39, 174, 96, 255), 200.0f, 6.0f);
         }
         ImGui::End();
+
+        // Barras de necesidades (abajo a la izquierda) con avisos encima
+        ImGui::SetNextWindowPos(ImVec2(20, displayHeight - 20), ImGuiCond_Always, ImVec2(0, 1));
+        if (ImGui::Begin("Necesidades", nullptr, plainFlags)) {
+            ImDrawList* draw = ImGui::GetWindowDrawList();
+            if (needs[3] <= 10.0f) {
+                ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.27f, 1.0f), "Salud crítica: usa vendajes o evita los vehículos.");
+            } else if (needs[3] <= 25.0f) {
+                ImGui::TextColored(ImVec4(1.0f, 0.72f, 0.24f, 1.0f), "Salud baja: usa vendajes y evita los vehículos.");
+            }
+            if (boostActive) {
+                ImGui::TextColored(ImVec4(0.25f, 0.95f, 1.0f, 1.0f), "ADRENALINA: %.1fs (+35%% vel, +botín)", std::max(0.0f, boostTimer));
+            }
+            const float withdrawal = needs[6] < 20.0f ? (20.0f - needs[6]) * 5.0f : 0.0f;
+            if (withdrawal >= 80.0f) {
+                const float flash = 0.5f + 0.5f * static_cast<float>(std::sin(ImGui::GetTime() * 8.0));
+                ImGui::TextColored(ImVec4(1.0f, 0.15f * flash, 0.15f * flash, 1.0f), "¡ABSTINENCIA CRÍTICA: PSICOSIS!");
+            } else if (withdrawal >= 50.0f) {
+                ImGui::TextColored(ImVec4(1.0f, 0.60f, 0.20f, 1.0f), "Síndrome de abstinencia: paranoia");
+            }
+            static const Icon needIcons[] = {Icon::Bread, Icon::Drop, Icon::Energy, Icon::Pill, Icon::Soap, Icon::Heart, Icon::Flame};
+            static const ImU32 needFills[] = {
+                IM_COL32(201, 162, 39, 255), IM_COL32(58, 123, 213, 255), IM_COL32(176, 106, 214, 255), IM_COL32(192, 57, 43, 255),
+                IM_COL32(48, 168, 204, 255), IM_COL32(142, 68, 173, 255), IM_COL32(224, 122, 30, 255)
+            };
+            const ImVec2 origin = ImGui::GetCursorScreenPos();
+            for (size_t i = 0; i < needs.size(); ++i) {
+                const float value = std::clamp(needs[i], 0.0f, 100.0f);
+                const bool critical = i == 3 ? value <= 10.0f
+                    : i == 4 ? value <= 20.0f
+                    : i == 5 ? value <= 10.0f
+                    : i == 6 ? value <= 4.0f : value <= 0.0f;
+                const float rowY = origin.y + static_cast<float>(i) * 20.0f;
+                SignUI::DrawIcon(draw, needIcons[i], ImVec2(origin.x + 8.0f, rowY + 7.0f), 14.0f);
+                ImGui::SetCursorScreenPos(ImVec2(origin.x + 32.0f, rowY + 2.0f));
+                SignUI::StatBar(value / 100.0f, needFills[i], 160.0f, 10.0f, critical);
+            }
+            ImGui::SetCursorScreenPos(origin);
+            ImGui::Dummy(ImVec2(192.0f, static_cast<float>(needs.size()) * 20.0f));
+        }
+        ImGui::End();
+        ImGui::PopStyleVar();
     }
 
     // Viñeta roja oscura pulsante en los bordes de la pantalla durante psicosis
@@ -1012,112 +1094,211 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
             ImGui::SetNextWindowPos(whisperPos, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowBgAlpha(0.75f * alpha);
             if (ImGui::Begin("WhisperOverlay", nullptr, hudFlags | ImGuiWindowFlags_NoInputs)) {
-                ImGui::TextColored(ImVec4(1.0f, 0.22f, 0.22f, alpha), "👁️  \"%s\"", m_ActiveWhisper.c_str());
+                ImGui::TextColored(ImVec4(1.0f, 0.22f, 0.22f, alpha), "\"%s\"", m_ActiveWhisper.c_str());
             }
             ImGui::End();
         }
     }
 
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 12, 12), ImGuiCond_Always, ImVec2(1, 0));
-    ImGui::SetNextWindowBgAlpha(0.64f);
-    if (ImGui::Begin("Costal", nullptr, hudFlags)) {
-        ImGui::Text("Peso: %.1f / %.0f kg", inventoryWeight, inventoryCapacity);
-        ImGui::End();
-    }
+    {
+        using SignUI::Icon;
+        const SignUI::Fonts& fonts = SignUI::GetFonts();
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        const ImGuiWindowFlags plainFlags = hudFlags | ImGuiWindowFlags_NoBackground;
 
-    ImGui::SetNextWindowPos(ImVec2(12, 47), ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.48f);
-    if (ImGui::Begin("Vista y objetivo", nullptr, hudFlags)) {
-        if (ImGui::Button(camera.GetMode() == CameraMode::ThirdPerson ? "Tercera persona [V]" : "Isometrica [V]")) camera.ToggleMode();
-        ImGui::SameLine();
-        if (ImGui::Button(audio.IsMuted() ? "Activar audio" : "Silenciar audio")) audio.SetMuted(!audio.IsMuted());
-        ImGui::SameLine();
-        if (ImGui::Button("Personaje [P]")) m_CharacterCreatorRequest = true;
-        ImGui::SameLine();
-        if (ImGui::Button("Inventario [I]")) OpenPauseSection(1);
-        ImGui::SameLine();
-        if (ImGui::Button("Talentos [T]")) OpenPauseSection(2);
-        ImGui::SameLine();
-        if (ImGui::Button("El Chato [O]")) OpenPauseSection(3);
-        ImGui::SameLine();
-        if (ImGui::Button("Pausa [Esc]")) TogglePause();
-        ImGui::TextWrapped("%s", objective.c_str());
-        if (simulation.IsMissionComplete()) ImGui::TextColored(ImVec4(0.35f, 0.85f, 0.48f, 1.0f), "Mision completada");
-        else if (simulation.IsMissionStarted()) ImGui::Text("Reciclables: %llu / %llu", static_cast<unsigned long long>(missionProgress), static_cast<unsigned long long>(missionTarget));
-        else ImGui::TextDisabled("Acercate al marcador para iniciar la mision");
-        ImGui::End();
-    }
-
-    if (!m_Paused && Input::IsKeyPressed(GLFW_KEY_N)) m_RadarVisible = !m_RadarVisible;
-    if (m_RadarVisible) {
-        const float radarSize = 156.0f;
-        const ImVec2 radarPos(ImGui::GetIO().DisplaySize.x - radarSize - 12.0f, 46.0f);
-        ImGui::SetNextWindowPos(radarPos, ImGuiCond_Always);
-        ImGui::SetNextWindowSize(ImVec2(radarSize, radarSize + 25.0f), ImGuiCond_Always);
-        ImGui::SetNextWindowBgAlpha(0.78f);
-        if (ImGui::Begin("Radar Bogota [N]", nullptr, hudFlags | ImGuiWindowFlags_NoScrollbar)) {
-            const ImVec2 origin = ImGui::GetCursorScreenPos();
-            const float mapSize = radarSize - 20.0f;
-            const float range = 42.0f;
-            const ImVec2 center(origin.x + mapSize * 0.5f, origin.y + mapSize * 0.5f);
+        // Botones de vista y paneles de ayuda y objetivo (arriba a la izquierda)
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 6.0f));
+        ImGui::SetNextWindowPos(ImVec2(12, 49), ImGuiCond_Always);
+        if (ImGui::Begin("Vista y objetivo", nullptr, plainFlags)) {
             ImDrawList* draw = ImGui::GetWindowDrawList();
-            draw->AddRectFilled(origin, ImVec2(origin.x + mapSize, origin.y + mapSize), IM_COL32(26, 29, 32, 245), 4.0f);
-            constexpr int samples = 30;
-            for (int z = 0; z < samples; ++z) for (int x = 0; x < samples; ++x) {
-                const float worldX = playerPos.x + ((x + 0.5f) / samples * 2.0f - 1.0f) * range;
-                const float worldZ = playerPos.z + ((z + 0.5f) / samples * 2.0f - 1.0f) * range;
-                const int tileX = static_cast<int>(std::floor((worldX + CityLayout::WIDTH) / CityLayout::TILE_SIZE));
-                const int tileZ = static_cast<int>(std::floor((worldZ + CityLayout::HEIGHT) / CityLayout::TILE_SIZE));
-                const TileType tile = city.GetTileAt(tileX, tileZ);
-                ImU32 color = IM_COL32(48, 50, 53, 255);
-                if (tile == TileType::Road) color = IM_COL32(104, 106, 108, 255);
-                else if (tile == TileType::Busway) color = IM_COL32(133, 87, 60, 255);
-                else if (tile == TileType::Sidewalk || tile == TileType::Plaza) color = IM_COL32(115, 112, 105, 255);
-                else if (tile == TileType::Grass) color = IM_COL32(62, 92, 58, 255);
-                const ImVec2 cell0(origin.x + x * mapSize / samples, origin.y + z * mapSize / samples);
-                const ImVec2 cell1(origin.x + (x + 1) * mapSize / samples + 0.5f, origin.y + (z + 1) * mapSize / samples + 0.5f);
-                draw->AddRectFilled(cell0, cell1, color);
-            }
-            const float markerX = origin.x + mapSize * 0.5f;
-            const float markerY = origin.y + mapSize * 0.5f;
-            const auto drawWorldMarker = [&](const glm::vec3& position, float radius, ImU32 color) {
-                const float dx = (position.x - playerPos.x) / range;
-                const float dz = (position.z - playerPos.z) / range;
-                if (std::abs(dx) <= 1.0f && std::abs(dz) <= 1.0f) {
-                    draw->AddCircleFilled(ImVec2(center.x + dx * mapSize * 0.5f, center.y + dz * mapSize * 0.5f), radius, color);
-                }
+            const auto hudButton = [&](const char* id, const char* label, Icon icon, float width, const char* tip) {
+                ImGui::PushID(id);
+                const bool pressed = ImGui::InvisibleButton("##hud", ImVec2(width, 32.0f));
+                ImGui::PopID();
+                const bool hovered = ImGui::IsItemHovered();
+                const ImVec2 min = ImGui::GetItemRectMin();
+                const ImVec2 max = ImGui::GetItemRectMax();
+                draw->AddRectFilled(min, max, hovered ? IM_COL32(24, 34, 52, 235) : IM_COL32(8, 12, 20, 210), 3.0f);
+                draw->AddRect(min, max, hovered ? IM_COL32(150, 165, 190, 255) : IM_COL32(74, 86, 108, 255), 3.0f);
+                if (label) draw->AddText(fonts.mono12, 12.0f, ImVec2(min.x + 10.0f, (min.y + max.y) * 0.5f - 7.0f), IM_COL32(208, 214, 226, 255), label);
+                else SignUI::DrawIcon(draw, icon, ImVec2((min.x + max.x) * 0.5f, (min.y + max.y) * 0.5f), 16.0f);
+                if (hovered && tip) ImGui::SetTooltip("%s", tip);
+                return pressed;
             };
-            for (const auto& pickup : simulation.GetPickups()) drawWorldMarker(pickup.position, 2.0f, IM_COL32(248, 204, 78, 255));
-            if (!simulation.IsMissionComplete()) drawWorldMarker(simulation.GetMissionNpcPosition(), 3.0f, IM_COL32(237, 84, 72, 255));
-            drawWorldMarker(simulation.GetDogPosition(), 2.5f, IM_COL32(117, 184, 255, 255));
-            draw->AddCircleFilled(ImVec2(markerX, markerY), 4.0f, IM_COL32(49, 220, 115, 255));
-            draw->AddCircle(ImVec2(markerX, markerY), 7.0f, IM_COL32(12, 38, 24, 255));
-            ImGui::Dummy(ImVec2(mapSize, mapSize));
-            ImGui::End();
-        }
-    }
+            const char* cameraLabel = camera.GetMode() == CameraMode::ThirdPerson ? "Tercera persona · V" : "Isométrica · V";
+            if (hudButton("camara", cameraLabel, Icon::None, 150.0f, "Alternar vista")) camera.ToggleMode();
+            ImGui::SameLine();
+            if (hudButton("inventario", nullptr, Icon::Bag, 38.0f, "Inventario [I]")) OpenPauseSection(1);
+            ImGui::SameLine();
+            if (hudButton("sonido", nullptr, audio.IsMuted() ? Icon::Mute : Icon::Sound, 38.0f, "Silenciar o activar el audio")) audio.SetMuted(!audio.IsMuted());
+            ImGui::SameLine();
+            if (hudButton("pausa", nullptr, Icon::Pause, 38.0f, "Pausa [Esc]")) TogglePause();
 
-    const float displayHeight = ImGui::GetIO().DisplaySize.y;
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 12, 228), ImGuiCond_Always, ImVec2(1, 0));
-    ImGui::SetNextWindowSize(ImVec2(190, std::max(120.0f, displayHeight - 250.0f)), ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.76f);
-    if (ImGui::Begin("Inventario", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
-        ImGui::Text("Peso %.1f / %.0f kg", inventoryWeight, inventoryCapacity);
-        ImGui::Separator();
-        if (inventorySummary == "Vacio" || inventorySummary.empty()) ImGui::TextDisabled("Costal vacio");
-        else {
-            std::istringstream items(inventorySummary);
-            std::string itemLine;
-            while (std::getline(items, itemLine, '|')) {
-                const size_t first = itemLine.find_first_not_of(" \t");
-                const size_t last = itemLine.find_last_not_of(" \t");
-                if (first != std::string::npos) ImGui::TextWrapped("%s", itemLine.substr(first, last - first + 1).c_str());
+            const auto panel = [&](const char* id, auto&& content) {
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 6.0f));
+                ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 3.0f);
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0.58f));
+                ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+                ImGui::BeginChild(id, ImVec2(344.0f, 0.0f), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders,
+                                  ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoInputs);
+                ImGui::PopStyleColor(2);
+                ImGui::PopStyleVar(2);
+                content();
+                ImGui::EndChild();
+            };
+            panel("ayuda", [&] {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.80f, 0.83f, 0.89f, 1.0f));
+                ImGui::TextWrapped("Mueve el ratón (o arrastra) para girar la cámara · Rueda: zoom");
+                ImGui::PopStyleColor();
+            });
+            panel("objetivo", [&] {
+                ImGui::TextWrapped("%s", objective.c_str());
+                if (simulation.IsMissionComplete()) ImGui::TextColored(ImVec4(0.35f, 0.85f, 0.48f, 1.0f), "Misión completada");
+                else if (simulation.IsMissionStarted()) ImGui::TextColored(ImVec4(0.96f, 0.77f, 0.0f, 1.0f), "Reciclables: %llu / %llu",
+                    static_cast<unsigned long long>(missionProgress), static_cast<unsigned long long>(missionTarget));
+                else ImGui::TextDisabled("Acércate al marcador para iniciar la misión");
+            });
+
+            // Enfermedades activas: una línea roja por cada una
+            if (diseaseSummary != "Sin enfermedades" && !diseaseSummary.empty()) {
+                std::istringstream diseases(diseaseSummary);
+                std::string part;
+                while (std::getline(diseases, part, '|')) {
+                    const size_t first = part.find_first_not_of(" \t");
+                    const size_t last = part.find_last_not_of(" \t");
+                    if (first == std::string::npos) continue;
+                    part = part.substr(first, last - first + 1);
+                    std::string name = part, remaining;
+                    const size_t paren = part.find(" (");
+                    if (paren != std::string::npos) {
+                        name = part.substr(0, paren);
+                        remaining = part.substr(paren + 2, part.size() - paren - 3);
+                    }
+                    const ImVec2 min = ImGui::GetCursorScreenPos();
+                    const ImVec2 max(min.x + 220.0f, min.y + 21.0f);
+                    draw->AddRectFilled(min, max, IM_COL32(192, 57, 43, 52));
+                    draw->AddRect(min, max, IM_COL32(192, 57, 43, 255));
+                    draw->AddText(fonts.mono12, 12.0f, ImVec2(min.x + 8.0f, min.y + 3.0f), IM_COL32(231, 76, 60, 255), name.c_str());
+                    const float width = fonts.mono12->CalcTextSizeA(12.0f, FLT_MAX, 0.0f, remaining.c_str()).x;
+                    draw->AddText(fonts.mono12, 12.0f, ImVec2(max.x - 8.0f - width, min.y + 3.0f), IM_COL32(136, 136, 136, 255), remaining.c_str());
+                    ImGui::Dummy(ImVec2(220.0f, 21.0f));
+                }
             }
         }
-        if (ImGui::CollapsingHeader("Salud")) ImGui::TextWrapped("%s", diseaseSummary.c_str());
-        ImGui::Separator();
-        ImGui::TextDisabled("Peatones %llu | Trafico %llu", static_cast<unsigned long long>(pedestrians), static_cast<unsigned long long>(traffic));
         ImGui::End();
+        ImGui::PopStyleVar(2);
+
+        if (!m_Paused && Input::IsKeyPressed(GLFW_KEY_N)) m_RadarVisible = !m_RadarVisible;
+        const float panelWidth = 175.0f;
+        const float panelLeft = display.x - 16.0f - panelWidth;
+
+        // Radar circular (arriba a la derecha)
+        if (m_RadarVisible) {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+            ImGui::SetNextWindowPos(ImVec2(panelLeft, 18.0f), ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2(panelWidth, 182.0f), ImGuiCond_Always);
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.03f, 0.06f, 0.09f, 0.86f));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.33f, 0.47f, 0.42f, 0.75f));
+            if (ImGui::Begin("Radar Bogota [N]", nullptr, (hudFlags & ~ImGuiWindowFlags_AlwaysAutoResize) | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoInputs)) {
+                ImDrawList* draw = ImGui::GetWindowDrawList();
+                const ImVec2 origin = ImGui::GetWindowPos();
+                SignUI::DrawIcon(draw, Icon::Compass, ImVec2(origin.x + 16.0f, origin.y + 12.0f), 13.0f);
+                draw->AddText(fonts.monoBold12, 11.0f, ImVec2(origin.x + 28.0f, origin.y + 5.0f), IM_COL32(238, 238, 238, 255), "Radar Bogotá");
+                draw->AddRect(ImVec2(origin.x + panelWidth - 30.0f, origin.y + 4.0f), ImVec2(origin.x + panelWidth - 10.0f, origin.y + 19.0f), IM_COL32(220, 225, 235, 180), 2.0f);
+                draw->AddText(fonts.monoBold12, 11.0f, ImVec2(origin.x + panelWidth - 24.0f, origin.y + 5.5f), IM_COL32(238, 238, 238, 255), "N");
+
+                const float diameter = 130.0f;
+                const float radius = diameter * 0.5f;
+                const ImVec2 center(origin.x + panelWidth * 0.5f, origin.y + 28.0f + radius);
+                const float range = 42.0f;
+                constexpr int samples = 26;
+                const float cell = diameter / samples;
+                draw->AddCircleFilled(center, radius, IM_COL32(26, 29, 32, 245), 48);
+                for (int z = 0; z < samples; ++z) for (int x = 0; x < samples; ++x) {
+                    const float localX = (x + 0.5f) / samples * 2.0f - 1.0f;
+                    const float localZ = (z + 0.5f) / samples * 2.0f - 1.0f;
+                    if (localX * localX + localZ * localZ > 0.94f) continue;
+                    const float worldX = playerPos.x + localX * range;
+                    const float worldZ = playerPos.z + localZ * range;
+                    const int tileX = static_cast<int>(std::floor((worldX + CityLayout::WIDTH) / CityLayout::TILE_SIZE));
+                    const int tileZ = static_cast<int>(std::floor((worldZ + CityLayout::HEIGHT) / CityLayout::TILE_SIZE));
+                    const TileType tile = city.GetTileAt(tileX, tileZ);
+                    ImU32 color = IM_COL32(48, 50, 53, 255);
+                    if (tile == TileType::Road) color = IM_COL32(104, 106, 108, 255);
+                    else if (tile == TileType::Busway) color = IM_COL32(133, 87, 60, 255);
+                    else if (tile == TileType::Sidewalk || tile == TileType::Plaza) color = IM_COL32(115, 112, 105, 255);
+                    else if (tile == TileType::Grass) color = IM_COL32(62, 92, 58, 255);
+                    const ImVec2 cell0(center.x - radius + x * cell, center.y - radius + z * cell);
+                    draw->AddRectFilled(cell0, ImVec2(cell0.x + cell + 0.5f, cell0.y + cell + 0.5f), color);
+                }
+                draw->AddCircle(center, radius, IM_COL32(120, 140, 170, 255), 48, 1.5f);
+                const auto marker = [&](const glm::vec3& position, float size, ImU32 color) {
+                    const float dx = (position.x - playerPos.x) / range;
+                    const float dz = (position.z - playerPos.z) / range;
+                    if (dx * dx + dz * dz <= 0.94f) draw->AddCircleFilled(ImVec2(center.x + dx * radius, center.y + dz * radius), size, color);
+                };
+                for (const auto& pickup : simulation.GetPickups()) marker(pickup.position, 2.0f, IM_COL32(248, 204, 78, 255));
+                if (!simulation.IsMissionComplete()) marker(simulation.GetMissionNpcPosition(), 3.0f, IM_COL32(237, 84, 72, 255));
+                marker(simulation.GetDogPosition(), 2.5f, IM_COL32(117, 184, 255, 255));
+                draw->AddCircleFilled(center, 4.0f, IM_COL32(49, 220, 115, 255));
+                draw->AddCircle(center, 7.0f, IM_COL32(12, 38, 24, 255));
+                const ImU32 compassColor = IM_COL32(210, 216, 228, 200);
+                draw->AddText(fonts.mono11, 10.0f, ImVec2(center.x - 3.0f, center.y - radius + 3.0f), compassColor, "N");
+                draw->AddText(fonts.mono11, 10.0f, ImVec2(center.x + radius - 11.0f, center.y - 5.0f), compassColor, "E");
+                draw->AddText(fonts.mono11, 10.0f, ImVec2(center.x - 3.0f, center.y + radius - 13.0f), compassColor, "S");
+                draw->AddText(fonts.mono11, 10.0f, ImVec2(center.x - radius + 4.0f, center.y - 5.0f), compassColor, "O");
+                char info[64];
+                std::snprintf(info, sizeof(info), "El Chato: %.0f m", glm::distance(playerPos, simulation.GetDogPosition()));
+                draw->AddText(fonts.mono11, 10.0f, ImVec2(origin.x + 10.0f, origin.y + 28.0f + diameter + 8.0f), IM_COL32(238, 214, 136, 255), info);
+            }
+            ImGui::End();
+            ImGui::PopStyleColor(2);
+            ImGui::PopStyleVar();
+        }
+
+        // Costal: lista de objetos y peso
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
+        ImGui::SetNextWindowPos(ImVec2(display.x - 16.0f, 208.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.60f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+        if (ImGui::Begin("Inventario", nullptr, hudFlags | ImGuiWindowFlags_NoInputs)) {
+            ImDrawList* draw = ImGui::GetWindowDrawList();
+            const float width = panelWidth - 16.0f;
+            const size_t maxRows = static_cast<size_t>(std::max(3.0f, (display.y - 208.0f - 80.0f) / 19.0f));
+            if (inventoryOptions.empty()) {
+                ImGui::TextDisabled("Costal vacío");
+                ImGui::Dummy(ImVec2(width, 1.0f));
+            }
+            size_t shown = 0;
+            for (const auto& item : inventoryOptions) {
+                if (shown++ >= maxRows) break;
+                const ImVec2 at = ImGui::GetCursorScreenPos();
+                draw->AddText(fonts.mono12, 12.0f, ImVec2(at.x, at.y + 1.0f), IM_COL32(204, 204, 204, 255), item.name.c_str());
+                char amount[24];
+                std::snprintf(amount, sizeof(amount), "x%d", item.quantity);
+                float right = at.x + width;
+                if (item.usable) {
+                    const float tagWidth = fonts.mono11->CalcTextSizeA(10.0f, FLT_MAX, 0.0f, "[usar]").x;
+                    draw->AddText(fonts.mono11, 10.0f, ImVec2(right - tagWidth, at.y + 2.0f), IM_COL32(136, 136, 136, 255), "[usar]");
+                    right -= tagWidth + 8.0f;
+                }
+                const float amountWidth = fonts.mono12->CalcTextSizeA(12.0f, FLT_MAX, 0.0f, amount).x;
+                draw->AddText(fonts.mono12, 12.0f, ImVec2(right - amountWidth, at.y + 1.0f), IM_COL32(201, 162, 39, 255), amount);
+                draw->AddLine(ImVec2(at.x, at.y + 17.0f), ImVec2(at.x + width, at.y + 17.0f), IM_COL32(34, 34, 34, 255));
+                ImGui::Dummy(ImVec2(width, 19.0f));
+            }
+            if (inventoryOptions.size() > maxRows) ImGui::TextDisabled("+%zu más…", inventoryOptions.size() - maxRows);
+            char weight[48];
+            std::snprintf(weight, sizeof(weight), "Peso: %.1f/%.0f", inventoryWeight, inventoryCapacity);
+            const ImVec2 at = ImGui::GetCursorScreenPos();
+            const float weightWidth = fonts.mono11->CalcTextSizeA(11.0f, FLT_MAX, 0.0f, weight).x;
+            draw->AddText(fonts.mono11, 11.0f, ImVec2(at.x + width - weightWidth, at.y + 4.0f), IM_COL32(136, 136, 136, 255), weight);
+            ImGui::Dummy(ImVec2(width, 20.0f));
+        }
+        ImGui::End();
+        ImGui::PopStyleColor(2);
+        ImGui::PopStyleVar();
     }
 
     std::string interactionPrompt;
@@ -1150,11 +1331,33 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
     else if (nearPickup) interactionPrompt = "[E] Recoger objeto del suelo";
     else if (inventorySummary.find("Pan duro") != std::string::npos || inventorySummary.find("Botella agua") != std::string::npos || inventorySummary.find("Vendaje") != std::string::npos || inventorySummary.find("Curita") != std::string::npos || inventorySummary.find("Tinto") != std::string::npos || inventorySummary.find("Comida enlatada") != std::string::npos || inventorySummary.find("Refresco") != std::string::npos || inventorySummary.find("Tintico") != std::string::npos || inventorySummary.find("Pegante") != std::string::npos || inventorySummary.find("Pastilla") != std::string::npos || inventorySummary.find("Cigarrillo") != std::string::npos || inventorySummary.find("Jabón") != std::string::npos || inventorySummary.find("Cepillo") != std::string::npos || inventorySummary.find("Vacuna") != std::string::npos || inventorySummary.find("Carbón activo") != std::string::npos || inventorySummary.find("Jarabe") != std::string::npos || inventorySummary.find("Pomada") != std::string::npos || inventorySummary.find("Antiparasitario") != std::string::npos || inventorySummary.find("Antibiótico") != std::string::npos) interactionPrompt = "[E] Usar el primer consumible o medicamento del costal";
     if (!interactionPrompt.empty()) {
-        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y - 42.0f), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
-        ImGui::SetNextWindowBgAlpha(0.82f);
-        if (ImGui::Begin("Interaccion", nullptr, hudFlags)) {
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y - 62.0f), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.80f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.79f, 0.64f, 0.15f, 0.85f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 8.0f));
+        ImGui::PushFont(SignUI::GetFonts().mono14);
+        if (ImGui::Begin("Interaccion", nullptr, hudFlags | ImGuiWindowFlags_NoInputs)) {
             ImGui::TextUnformatted(interactionPrompt.c_str());
-            ImGui::End();
+        }
+        ImGui::End();
+        ImGui::PopFont();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(2);
+    }
+
+    // Recordatorio de teclas (tenue, al pie de la pantalla)
+    {
+        const SignUI::Fonts& fonts = SignUI::GetFonts();
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        const char* lines[2] = {
+            "WASD mover · Shift correr · V cámara · N radar · R radio · E interactuar · Q recoger/dealer · B limosna · X lanzar · Z popó",
+            "I inventario · T talentos · O El Chato · C crafteo · P personaje · F11 pantalla completa · ESC pausa"
+        };
+        for (int line = 0; line < 2; ++line) {
+            const float width = fonts.mono11->CalcTextSizeA(11.0f, FLT_MAX, 0.0f, lines[line]).x;
+            ImGui::GetBackgroundDrawList()->AddText(fonts.mono11, 11.0f,
+                ImVec2((display.x - width) * 0.5f, display.y - 36.0f + static_cast<float>(line) * 14.0f),
+                IM_COL32(255, 255, 255, 80), lines[line]);
         }
     }
 
@@ -1205,90 +1408,92 @@ void UIManager::RenderCambucheMenu(const std::vector<CambuchePieceOption>& piece
     // Liberar el ratón mientras el menú está abierto
     Input::SetCursorLocked(false);
 
-    const ImGuiIO& io = ImGui::GetIO();
-    const float menuWidth  = std::min(480.0f, io.DisplaySize.x - 40.0f);
-    const float menuHeight = std::min(560.0f, io.DisplaySize.y - 40.0f);
-    ImGui::SetNextWindowSize({menuWidth, menuHeight}, ImGuiCond_Always);
-    ImGui::SetNextWindowPos({(io.DisplaySize.x - menuWidth) * 0.5f,
-                             (io.DisplaySize.y - menuHeight) * 0.5f},
-                            ImGuiCond_Always);
-    ImGui::SetNextWindowBgAlpha(0.94f);
-
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
-                           | ImGuiWindowFlags_NoCollapse;
-    if (ImGui::Begin("🏠 Cambuche - Refugio urbano", nullptr, flags)) {
-        ImGui::TextColored(ImVec4(0.96f, 0.82f, 0.25f, 1.0f),
-                           "Construye tu refugio paso a paso.");
-        ImGui::Text("Acércate a los materiales y recógelos antes de construir.");
-        ImGui::Separator();
+    using SignUI::Icon;
+    const SignUI::Fonts& fonts = SignUI::GetFonts();
+    const ImVec4 blueText(0.84f, 0.89f, 1.0f, 1.0f);
+    SignUI::DrawBackdrop(0.55f);
+    bool closeRequested = false;
+    if (SignUI::BeginMenu("Cambuche", "Cambuche · Refugio urbano", "Construye tu refugio paso a paso", Icon::Home, &closeRequested)) {
+        ImGui::PushStyleColor(ImGuiCol_Text, blueText);
+        ImGui::TextWrapped("Acércate a los materiales y recógelos antes de construir.");
+        ImGui::PopStyleColor();
         ImGui::Spacing();
 
+        int rowIndex = 0;
         for (const auto& piece : pieces) {
             ImGui::PushID(piece.id.c_str());
-
-            // Color del encabezado según estado
-            if (piece.isBuilt) {
-                ImGui::TextColored(ImVec4(0.40f, 0.85f, 0.45f, 1.0f), "✓ %s", piece.name.c_str());
-            } else if (piece.isLocked) {
-                ImGui::TextColored(ImVec4(0.55f, 0.55f, 0.55f, 1.0f), "🔒 %s", piece.name.c_str());
-            } else {
-                ImGui::TextColored(ImVec4(0.92f, 0.92f, 0.92f, 1.0f), "🔨 %s", piece.name.c_str());
-            }
-
-            ImGui::SameLine(menuWidth * 0.62f);
-            if (piece.isBuilt) {
-                ImGui::TextColored(ImVec4(0.40f, 0.85f, 0.45f, 1.0f), "Construido");
-            } else if (piece.isLocked) {
-                ImGui::TextDisabled("Bloqueado");
-            } else if (piece.canBuild) {
-                if (ImGui::SmallButton(("Construir##" + piece.id).c_str())) {
-                    m_CambucheBuildRequest = piece.id;
+            if (SignUI::BeginRow("pieza", rowIndex++)) {
+                const float statusWidth = piece.canBuild && !piece.isBuilt && !piece.isLocked ? SignUI::RowButtonWidth("Construir") : 128.0f;
+                const ImVec2 at = ImGui::GetCursorScreenPos();
+                const float rowTop = ImGui::GetCursorPosY();
+                ImDrawList* draw = ImGui::GetWindowDrawList();
+                if (piece.isBuilt) {
+                    draw->AddCircleFilled(ImVec2(at.x + 10.0f, at.y + 15.0f), 9.0f, IM_COL32(25, 196, 99, 255), 16);
+                    SignUI::DrawIcon(draw, Icon::Check, ImVec2(at.x + 10.0f, at.y + 15.0f), 14.0f);
+                } else {
+                    SignUI::DrawIcon(draw, Icon::Home, ImVec2(at.x + 10.0f, at.y + 15.0f), 18.0f, piece.isLocked ? 0.35f : 1.0f);
                 }
-            } else {
-                ImGui::TextColored(ImVec4(0.85f, 0.42f, 0.25f, 1.0f), "Faltan materiales");
+                ImGui::SetCursorScreenPos(ImVec2(at.x + 30.0f, at.y + 7.0f));
+                ImGui::PushFont(fonts.monoBold14);
+                ImGui::TextColored(piece.isLocked ? ImVec4(0.6f, 0.65f, 0.72f, 1.0f) : ImVec4(1, 1, 1, 1), "%s", piece.name.c_str());
+                ImGui::PopFont();
+                SignUI::RowCluster(rowTop, ImGui::GetWindowWidth() - 10.0f - statusWidth);
+                if (piece.isBuilt) {
+                    ImGui::SetCursorPosY(rowTop + 7.0f);
+                    ImGui::TextColored(ImVec4(0.62f, 0.94f, 0.75f, 1.0f), "Construido");
+                } else if (piece.isLocked) {
+                    ImGui::SetCursorPosY(rowTop + 7.0f);
+                    ImGui::TextDisabled("Bloqueado");
+                } else if (piece.canBuild) {
+                    if (SignUI::RowButton("Construir", true, true)) m_CambucheBuildRequest = piece.id;
+                } else {
+                    ImGui::SetCursorPosY(rowTop + 7.0f);
+                    ImGui::TextColored(ImVec4(1.0f, 0.71f, 0.67f, 1.0f), "Faltan materiales");
+                }
+                SignUI::RowBelow(rowTop);
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 20.0f);
+                ImGui::PushStyleColor(ImGuiCol_Text, blueText);
+                ImGui::PushTextWrapPos(ImGui::GetWindowWidth() - 18.0f - statusWidth);
+                ImGui::TextWrapped("%s", piece.desc.c_str());
+                ImGui::PopTextWrapPos();
+                ImGui::PopStyleColor();
+                if (!piece.reqText.empty()) {
+                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 30.0f);
+                    ImGui::TextColored(piece.canBuild ? ImVec4(0.62f, 0.94f, 0.75f, 1.0f) : ImVec4(1.0f, 0.71f, 0.67f, 1.0f),
+                                       "Requiere: %s", piece.reqText.c_str());
+                }
             }
-
-            ImGui::TextDisabled("  %s", piece.desc.c_str());
-            if (!piece.reqText.empty()) {
-                ImGui::TextDisabled("  Requiere: %s", piece.reqText.c_str());
-            }
-
-            ImGui::Spacing();
+            SignUI::EndRow();
             ImGui::PopID();
         }
 
-        ImGui::Separator();
         ImGui::Spacing();
-
-        // Botón de dormir — solo si la base está construida
         if (hasBase) {
-            const bool canSleep = isNight;
-            if (!canSleep) {
-                ImGui::TextColored(ImVec4(0.60f, 0.60f, 0.60f, 1.0f),
-                                   "Puedes dormir aquí de noche para recuperar energía.");
+            if (!isNight) {
+                ImGui::TextDisabled("Puedes dormir aquí de noche para recuperar energía.");
             } else {
-                ImGui::TextColored(ImVec4(0.70f, 0.85f, 1.0f, 1.0f),
-                                   "Es de noche. Puedes descansar en el cambuche.");
-                if (ImGui::Button("💤  Dormir (recupera energía y salud)")) {
+                ImGui::PushStyleColor(ImGuiCol_Text, blueText);
+                ImGui::TextWrapped("Es de noche. Puedes descansar en el cambuche.");
+                ImGui::PopStyleColor();
+                SignUI::FlexReset();
+                if (SignUI::Button("Dormir (recupera energía y salud)", Icon::Heart)) {
                     m_SleepRequest = true;
                     m_CambucheMenuOpen = false;
                     Input::SetCursorLocked(true);
                 }
             }
         } else {
-            ImGui::TextColored(ImVec4(0.75f, 0.55f, 0.20f, 1.0f),
-                               "Construye la base para poder descansar aquí.");
+            ImGui::TextColored(ImVec4(1.0f, 0.82f, 0.45f, 1.0f), "Construye la base para poder descansar aquí.");
         }
 
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
-        if (ImGui::Button("Cerrar [Esc]", {menuWidth - 32.0f, 0.0f})) {
-            m_CambucheMenuOpen = false;
-            Input::SetCursorLocked(true);
-        }
+        SignUI::BeginFooter();
+        if (SignUI::PrimaryButton("Cerrar (Esc)")) closeRequested = true;
     }
-    ImGui::End();
+    SignUI::EndMenu();
+    if (closeRequested) {
+        m_CambucheMenuOpen = false;
+        Input::SetCursorLocked(true);
+    }
 }
 
 } // namespace Bazuko
