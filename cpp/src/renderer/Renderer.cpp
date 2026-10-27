@@ -56,6 +56,7 @@ void Renderer::BeginScene(const Camera& camera, float time) {
     m_LightUBO->SetData(&m_LightingData, sizeof(LightBlockData));
 
     m_DefaultShader->Bind();
+    m_DefaultShader->SetFloat("uWetness", m_Wetness);
     m_DefaultShader->SetFloat("uContrast", m_Contrast);
     m_DefaultShader->SetFloat("uSaturation", m_Saturation);
     m_DefaultShader->SetFloat("uHueDegrees", m_HueDegrees);

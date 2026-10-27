@@ -1054,10 +1054,7 @@ int main(int argc, char** argv) {
                 ui.OpenRecyclerMenu();
             } else if (vendorIndex < simulation.GetStreetVendorCount()) {
                 const StreetVendor& vendor = simulation.GetVendor(vendorIndex);
-                // Productos de cada tipo de puesto (ids del catalogo de la tienda)
-                const std::vector<std::string> chazaCatalog{"cafe", "pan", "agua"};
-                const std::vector<std::string> fritangaCatalog{"lataComida", "pan", "refresco"};
-                ui.OpenShopMenu(vendor.name, "Venta ambulante: lo justo para el día.", vendor.fritanga ? fritangaCatalog : chazaCatalog);
+                ui.OpenShopMenu(vendor.name, "Venta ambulante: lo justo para el día.", vendor.items);
             } else if (pedestrianIndex < simulation.GetPedestrianCount()) {
                 const RobberyOutcome outcome = simulation.RobPedestrian(pedestrianIndex, false, playerPos);
                 if (outcome.attempted && outcome.successful) {
@@ -1287,6 +1284,9 @@ int main(int argc, char** argv) {
         showDeathScreenIfNeeded();
         if (ui.IsDeathScreenOpen()) dt = 0.0f;
         audio.SetRaining(simulation.IsRaining());
+        simulation.SetReducedWeather(graphicsQuality == 0);
+        if (const int weatherChange = simulation.ConsumeWeatherChange(); weatherChange != 0)
+            ui.Notify(weatherChange == 1 ? "Comienza a lloviznar en el centro de Bogotá…" : "La llovizna cesa sobre los cerros orientales.", ToastType::Info);
         audio.UpdateVehicleAudio(dt, playerPos, simulation, ui.IsPaused());
 
         // 7. Actualizar cámara
@@ -1318,6 +1318,7 @@ int main(int argc, char** argv) {
             renderer.SetRenderScale(adaptiveResolution.ratio);
             ui.SetEffectiveRenderScale(adaptiveResolution.ratio, adaptiveResolution.pressure);
         }
+        renderer.SetWetness(simulation.GetWetness());
         renderer.BeginScaledTarget();
         renderer.BeginScene(camera, clock.GetElapsedTime());
 

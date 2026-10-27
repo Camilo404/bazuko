@@ -16,6 +16,8 @@ namespace Bazuko {
 
 namespace {
 
+constexpr size_t kRainDropCount = 350;   // gotas alrededor del jugador, como el original
+
 std::vector<glm::vec3> MakeTrafficCircuit(float left, float right, float top, float bottom) {
     constexpr float radius = 1.0f;
     constexpr float spacing = 0.45f;
@@ -451,9 +453,9 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
     m_ShadowEyeMesh = Mesh::CreateCube({0.06f, 0.04f, 0.06f}, {1.0f, 0.12f, 0.12f, 1.0f});
     m_ShadowTorsoMesh = Mesh::CreateRoundedBox({0.42f, 0.85f, 0.28f}, 0.08f, 2, {0.03f, 0.03f, 0.04f, 1.0f});
     m_ShadowLegMesh = Mesh::CreateCylinder(0.08f, 0.80f, 6, {0.03f, 0.03f, 0.04f, 1.0f});
-    std::uniform_real_distribution<float> rainHorizontal(-13.0f, 13.0f);
+    std::uniform_real_distribution<float> rainHorizontal(-13.0f, 13.0f);   // area de 26 x 26 m alrededor del jugador
     std::uniform_real_distribution<float> rainHeight(0.0f, 16.0f);
-    for (size_t drop = 0; drop < 48; ++drop) {
+    for (size_t drop = 0; drop < kRainDropCount; ++drop) {
         m_RainOffsets.emplace_back(rainHorizontal(m_Random), rainHeight(m_Random), rainHorizontal(m_Random));
     }
     const std::array<std::array<int, 4>, 3> parkBounds{{
@@ -826,14 +828,15 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
         int tileZ;
         bool fritanga;
         const char* name;
+        std::vector<std::string> items;
     };
-    constexpr std::array<VendorSite, 6> vendorSites{{
-        {30, 14, false, "Chaza de don Efraín"},
-        {48, 22, true, "Fritanga La Mona"},
-        {76, 36, false, "Dulces y minutos"},
-        {96, 58, false, "Chaza de la Carrera 8"},
-        {30, 92, true, "Fritanga del Sur"},
-        {76, 80, false, "Chaza de la avenida"}
+    const std::array<VendorSite, 6> vendorSites{{
+        {30, 14, false, "Chaza de don Efraín", {"cigarrillo", "cafe", "pan", "agua"}},
+        {48, 22, true, "Fritanga La Mona", {"lataComida", "pan", "refresco"}},
+        {76, 36, false, "Dulces y minutos", {"cigarrillo", "refresco", "agua"}},
+        {96, 58, false, "Chaza de la Carrera 8", {"agua", "pan", "cafe"}},
+        {30, 92, true, "Fritanga del Sur", {"lataComida", "pan", "refresco"}},
+        {76, 80, false, "Chaza de la avenida", {"cigarrillo", "pan", "agua"}}
     }};
     for (const VendorSite& site : vendorSites) {
         float bestDistanceSquared = std::numeric_limits<float>::max();
@@ -865,7 +868,8 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
                 if (distanceSquared >= bestDistanceSquared) continue;
                 const glm::vec3 serverPosition = position - facing * 1.05f;
                 selected = {position, serverPosition, facing, site.name, site.fritanga,
-                            m_PedestrianAppearances.empty() ? 0 : m_StreetVendors.size() % m_PedestrianAppearances.size()};
+                            m_PedestrianAppearances.empty() ? 0 : m_StreetVendors.size() % m_PedestrianAppearances.size(),
+                            site.items};
                 bestDistanceSquared = distanceSquared;
                 found = true;
             }
@@ -1183,8 +1187,10 @@ void Simulation::Update(float dt, const glm::vec3& playerPosition) {
     m_WeatherRemaining -= dt;
     if (m_WeatherRemaining <= 0.0f) {
         m_IsRaining = !m_IsRaining;
+        m_WeatherChange = m_IsRaining ? 1 : 2;
         m_WeatherRemaining = 150.0f + m_Unit(m_Random) * 150.0f;
     }
+    m_Wetness = m_IsRaining ? std::min(1.0f, m_Wetness + dt * 0.25f) : std::max(0.0f, m_Wetness - dt * 0.04f);
     if (m_IsRaining) {
         for (auto& drop : m_RainOffsets) {
             drop.y -= 24.0f * dt;
@@ -2218,8 +2224,9 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
         }
     }
     if (m_IsRaining) {
-        for (const auto& offset : m_RainOffsets) {
-            const glm::vec3 position = focusPosition + offset;
+        const size_t visibleDrops = m_ReducedWeather ? kRainDropCount / 3 : m_RainOffsets.size();
+        for (size_t index = 0; index < visibleDrops; ++index) {
+            const glm::vec3 position = focusPosition + m_RainOffsets[index];
             const glm::mat4 drop = glm::translate(glm::mat4(1.0f), position);
             renderer.Submit(*m_RainDrop, drop, glm::vec4(0.75f, 0.88f, 1.0f, 0.44f), false, false, nullptr, 2);
         }

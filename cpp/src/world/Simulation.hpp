@@ -88,6 +88,7 @@ struct StreetVendor {
     std::string name;
     bool fritanga = false;
     size_t appearance = 0;
+    std::vector<std::string> items;   // ids del catalogo que vende este puesto
 };
 struct StreetLamp {
     glm::vec3 position{0.0f};
@@ -193,6 +194,12 @@ public:
     size_t ConsumePoopHitCount() { return std::exchange(m_PoopHitCount, 0); }
     float GetDayProgress() const { return m_DayProgress; }
     bool IsRaining() const { return m_IsRaining; }
+    // Humedad 0..1: sube con la llovizna (0,25/s) y se seca despacio (0,04/s); el suelo se ve mojado
+    float GetWetness() const { return m_ReducedWeather ? 0.0f : m_Wetness; }
+    // Cambio de clima pendiente de avisar: 0 ninguno, 1 empieza la llovizna, 2 cesa (se consume al leerlo)
+    int ConsumeWeatherChange() { const int change = m_WeatherChange; m_WeatherChange = 0; return change; }
+    // Calidad baja: menos gotas y sin suelo mojado
+    void SetReducedWeather(bool reduced) { m_ReducedWeather = reduced; }
     void SetDayProgress(float progress) { m_Clock = std::clamp(progress, 0.0f, 1.0f); m_DayProgress = m_Clock; }
     bool IsNight() const { return m_DayProgress > 0.78f || m_DayProgress < 0.22f; }
     size_t GetPedestrianCount() const { return m_Pedestrians.size(); }
@@ -397,6 +404,9 @@ private:
     std::vector<glm::vec3> m_RainOffsets;
     float m_WeatherRemaining = 180.0f;
     bool m_IsRaining = true;
+    float m_Wetness = 0.6f;   // como el original: la partida empieza lloviznando con el suelo humedo
+    int m_WeatherChange = 0;
+    bool m_ReducedWeather = false;
     glm::vec3 m_DogPosition{4.0f, 0.0f, 4.0f};
     float m_DogYaw = 0.0f;
     float m_DogTime = 0.0f;

@@ -55,6 +55,9 @@ public:
         m_HueDegrees = hueDegrees;
     }
 
+    // Humedad del suelo 0..1 (lluvia): oscurece un poco y da brillo de charco a las superficies horizontales
+    void SetWetness(float wetness) { m_Wetness = std::clamp(wetness, 0.0f, 1.0f); }
+
     Shader& GetDefaultShader() { return *m_DefaultShader; }
     LightBlockData& GetLighting() { return m_LightingData; }
 
@@ -75,6 +78,7 @@ private:
     int m_ScaledHeight = 0;
     int m_ScreenViewport[4] = {0, 0, 0, 0};
     bool m_ScaledActive = false;
+    float m_Wetness = 0.0f;
     float m_Contrast = 1.0f;
     float m_Saturation = 1.0f;
     float m_HueDegrees = 0.0f;

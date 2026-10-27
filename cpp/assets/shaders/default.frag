@@ -32,6 +32,7 @@ layout(binding = 0) uniform sampler2D uTexture;
 layout(binding = 1) uniform sampler2D uSpecularTexture;
 uniform int uUseSpecularTexture;
 // Filtro de color de la psicosis: contrast(), saturate() y hue-rotate() del CSS del juego web
+uniform float uWetness = 0.0;   // lluvia: suelo oscuro y brillante
 uniform float uContrast = 1.0;
 uniform float uSaturation = 1.0;
 uniform float uHueDegrees = 0.0;
@@ -64,6 +65,14 @@ void main() {
     }
 
     vec3 result = (ambient + diffuse) * baseColor.rgb + specular;
+    if (uWetness > 0.0) {
+        // superficies que miran hacia arriba (calles, andenes): mas oscuras, con brillo del sol y reflejo del cielo
+        const float wet = uWetness * smoothstep(0.75, 0.95, norm.y);
+        const float facing = max(dot(norm, viewDir), 0.0);
+        result *= 1.0 - 0.2 * wet;
+        result += pow(max(dot(viewDir, reflectedLight), 0.0), 40.0) * uSunColor * 0.7 * wet;
+        result = mix(result, uFogColor, 0.2 * wet * pow(1.0 - facing, 3.0));
+    }
 
     float dist = length(uCameraPos - vFragPos);
     float fogFactor = 1.0 - exp(-dist * uFogDensity);
