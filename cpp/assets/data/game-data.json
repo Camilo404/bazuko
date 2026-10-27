@@ -1,0 +1,1085 @@
+{
+  "generatedFrom": "src/data/items.js, src/data/talents.js, src/data/cambuche.js",
+  "costalBonus": 20,
+  "items": [
+    {
+      "id": "lata",
+      "name": "Lata vacía",
+      "weight": 0.2,
+      "value": 250,
+      "rarity": "common",
+      "rarityLabel": "Común",
+      "recyclable": true,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Se puede vender."
+    },
+    {
+      "id": "botella",
+      "name": "Botella PET",
+      "weight": 0.3,
+      "value": 150,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": true,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Se puede vender."
+    },
+    {
+      "id": "carton",
+      "name": "Cartón",
+      "weight": 0.5,
+      "value": 200,
+      "rarity": "common",
+      "rarityLabel": "Común",
+      "recyclable": true,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Se puede vender."
+    },
+    {
+      "id": "chatarra",
+      "name": "Chatarra",
+      "weight": 1,
+      "value": 900,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": true,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Se puede vender."
+    },
+    {
+      "id": "cable",
+      "name": "Cable cobre",
+      "weight": 0.4,
+      "value": 2400,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": true,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Se puede vender."
+    },
+    {
+      "id": "pan",
+      "name": "Pan duro",
+      "weight": 0.3,
+      "value": 1000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Consumible.",
+      "consumable": {
+        "stat": "hambre",
+        "amount": 25
+      },
+      "effects": {
+        "animo": 5
+      }
+    },
+    {
+      "id": "agua",
+      "name": "Botella agua",
+      "weight": 0.5,
+      "value": 1500,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Consumible.",
+      "consumable": {
+        "stat": "sed",
+        "amount": 35
+      }
+    },
+    {
+      "id": "reloj",
+      "name": "Reloj oxidado",
+      "weight": 0.1,
+      "value": 8000,
+      "rarity": "rare",
+      "rarityLabel": "",
+      "recyclable": true,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Se puede vender."
+    },
+    {
+      "id": "vendaje",
+      "name": "Vendaje",
+      "weight": 0.1,
+      "value": 3000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Consumible.",
+      "consumable": {
+        "stat": "salud",
+        "amount": 30
+      }
+    },
+    {
+      "id": "antibiotico",
+      "name": "Antibiótico",
+      "weight": 0.1,
+      "value": 18000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "infeccion",
+      "desc": "Tratamiento."
+    },
+    {
+      "id": "madera",
+      "name": "Tablas",
+      "weight": 2,
+      "value": 1500,
+      "rarity": "uncommon",
+      "rarityLabel": "Poco común",
+      "recyclable": false,
+      "usable": false,
+      "build": true,
+      "substance": false,
+      "cure": "",
+      "desc": "Material para mejorar el cambuche."
+    },
+    {
+      "id": "pilas",
+      "name": "Pilas AA",
+      "weight": 0.1,
+      "value": 2000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": true,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Se puede vender."
+    },
+    {
+      "id": "radioTransistor",
+      "name": "Radio transistor AM/FM",
+      "weight": 0.6,
+      "value": 18000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": true,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Se puede vender."
+    },
+    {
+      "id": "retrovisor",
+      "name": "Retrovisor",
+      "weight": 0.8,
+      "value": 15000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": true,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Se puede vender."
+    },
+    {
+      "id": "radio",
+      "name": "Radio auto",
+      "weight": 1.5,
+      "value": 35000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": true,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Se puede vender."
+    },
+    {
+      "id": "tela",
+      "portOnly": true,
+      "name": "Retazo de tela",
+      "weight": 0.2,
+      "value": 300,
+      "recyclable": false
+    },
+    {
+      "id": "pastilla",
+      "name": "Pastilla",
+      "weight": 0.05,
+      "value": 8000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": true,
+      "cure": "",
+      "desc": "Consumible.",
+      "consumable": {
+        "stat": "vicio",
+        "amount": 60
+      },
+      "effects": {
+        "salud": -5,
+        "animo": 40
+      }
+    },
+    {
+      "id": "lona",
+      "name": "Lona azul",
+      "weight": 2,
+      "value": 4000,
+      "rarity": "rare",
+      "rarityLabel": "Raro",
+      "recyclable": false,
+      "usable": false,
+      "build": true,
+      "substance": false,
+      "cure": "",
+      "desc": "Material para mejorar el cambuche."
+    },
+    {
+      "id": "colchon",
+      "name": "Colchón viejo",
+      "weight": 6,
+      "value": 5000,
+      "rarity": "veryRare",
+      "rarityLabel": "Muy raro",
+      "recyclable": false,
+      "usable": false,
+      "build": true,
+      "substance": false,
+      "cure": "",
+      "desc": "Material para mejorar el cambuche."
+    },
+    {
+      "id": "vela",
+      "name": "Vela",
+      "weight": 0.05,
+      "value": 500,
+      "rarity": "rare",
+      "rarityLabel": "Raro",
+      "recyclable": false,
+      "usable": false,
+      "build": true,
+      "substance": false,
+      "cure": "",
+      "desc": "Material para mejorar el cambuche."
+    },
+    {
+      "id": "popo",
+      "name": "Mojón de popó",
+      "weight": 0.3,
+      "value": 50,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": true,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Proyectil biológico artesanal. Presiona [X] para lanzárselo a los peatones."
+    },
+    {
+      "id": "alambre",
+      "portOnly": true,
+      "name": "Alambre",
+      "weight": 0.1,
+      "value": 500,
+      "recyclable": false
+    },
+    {
+      "id": "plastico",
+      "portOnly": true,
+      "name": "Plástico",
+      "weight": 0.1,
+      "value": 200,
+      "recyclable": false
+    },
+    {
+      "id": "mochila",
+      "portOnly": true,
+      "name": "Mochila",
+      "weight": 0.8,
+      "value": 12000,
+      "recyclable": false
+    },
+    {
+      "id": "arma",
+      "portOnly": true,
+      "name": "Arma casera",
+      "weight": 1.2,
+      "value": 0,
+      "recyclable": false
+    },
+    {
+      "id": "curita",
+      "portOnly": true,
+      "name": "Curita",
+      "weight": 0.05,
+      "value": 500,
+      "recyclable": true
+    },
+    {
+      "id": "rifa",
+      "portOnly": true,
+      "name": "Cartón de rifa",
+      "weight": 0.05,
+      "value": 1000,
+      "recyclable": true
+    },
+    {
+      "id": "cafe",
+      "name": "Café caliente",
+      "weight": 0.3,
+      "value": 1500,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Consumible.",
+      "consumable": {
+        "stat": "energia",
+        "amount": 40
+      },
+      "effects": {
+        "animo": 15
+      }
+    },
+    {
+      "id": "lataComida",
+      "name": "Lata de atún",
+      "weight": 0.4,
+      "value": 4500,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Consumible.",
+      "consumable": {
+        "stat": "hambre",
+        "amount": 45
+      },
+      "effects": {
+        "animo": 8
+      }
+    },
+    {
+      "id": "refresco",
+      "name": "Refresco",
+      "weight": 0.4,
+      "value": 2500,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Consumible.",
+      "consumable": {
+        "stat": "sed",
+        "amount": 50
+      },
+      "effects": {
+        "energia": 10,
+        "animo": 10
+      }
+    },
+    {
+      "id": "tintico",
+      "name": "Tintico",
+      "weight": 0.1,
+      "value": 1000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": true,
+      "cure": "",
+      "desc": "Consumible.",
+      "consumable": {
+        "stat": "vicio",
+        "amount": 20
+      },
+      "effects": {
+        "energia": 20,
+        "animo": 15
+      }
+    },
+    {
+      "id": "pegante",
+      "name": "Pegante",
+      "weight": 0.2,
+      "value": 3000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": true,
+      "cure": "",
+      "desc": "Consumible.",
+      "consumable": {
+        "stat": "vicio",
+        "amount": 40
+      },
+      "effects": {
+        "salud": -3,
+        "animo": 25
+      }
+    },
+    {
+      "id": "cigarrillo",
+      "name": "Cigarrillo suelto",
+      "weight": 0.01,
+      "value": 300,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Consumible.",
+      "consumable": {
+        "stat": "vicio",
+        "amount": 35
+      },
+      "effects": {
+        "salud": -1
+      }
+    },
+    {
+      "id": "jabon",
+      "name": "Jabón",
+      "weight": 0.2,
+      "value": 2500,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Consumible.",
+      "consumable": {
+        "stat": "higiene",
+        "amount": 40
+      }
+    },
+    {
+      "id": "cepillo",
+      "name": "Cepillo",
+      "weight": 0.1,
+      "value": 2000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Consumible.",
+      "consumable": {
+        "stat": "higiene",
+        "amount": 20
+      }
+    },
+    {
+      "id": "vacuna",
+      "name": "Vacuna",
+      "weight": 0.1,
+      "value": 15000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "tetanos",
+      "desc": "Tratamiento."
+    },
+    {
+      "id": "carbon",
+      "name": "Carbón activo",
+      "weight": 0.1,
+      "value": 6000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "intoxicacion",
+      "desc": "Tratamiento."
+    },
+    {
+      "id": "jarabe",
+      "name": "Jarabe",
+      "weight": 0.2,
+      "value": 8000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "gripe",
+      "desc": "Tratamiento."
+    },
+    {
+      "id": "pomada",
+      "name": "Pomada",
+      "weight": 0.15,
+      "value": 7000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "sarna",
+      "desc": "Tratamiento."
+    },
+    {
+      "id": "antiparasitario",
+      "name": "Antiparasitario",
+      "weight": 0.1,
+      "value": 9000,
+      "rarity": "",
+      "rarityLabel": "",
+      "recyclable": false,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "parasitos",
+      "desc": "Tratamiento."
+    },
+    {
+      "id": "moneda",
+      "name": "Moneda vieja",
+      "weight": 0.02,
+      "value": 12000,
+      "rarity": "rare",
+      "rarityLabel": "",
+      "recyclable": true,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Se puede vender."
+    },
+    {
+      "id": "anillo",
+      "name": "Anillo",
+      "weight": 0.05,
+      "value": 20000,
+      "rarity": "rare",
+      "rarityLabel": "",
+      "recyclable": true,
+      "usable": false,
+      "build": false,
+      "substance": false,
+      "cure": "",
+      "desc": "Se puede vender."
+    }
+  ],
+  "shop": [
+    {
+      "item": "pan",
+      "upgrade": "",
+      "price": 1500,
+      "qty": 1,
+      "label": "",
+      "desc": ""
+    },
+    {
+      "item": "lataComida",
+      "upgrade": "",
+      "price": 6000,
+      "qty": 1,
+      "label": "",
+      "desc": ""
+    },
+    {
+      "item": "agua",
+      "upgrade": "",
+      "price": 2000,
+      "qty": 1,
+      "label": "",
+      "desc": ""
+    },
+    {
+      "item": "refresco",
+      "upgrade": "",
+      "price": 3500,
+      "qty": 1,
+      "label": "",
+      "desc": ""
+    },
+    {
+      "item": "cafe",
+      "upgrade": "",
+      "price": 2000,
+      "qty": 1,
+      "label": "",
+      "desc": "Un tinto caliente: quita el sueño."
+    },
+    {
+      "item": "cigarrillo",
+      "upgrade": "",
+      "price": 500,
+      "qty": 1,
+      "label": "",
+      "desc": "Calma el vicio. Le quita un poquito a la salud."
+    },
+    {
+      "item": "vendaje",
+      "upgrade": "",
+      "price": 4500,
+      "qty": 1,
+      "label": "",
+      "desc": ""
+    },
+    {
+      "item": "jabon",
+      "upgrade": "",
+      "price": 3500,
+      "qty": 1,
+      "label": "",
+      "desc": ""
+    },
+    {
+      "item": "cepillo",
+      "upgrade": "",
+      "price": 3000,
+      "qty": 1,
+      "label": "",
+      "desc": ""
+    },
+    {
+      "item": "jarabe",
+      "upgrade": "",
+      "price": 11000,
+      "qty": 1,
+      "label": "",
+      "desc": ""
+    },
+    {
+      "item": "pomada",
+      "upgrade": "",
+      "price": 9500,
+      "qty": 1,
+      "label": "",
+      "desc": ""
+    },
+    {
+      "item": "carbon",
+      "upgrade": "",
+      "price": 9000,
+      "qty": 1,
+      "label": "",
+      "desc": ""
+    },
+    {
+      "item": "antiparasitario",
+      "upgrade": "",
+      "price": 13000,
+      "qty": 1,
+      "label": "",
+      "desc": ""
+    },
+    {
+      "item": "vacuna",
+      "upgrade": "",
+      "price": 20000,
+      "qty": 1,
+      "label": "",
+      "desc": ""
+    },
+    {
+      "item": "antibiotico",
+      "upgrade": "",
+      "price": 25000,
+      "qty": 1,
+      "label": "",
+      "desc": ""
+    },
+    {
+      "item": "vela",
+      "upgrade": "",
+      "price": 1000,
+      "qty": 1,
+      "label": "",
+      "desc": "Ilumina el cambuche: duermes más tranquilo."
+    },
+    {
+      "item": "lona",
+      "upgrade": "",
+      "price": 9000,
+      "qty": 1,
+      "label": "",
+      "desc": "Para el techo del cambuche."
+    },
+    {
+      "item": "madera",
+      "upgrade": "",
+      "price": 6000,
+      "qty": 3,
+      "label": "Tablas ×3",
+      "desc": "Para las paredes del cambuche."
+    },
+    {
+      "item": "pilas",
+      "upgrade": "",
+      "price": 2000,
+      "qty": 1,
+      "label": "",
+      "desc": "Pilas AA: recargan la radio transistor."
+    },
+    {
+      "item": "radioTransistor",
+      "upgrade": "",
+      "price": 18000,
+      "qty": 1,
+      "label": "",
+      "desc": "Radio transistor: sintoniza emisoras y calma la mente."
+    },
+    {
+      "item": "",
+      "upgrade": "costal",
+      "price": 12000,
+      "qty": 1,
+      "label": "Costal grande",
+      "desc": "Cargas 20 kg más."
+    }
+  ],
+  "lootCommon": [
+    {
+      "item": "lata",
+      "weight": 33
+    },
+    {
+      "item": "botella",
+      "weight": 24
+    },
+    {
+      "item": "carton",
+      "weight": 17
+    },
+    {
+      "item": "chatarra",
+      "weight": 8
+    },
+    {
+      "item": "cable",
+      "weight": 4
+    },
+    {
+      "item": "pilas",
+      "weight": 3
+    },
+    {
+      "item": "pan",
+      "weight": 4
+    },
+    {
+      "item": "agua",
+      "weight": 3
+    },
+    {
+      "item": "lataComida",
+      "weight": 2
+    },
+    {
+      "item": "vendaje",
+      "weight": 1
+    },
+    {
+      "item": "cigarrillo",
+      "weight": 2
+    },
+    {
+      "item": "madera",
+      "weight": 3
+    },
+    {
+      "item": "lona",
+      "weight": 0.6
+    },
+    {
+      "item": "colchon",
+      "weight": 0.4
+    },
+    {
+      "item": "vela",
+      "weight": 0.8
+    }
+  ],
+  "lootRare": [
+    {
+      "item": "reloj",
+      "weight": 55
+    },
+    {
+      "item": "moneda",
+      "weight": 30
+    },
+    {
+      "item": "anillo",
+      "weight": 15
+    }
+  ],
+  "lootSubstance": [
+    {
+      "item": "tintico",
+      "weight": 50
+    },
+    {
+      "item": "pegante",
+      "weight": 30
+    },
+    {
+      "item": "pastilla",
+      "weight": 20
+    }
+  ],
+  "cambuche": [
+    {
+      "id": "base",
+      "name": "Base de cartón",
+      "req": {
+        "carton": 8
+      },
+      "needs": "",
+      "desc": "Para dormir sin tocar el piso. Sin base no se puede dormir."
+    },
+    {
+      "id": "techo",
+      "name": "Techo de lona",
+      "req": {
+        "lona": 1
+      },
+      "needs": "base",
+      "desc": "Duermes mejor: recuperas más salud."
+    },
+    {
+      "id": "paredes",
+      "name": "Paredes de tablas",
+      "req": {
+        "madera": 6
+      },
+      "needs": "base",
+      "desc": "Nadie te roba mientras duermes."
+    },
+    {
+      "id": "cama",
+      "name": "Colchón",
+      "req": {
+        "colchon": 1
+      },
+      "needs": "base",
+      "desc": "Recuperas mucha más energía al dormir."
+    },
+    {
+      "id": "fogon",
+      "name": "Fogón de latas",
+      "req": {
+        "lata": 6,
+        "madera": 2
+      },
+      "needs": "base",
+      "desc": "Calienta: despiertas con más ánimo y sin tanta hambre."
+    },
+    {
+      "id": "vela",
+      "name": "Vela y foto",
+      "req": {
+        "vela": 1
+      },
+      "needs": "base",
+      "desc": "Despiertas más tranquilo: calma el vicio."
+    }
+  ],
+  "sleep": {
+    "energia": 45,
+    "energiaCama": 35,
+    "salud": 10,
+    "saludTecho": 15,
+    "animoFogon": 15,
+    "hambreFogon": 15,
+    "vicioVela": 15,
+    "roboProb": 0.25,
+    "roboDinero": 0.4,
+    "roboMaterial": 0.5
+  },
+  "branches": [
+    {
+      "id": "recoleccion",
+      "name": "Recolección"
+    },
+    {
+      "id": "supervivencia",
+      "name": "Supervivencia"
+    },
+    {
+      "id": "crimen",
+      "name": "Crimen"
+    }
+  ],
+  "talents": [
+    {
+      "id": "collector1",
+      "name": "Ojo de Águila",
+      "desc": "+25% de probabilidad de objeto raro en basura",
+      "branch": "recoleccion",
+      "cost": 1,
+      "requires": [],
+      "effects": {
+        "rareChanceMult": 1.25
+      }
+    },
+    {
+      "id": "collector2",
+      "name": "Bolsas Llenas",
+      "desc": "+10 de peso máximo en inventario",
+      "branch": "recoleccion",
+      "cost": 1,
+      "requires": [
+        "collector1"
+      ],
+      "effects": {
+        "maxWeightBonus": 10
+      }
+    },
+    {
+      "id": "collector3",
+      "name": "Selección Experta",
+      "desc": "Seleccionar basura da +50% de valor y -20% de enfermedad",
+      "branch": "recoleccion",
+      "cost": 2,
+      "requires": [
+        "collector2"
+      ],
+      "effects": {
+        "sortValueMult": 1.5,
+        "sortDiseaseMult": 0.8
+      }
+    },
+    {
+      "id": "surv1",
+      "name": "Estómago de Hierro",
+      "desc": "-30% de desgaste de hambre y sed",
+      "branch": "supervivencia",
+      "cost": 1,
+      "requires": [],
+      "effects": {
+        "decayMult": 0.7
+      }
+    },
+    {
+      "id": "surv2",
+      "name": "Piel Dura",
+      "desc": "-40% de riesgo de enfermedad en la basura",
+      "branch": "supervivencia",
+      "cost": 1,
+      "requires": [
+        "surv1"
+      ],
+      "effects": {
+        "diseaseResist": 0.6
+      }
+    },
+    {
+      "id": "surv3",
+      "name": "Mente de Acero",
+      "desc": "-50% de desgaste de salud mental",
+      "branch": "supervivencia",
+      "cost": 2,
+      "requires": [
+        "surv2"
+      ],
+      "effects": {
+        "mentalDecayMult": 0.5
+      }
+    },
+    {
+      "id": "crime1",
+      "name": "Manos Ligeras",
+      "desc": "-20% de probabilidad de ser atrapado robando",
+      "branch": "crimen",
+      "cost": 1,
+      "requires": [],
+      "effects": {
+        "stealCaughtMult": 0.8
+      }
+    },
+    {
+      "id": "crime2",
+      "name": "Contactos",
+      "desc": "+30% de precio en sustancias",
+      "branch": "crimen",
+      "cost": 1,
+      "requires": [
+        "crime1"
+      ],
+      "effects": {
+        "substancePriceMult": 1.3
+      }
+    },
+    {
+      "id": "crime3",
+      "name": "Rey de la Calle",
+      "desc": "+50% de XP por todas las actividades",
+      "branch": "crimen",
+      "cost": 2,
+      "requires": [
+        "crime2"
+      ],
+      "effects": {
+        "xpMult": 1.5
+      }
+    }
+  ]
+}

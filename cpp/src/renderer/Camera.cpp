@@ -1,4 +1,4 @@
-﻿#include "Camera.hpp"
+#include "Camera.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -36,13 +36,13 @@ void Camera::Zoom(float delta) {
 void Camera::Follow(const glm::vec3& targetPos, float dt, float speed, bool isRunning) {
     // Dynamic FOV
     if (m_Mode == CameraMode::ThirdPerson && dt > 0.0f) {
-        float wantFov = (isRunning && speed > 2.5f) ? 61.0f : m_BaseFov;
+        float wantFov = ((isRunning && speed > 2.5f) ? 61.0f : m_BaseFov) + m_PsychosisFovOffset;
         if (std::abs(m_CurrentFov - wantFov) > 0.05f) {
             m_CurrentFov += (wantFov - m_CurrentFov) * (1.0f - std::exp(-6.0f * dt));
             UpdateProjection();
         }
-    } else if (m_CurrentFov != m_BaseFov) {
-        m_CurrentFov = m_BaseFov;
+    } else if (std::abs(m_CurrentFov - (m_BaseFov + m_PsychosisFovOffset)) > 0.05f) {
+        m_CurrentFov = m_BaseFov + m_PsychosisFovOffset;
         UpdateProjection();
     }
 
@@ -92,7 +92,12 @@ void Camera::Follow(const glm::vec3& targetPos, float dt, float speed, bool isRu
         }
     }
 
-    m_ViewMatrix = glm::lookAt(m_Position, lookAt, glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::vec3 up(0.0f, 1.0f, 0.0f);
+    if (m_PsychosisRoll != 0.0f) {
+        const glm::vec3 forward = glm::normalize(lookAt - m_Position);
+        up = glm::vec3(glm::rotate(glm::mat4(1.0f), m_PsychosisRoll, forward) * glm::vec4(up, 0.0f));
+    }
+    m_ViewMatrix = glm::lookAt(m_Position, lookAt, up);
     m_ViewProjectionMatrix = m_ProjectionMatrix * m_ViewMatrix;
 }
 

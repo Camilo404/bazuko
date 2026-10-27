@@ -3,17 +3,33 @@
 
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
+#include <assimp/Importer.hpp>
+#include <assimp/material.h>
+#include <assimp/postprocess.h>
+#include <assimp/scene.h>
+#include <assimp/texture.h>
 
 #include <algorithm>
 #include <glm/gtc/quaternion.hpp>
 #include <filesystem>
 #include <functional>
 #include <limits>
+#include <cmath>
 #include <glm/gtc/type_ptr.hpp>
+#include <cctype>
 
 namespace Bazuko {
 
-std::shared_ptr<Model> Model::LoadFromFile(const std::string& filepath) {
+std::shared_ptr<Model> Model::LoadFromFile(const std::string& filepath,
+                                           const std::string& meshNameFilter,
+                                           const std::string& excludedMeshName,
+                                           float maximumWorldX) {
+    std::string extension = std::filesystem::path(filepath).extension().string();
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char character) { return static_cast<char>(std::tolower(character)); });
+    if (extension != ".gltf" && extension != ".glb")
+        return LoadWithAssimp(filepath, meshNameFilter, excludedMeshName, maximumWorldX);
+
     cgltf_options options{};
     cgltf_data* data = nullptr;
     if (cgltf_parse_file(&options, filepath.c_str(), &data) != cgltf_result_success) {
@@ -37,14 +53,40 @@ std::shared_ptr<Model> Model::LoadFromFile(const std::string& filepath) {
         if (source.has_scale) node.scale = {source.scale[0], source.scale[1], source.scale[2]};
         if (source.parent) node.parent = static_cast<int>(cgltf_node_index(data, source.parent));
     }
+    std::vector<glm::mat4> nodeWorldTransforms(model->m_Nodes.size(), glm::mat4(1.0f));
+    std::vector<bool> nodeWorldResolved(model->m_Nodes.size(), false);
+    std::function<glm::mat4(size_t)> resolveNodeWorld = [&](size_t index) {
+        if (nodeWorldResolved[index]) return nodeWorldTransforms[index];
+        const auto& node = model->m_Nodes[index];
+        const glm::mat4 local = glm::translate(glm::mat4(1.0f), node.translation)
+            * glm::mat4_cast(node.rotation) * glm::scale(glm::mat4(1.0f), node.scale);
+        nodeWorldTransforms[index] = node.parent >= 0
+            ? resolveNodeWorld(static_cast<size_t>(node.parent)) * local : local;
+        nodeWorldResolved[index] = true;
+        return nodeWorldTransforms[index];
+    };
+    for (size_t i = 0; i < model->m_Nodes.size(); ++i) resolveNodeWorld(i);
+    model->m_BoundsMinimum = glm::vec3(std::numeric_limits<float>::max());
+    model->m_BoundsMaximum = glm::vec3(std::numeric_limits<float>::lowest());
     const std::filesystem::path modelDirectory = std::filesystem::path(filepath).parent_path();
     std::vector<std::shared_ptr<Texture>> textures(data->textures_count);
     for (cgltf_size i = 0; i < data->textures_count; ++i) {
         const cgltf_texture& sourceTexture = data->textures[i];
         const cgltf_image* image = sourceTexture.webp_image ? sourceTexture.webp_image : sourceTexture.image;
-        if (!image || !image->uri || std::string(image->uri).starts_with("data:")) continue;
-        const std::filesystem::path imagePath = (modelDirectory / image->uri).lexically_normal();
-        if (std::filesystem::exists(imagePath)) textures[i] = std::make_shared<Texture>(imagePath.string());
+        if (!image) continue;
+        if (image->buffer_view) {
+            const auto* imageData = cgltf_buffer_view_data(image->buffer_view);
+            if (imageData) {
+                textures[i] = Texture::LoadFromMemory(imageData, image->buffer_view->size,
+                                                       image->mime_type ? image->mime_type : "");
+            } else {
+                LogError("No se pudieron leer los bytes de la textura glTF embebida: {} (imagen {}).",
+                         filepath, static_cast<size_t>(i));
+            }
+        } else if (image->uri && !std::string(image->uri).starts_with("data:")) {
+            const std::filesystem::path imagePath = (modelDirectory / image->uri).lexically_normal();
+            if (std::filesystem::exists(imagePath)) textures[i] = std::make_shared<Texture>(imagePath.string());
+        }
     }
 
     for (cgltf_size ni = 0; ni < data->nodes_count; ++ni) {
@@ -72,6 +114,9 @@ std::shared_ptr<Model> Model::LoadFromFile(const std::string& filepath) {
                 float value[4]{};
                 cgltf_accessor_read_float(positions, i, value, 3);
                 vertices[i].position = {value[0], value[1], value[2]};
+                const glm::vec3 worldPosition = glm::vec3(nodeWorldTransforms[ni] * glm::vec4(vertices[i].position, 1.0f));
+                model->m_BoundsMinimum = glm::min(model->m_BoundsMinimum, worldPosition);
+                model->m_BoundsMaximum = glm::max(model->m_BoundsMaximum, worldPosition);
                 if (normals) {
                     cgltf_accessor_read_float(normals, i, value, 3);
                     vertices[i].normal = {value[0], value[1], value[2]};
@@ -139,6 +184,48 @@ std::shared_ptr<Model> Model::LoadFromFile(const std::string& filepath) {
             model->m_PartNodes.push_back(std::move(chain));
         }
     }
+    if (model->m_Parts.empty()) {
+        model->m_BoundsMinimum = glm::vec3(0.0f);
+        model->m_BoundsMaximum = glm::vec3(0.0f);
+        model->m_GroundAnchor = glm::vec3(0.0f);
+    } else {
+        const float groundThreshold = model->m_BoundsMinimum.y
+            + (model->m_BoundsMaximum.y - model->m_BoundsMinimum.y) * 0.04f;
+        glm::vec2 groundSum(0.0f);
+        size_t groundVertexCount = 0;
+        for (cgltf_size ni = 0; ni < data->nodes_count; ++ni) {
+            const cgltf_node& node = data->nodes[ni];
+            if (!node.mesh) continue;
+            for (cgltf_size primitiveIndex = 0; primitiveIndex < node.mesh->primitives_count; ++primitiveIndex) {
+                const cgltf_primitive& primitive = node.mesh->primitives[primitiveIndex];
+                const cgltf_accessor* positions = nullptr;
+                for (cgltf_size attributeIndex = 0; attributeIndex < primitive.attributes_count; ++attributeIndex) {
+                    const cgltf_attribute& attribute = primitive.attributes[attributeIndex];
+                    if (attribute.type == cgltf_attribute_type_position) {
+                        positions = attribute.data;
+                        break;
+                    }
+                }
+                if (!positions) continue;
+                for (cgltf_size vertexIndex = 0; vertexIndex < positions->count; ++vertexIndex) {
+                    float value[3]{};
+                    if (!cgltf_accessor_read_float(positions, vertexIndex, value, 3)) continue;
+                    const glm::vec3 point = glm::vec3(nodeWorldTransforms[ni] * glm::vec4(value[0], value[1], value[2], 1.0f));
+                    if (point.y <= groundThreshold) {
+                        groundSum += glm::vec2(point.x, point.z);
+                        ++groundVertexCount;
+                    }
+                }
+            }
+        }
+        const glm::vec3 boundsCenter = (model->m_BoundsMinimum + model->m_BoundsMaximum) * 0.5f;
+        model->m_GroundAnchor = {boundsCenter.x, model->m_BoundsMinimum.y, boundsCenter.z};
+        if (groundVertexCount > 0) {
+            const glm::vec2 center = groundSum / static_cast<float>(groundVertexCount);
+            model->m_GroundAnchor.x = center.x;
+            model->m_GroundAnchor.z = center.y;
+        }
+    }
 
     std::unordered_map<std::string, size_t> targetNodesByName;
     for (size_t i = 0; i < model->m_Nodes.size(); ++i) if (!model->m_Nodes[i].name.empty()) targetNodesByName.emplace(model->m_Nodes[i].name, i);
@@ -189,10 +276,336 @@ std::shared_ptr<Model> Model::LoadFromFile(const std::string& filepath) {
     return model;
 }
 
-void Model::SetAnimationSource(const Model& source) {
+std::shared_ptr<Model> Model::LoadWithAssimp(const std::string& filepath,
+                                             const std::string& meshNameFilter,
+                                             const std::string& excludedMeshName,
+                                             float maximumWorldX) {
+    Assimp::Importer importer;
+    constexpr unsigned int importFlags = aiProcess_Triangulate | aiProcess_GenSmoothNormals
+        | aiProcess_JoinIdenticalVertices | aiProcess_SortByPType | aiProcess_ImproveCacheLocality
+        | aiProcess_OptimizeGraph;
+    const unsigned int flags = importFlags
+        | (meshNameFilter.empty() ? aiProcess_OptimizeMeshes : 0);
+    const aiScene* scene = importer.ReadFile(filepath, flags);
+    if (!scene || !scene->mRootNode || (scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) != 0) {
+        LogError("Error al importar modelo {}: {}", filepath, importer.GetErrorString());
+        return nullptr;
+    }
+
+    auto model = std::make_shared<Model>();
+    model->m_BoundsMinimum = glm::vec3(std::numeric_limits<float>::max());
+    model->m_BoundsMaximum = glm::vec3(std::numeric_limits<float>::lowest());
+    std::vector<glm::vec3> worldVertices;
+    const auto convertMatrix = [](const aiMatrix4x4& value) {
+        return glm::mat4(
+            value.a1, value.b1, value.c1, value.d1,
+            value.a2, value.b2, value.c2, value.d2,
+            value.a3, value.b3, value.c3, value.d3,
+            value.a4, value.b4, value.c4, value.d4);
+    };
+    const auto convertVector = [](const aiVector3D& value) {
+        return glm::vec3(value.x, value.y, value.z);
+    };
+    const auto convertColor = [](const aiColor4D& value) {
+        return glm::vec4(value.r, value.g, value.b, value.a);
+    };
+    const std::filesystem::path modelDirectory = std::filesystem::path(filepath).parent_path();
+    const auto normalizedName = [](std::string value) {
+        std::string result;
+        result.reserve(value.size());
+        for (unsigned char character : value) {
+            if (std::isalnum(character))
+                result.push_back(static_cast<char>(std::tolower(character)));
+        }
+        return result;
+    };
+    const auto findFallbackColorTexture = [&](const aiMaterial* material) -> std::filesystem::path {
+        aiString materialName;
+        material->Get(AI_MATKEY_NAME, materialName);
+        const std::string normalizedMaterialName = normalizedName(materialName.C_Str());
+        std::filesystem::path bestMatch;
+        int bestScore = -1;
+        bool ambiguousBestMatch = false;
+        std::error_code iterationError;
+        size_t colorTextureCount = 0;
+        for (std::filesystem::directory_iterator entry(
+                 modelDirectory, std::filesystem::directory_options::skip_permission_denied,
+                 iterationError), end;
+             entry != end && !iterationError; entry.increment(iterationError)) {
+            if (!entry->is_regular_file(iterationError)) continue;
+            const std::string extension = normalizedName(entry->path().extension().string());
+            if (extension != "png" && extension != "jpg" && extension != "jpeg"
+                && extension != "webp") continue;
+            const std::string filename = normalizedName(entry->path().filename().string());
+            const bool baseColor = filename.find("basecolor") != std::string::npos
+                || filename.find("albedo") != std::string::npos;
+            const bool diffuse = filename.find("diffuse") != std::string::npos;
+            if (!baseColor && !diffuse) continue;
+            ++colorTextureCount;
+            const bool matchesMaterial = !normalizedMaterialName.empty()
+                && filename.find(normalizedMaterialName) != std::string::npos;
+            if (!matchesMaterial) continue;
+            const int score = (matchesMaterial ? 2 : 0) + (baseColor ? 1 : 0);
+            if (score > bestScore) {
+                bestMatch = entry->path();
+                bestScore = score;
+                ambiguousBestMatch = false;
+            } else if (score == bestScore) {
+                ambiguousBestMatch = true;
+            }
+        }
+        if (bestScore >= 0)
+            return ambiguousBestMatch ? std::filesystem::path{} : bestMatch;
+        if (normalizedName(modelDirectory.filename().string()) != "models" && colorTextureCount == 1) {
+            for (std::filesystem::directory_iterator entry(
+                     modelDirectory, std::filesystem::directory_options::skip_permission_denied,
+                     iterationError), end;
+                 entry != end && !iterationError; entry.increment(iterationError)) {
+                if (!entry->is_regular_file(iterationError)) continue;
+                const std::string filename = normalizedName(entry->path().filename().string());
+                if (filename.find("basecolor") != std::string::npos
+                    || filename.find("albedo") != std::string::npos
+                    || filename.find("diffuse") != std::string::npos)
+                    return entry->path();
+            }
+        }
+        return {};
+    };
+    const auto resolveTexturePath = [&](const aiString& texturePath) {
+        const std::filesystem::path textureFile(texturePath.C_Str());
+        std::filesystem::path resolved = textureFile.is_absolute()
+            ? textureFile : (modelDirectory / textureFile).lexically_normal();
+        if (std::filesystem::exists(resolved)) return resolved;
+        const std::string filename = normalizedName(textureFile.filename().string());
+        std::error_code iterationError;
+        for (std::filesystem::recursive_directory_iterator entry(
+                 modelDirectory, std::filesystem::directory_options::skip_permission_denied,
+                 iterationError), end;
+             entry != end && !iterationError; entry.increment(iterationError)) {
+            if (entry->is_regular_file(iterationError)
+                && normalizedName(entry->path().filename().string()) == filename)
+                return entry->path();
+        }
+        return std::filesystem::path{};
+    };
+
+    std::function<void(const aiNode*, int, const glm::mat4&)> visitNode;
+    visitNode = [&](const aiNode* source, int parent, const glm::mat4& parentTransform) {
+        const size_t nodeIndex = model->m_Nodes.size();
+        AnimationNode node;
+        if (source->mName.length > 0) node.name = source->mName.C_Str();
+        node.parent = parent;
+        aiVector3D translation, scale;
+        aiQuaternion rotation;
+        source->mTransformation.Decompose(scale, rotation, translation);
+        node.translation = convertVector(translation);
+        node.rotation = glm::normalize(glm::quat(rotation.w, rotation.x, rotation.y, rotation.z));
+        node.scale = convertVector(scale);
+        model->m_Nodes.push_back(std::move(node));
+        const glm::mat4 worldTransform = parentTransform * convertMatrix(source->mTransformation);
+
+        for (unsigned int meshIndex = 0; meshIndex < source->mNumMeshes; ++meshIndex) {
+            const unsigned int sourceMeshIndex = source->mMeshes[meshIndex];
+            if (sourceMeshIndex >= scene->mNumMeshes) continue;
+            const aiMesh* sourceMesh = scene->mMeshes[sourceMeshIndex];
+            if (!sourceMesh || sourceMesh->mNumVertices == 0) continue;
+            if (!meshNameFilter.empty() && sourceMesh->mName.C_Str() != meshNameFilter) continue;
+            if (!excludedMeshName.empty() && sourceMesh->mName.C_Str() == excludedMeshName) continue;
+
+            std::vector<Vertex> vertices(sourceMesh->mNumVertices);
+            std::vector<glm::vec3> meshWorldPositions(sourceMesh->mNumVertices);
+            const bool clipByWorldX = std::isfinite(maximumWorldX);
+            for (unsigned int vertexIndex = 0; vertexIndex < sourceMesh->mNumVertices; ++vertexIndex) {
+                Vertex& vertex = vertices[vertexIndex];
+                vertex.position = convertVector(sourceMesh->mVertices[vertexIndex]);
+                if (sourceMesh->HasNormals()) vertex.normal = convertVector(sourceMesh->mNormals[vertexIndex]);
+                else vertex.normal = {0.0f, 1.0f, 0.0f};
+                if (sourceMesh->HasTextureCoords(0)) {
+                    const aiVector3D& uv = sourceMesh->mTextureCoords[0][vertexIndex];
+                    vertex.uv = {uv.x, uv.y};
+                }
+                if (sourceMesh->HasVertexColors(0)) {
+                    const aiColor4D& color = sourceMesh->mColors[0][vertexIndex];
+                    vertex.color = {color.r, color.g, color.b, color.a};
+                }
+                const glm::vec3 worldPosition = glm::vec3(worldTransform * glm::vec4(vertex.position, 1.0f));
+                meshWorldPositions[vertexIndex] = worldPosition;
+                if (!clipByWorldX) {
+                    model->m_BoundsMinimum = glm::min(model->m_BoundsMinimum, worldPosition);
+                    model->m_BoundsMaximum = glm::max(model->m_BoundsMaximum, worldPosition);
+                    worldVertices.push_back(worldPosition);
+                }
+            }
+
+            std::vector<uint32_t> indices;
+            std::vector<bool> usedVertices(clipByWorldX ? sourceMesh->mNumVertices : 0, false);
+            for (unsigned int faceIndex = 0; faceIndex < sourceMesh->mNumFaces; ++faceIndex) {
+                const aiFace& face = sourceMesh->mFaces[faceIndex];
+                if (face.mNumIndices != 3) continue;
+                if (clipByWorldX) {
+                    const float faceCenterX = (meshWorldPositions[face.mIndices[0]].x
+                        + meshWorldPositions[face.mIndices[1]].x
+                        + meshWorldPositions[face.mIndices[2]].x) / 3.0f;
+                    if (faceCenterX > maximumWorldX) continue;
+                    for (unsigned int index = 0; index < face.mNumIndices; ++index)
+                        usedVertices[face.mIndices[index]] = true;
+                }
+                indices.insert(indices.end(), face.mIndices, face.mIndices + face.mNumIndices);
+            }
+            if (indices.empty()) continue;
+            if (clipByWorldX) {
+                for (size_t vertexIndex = 0; vertexIndex < usedVertices.size(); ++vertexIndex) {
+                    if (!usedVertices[vertexIndex]) continue;
+                    const glm::vec3& position = meshWorldPositions[vertexIndex];
+                    model->m_BoundsMinimum = glm::min(model->m_BoundsMinimum, position);
+                    model->m_BoundsMaximum = glm::max(model->m_BoundsMaximum, position);
+                    worldVertices.push_back(position);
+                }
+            }
+
+            ModelPart part;
+            part.mesh = std::make_shared<Mesh>(vertices, indices);
+            if (sourceMesh->mMaterialIndex < scene->mNumMaterials) {
+                const aiMaterial* material = scene->mMaterials[sourceMesh->mMaterialIndex];
+                aiColor4D color;
+                if (aiGetMaterialColor(material, AI_MATKEY_BASE_COLOR, &color) != AI_SUCCESS
+                    && aiGetMaterialColor(material, AI_MATKEY_COLOR_DIFFUSE, &color) == AI_SUCCESS) {
+                    part.baseColor = convertColor(color);
+                }
+                int twoSided = 0;
+                if (aiGetMaterialInteger(material, AI_MATKEY_TWOSIDED, &twoSided) == AI_SUCCESS)
+                    part.doubleSided = twoSided != 0;
+
+                aiString texturePath;
+                aiTextureType textureType = aiTextureType_BASE_COLOR;
+                if (material->GetTextureCount(textureType) == 0) textureType = aiTextureType_DIFFUSE;
+                const bool hasColorTexture =
+                    material->GetTexture(textureType, 0, &texturePath) == AI_SUCCESS;
+                const std::string textureStem = hasColorTexture
+                    ? texturePath.C_Str() : std::string{};
+                const std::filesystem::path texturePathFile(textureStem);
+                const std::string mapSuffix = texturePathFile.stem().string();
+                const size_t mapSeparator = mapSuffix.find_last_of('_');
+                const std::string mapType = mapSeparator == std::string::npos
+                    ? std::string{} : normalizedName(mapSuffix.substr(mapSeparator + 1));
+                const bool isNonColorMap = mapType == "s" || mapType == "n"
+                    || mapType == "r" || mapType == "m" || mapType == "h"
+                    || mapType == "ao";
+                if (hasColorTexture && !isNonColorMap) {
+                    if (const aiTexture* embedded = scene->GetEmbeddedTexture(texturePath.C_Str())) {
+                        if (embedded->mHeight == 0) {
+                            std::string mimeType = embedded->achFormatHint;
+                            if (mimeType == "webp") mimeType = "image/webp";
+                            part.texture = Texture::LoadFromMemory(
+                                reinterpret_cast<const uint8_t*>(embedded->pcData),
+                                embedded->mWidth,
+                                mimeType);
+                        } else {
+                            std::vector<uint8_t> rgba(static_cast<size_t>(embedded->mWidth) * embedded->mHeight * 4);
+                            for (size_t pixel = 0; pixel < static_cast<size_t>(embedded->mWidth) * embedded->mHeight; ++pixel) {
+                                const aiTexel& texel = embedded->pcData[pixel];
+                                rgba[pixel * 4] = texel.r;
+                                rgba[pixel * 4 + 1] = texel.g;
+                                rgba[pixel * 4 + 2] = texel.b;
+                                rgba[pixel * 4 + 3] = texel.a;
+                            }
+                            part.texture = std::make_shared<Texture>(embedded->mWidth, embedded->mHeight, rgba.data());
+                        }
+                    } else {
+                        const std::filesystem::path resolvedTexture = resolveTexturePath(texturePath);
+                        if (std::filesystem::exists(resolvedTexture))
+                            part.texture = Texture::LoadCached(resolvedTexture.string());
+                    }
+                }
+                aiString specularPath;
+                if (hasColorTexture && mapType == "s") {
+                    specularPath = texturePath;
+                } else if (material->GetTexture(aiTextureType_SPECULAR, 0, &specularPath) != AI_SUCCESS) {
+                    specularPath.Clear();
+                }
+                if (specularPath.length > 0
+                    && !scene->GetEmbeddedTexture(specularPath.C_Str())) {
+                    const std::filesystem::path resolvedSpecular = resolveTexturePath(specularPath);
+                    if (std::filesystem::exists(resolvedSpecular)) {
+                        part.specularTexture = Texture::LoadCached(resolvedSpecular.string());
+                        LogInfo("Mapa especular cargado: {} ({})",
+                                resolvedSpecular.string(), filepath);
+                    } else {
+                        LogWarn("No se encontro el mapa especular {} del modelo {}.",
+                                specularPath.C_Str(), filepath);
+                    }
+                }
+                if (!part.texture) {
+                    const std::filesystem::path fallbackTexture = findFallbackColorTexture(material);
+                    if (!fallbackTexture.empty()) {
+                        part.texture = Texture::LoadCached(fallbackTexture.string());
+                        LogInfo("Textura de color asignada por convencion: {} ({})",
+                                fallbackTexture.string(), filepath);
+                    }
+                }
+                if (!part.texture && hasColorTexture && !isNonColorMap) {
+                    LogWarn("No se encontro la textura {} del modelo {}.", texturePath.C_Str(), filepath);
+                }
+                if (filepath.find("Edificio ") != std::string::npos
+                    || filepath.find("street+light.fbx") != std::string::npos) {
+                    std::string textureSlots;
+                    for (aiTextureType type : {aiTextureType_BASE_COLOR, aiTextureType_DIFFUSE,
+                                               aiTextureType_SPECULAR, aiTextureType_UNKNOWN}) {
+                        for (unsigned int slot = 0; slot < material->GetTextureCount(type); ++slot) {
+                            aiString path;
+                            if (material->GetTexture(type, slot, &path) == AI_SUCCESS) {
+                                textureSlots += std::format(" type{}={}", static_cast<int>(type), path.C_Str());
+                            }
+                        }
+                    }
+                    LogInfo("Diagnostico material: modelo={} malla={} material={} UV={} color={},{},{},{} diffuseTex={} specularTex={}{}",
+                            filepath, sourceMesh->mName.C_Str(), material->GetName().C_Str(),
+                            sourceMesh->HasTextureCoords(0),
+                            part.baseColor.r, part.baseColor.g, part.baseColor.b, part.baseColor.a,
+                            static_cast<bool>(part.texture), static_cast<bool>(part.specularTexture), textureSlots);
+                }
+            }
+            model->m_Parts.push_back(std::move(part));
+            model->m_PartNodes.push_back({nodeIndex});
+        }
+
+        for (unsigned int childIndex = 0; childIndex < source->mNumChildren; ++childIndex)
+            visitNode(source->mChildren[childIndex], static_cast<int>(nodeIndex), worldTransform);
+    };
+    visitNode(scene->mRootNode, -1, glm::mat4(1.0f));
+
+    if (model->m_Parts.empty()) {
+        LogError("El archivo no contiene mallas trianguladas compatibles: {}", filepath);
+        return nullptr;
+    }
+    const float groundThreshold = model->m_BoundsMinimum.y
+        + (model->m_BoundsMaximum.y - model->m_BoundsMinimum.y) * 0.04f;
+    glm::vec2 groundSum(0.0f);
+    size_t groundVertexCount = 0;
+    for (const glm::vec3& vertex : worldVertices) {
+        if (vertex.y > groundThreshold) continue;
+        groundSum += glm::vec2(vertex.x, vertex.z);
+        ++groundVertexCount;
+    }
+    const glm::vec3 boundsCenter = (model->m_BoundsMinimum + model->m_BoundsMaximum) * 0.5f;
+    model->m_GroundAnchor = {boundsCenter.x, model->m_BoundsMinimum.y, boundsCenter.z};
+    if (groundVertexCount > 0) {
+        const glm::vec2 groundCenter = groundSum / static_cast<float>(groundVertexCount);
+        model->m_GroundAnchor.x = groundCenter.x;
+        model->m_GroundAnchor.z = groundCenter.y;
+    }
+    LogInfo("Modelo importado con Assimp: {} ({} mallas)", filepath, model->m_Parts.size());
+    return model;
+}
+
+void Model::SetAnimationSource(const Model& source, const std::unordered_map<std::string, std::string>& clipAliases) {
     m_AnimationChannels.clear();
     m_AnimationSamplers = source.m_AnimationSamplers;
     m_AnimationClips = source.m_AnimationClips;
+    for (auto& clip : m_AnimationClips) {
+        const auto alias = clipAliases.find(clip.name);
+        if (alias != clipAliases.end()) clip.name = alias->second;
+    }
     m_AnimationSourceNodes = source.m_Nodes;
     m_SourceToTargetNode.assign(source.m_Nodes.size(), -1);
     m_SourceRestWorldRotations.resize(source.m_Nodes.size(), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
@@ -332,7 +745,9 @@ int Model::FindAnimationClip(const std::string& name) const {
     return -1;
 }
 
-void Model::Draw(Renderer& renderer, const glm::mat4& transform, const glm::vec4& tint, float animationTime, bool animate, int animationClip) const {
+void Model::Draw(Renderer& renderer, const glm::mat4& transform, const glm::vec4& tint,
+                 float animationTime, bool animate, int animationClip, int alphaModeOverride,
+                 bool seatedPose) const {
     auto nodes = m_Nodes;
     if (animate && animationClip >= 0 && static_cast<size_t>(animationClip) < m_AnimationClips.size()) {
         const auto& clip = m_AnimationClips[static_cast<size_t>(animationClip)];
@@ -409,6 +824,69 @@ void Model::Draw(Renderer& renderer, const glm::mat4& transform, const glm::vec4
             for (size_t i = 0; i < nodes.size(); ++i) resolveTarget(i);
         }
     }
+    if (seatedPose) {
+        const auto findNodeWithSuffix = [&](const std::string& suffix, int parent = -2) {
+            for (size_t index = 0; index < nodes.size(); ++index) {
+                if ((parent == -2 || nodes[index].parent == parent)
+                    && nodes[index].name.ends_with(suffix))
+                    return static_cast<int>(index);
+            }
+            return -1;
+        };
+        const auto rotateBoneToward = [&](int boneIndex, int childIndex, const glm::vec3& targetDirection) {
+            if (boneIndex < 0 || childIndex < 0) return;
+            std::vector<glm::mat4> worldTransforms(nodes.size(), glm::mat4(1.0f));
+            std::vector<glm::quat> worldRotations(nodes.size(), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+            std::vector<bool> resolved(nodes.size(), false);
+            std::function<void(size_t)> resolve = [&](size_t index) {
+                if (resolved[index]) return;
+                const auto& node = nodes[index];
+                const glm::mat4 local = glm::translate(glm::mat4(1.0f), node.translation)
+                    * glm::mat4_cast(node.rotation) * glm::scale(glm::mat4(1.0f), node.scale);
+                if (node.parent >= 0) {
+                    const size_t parent = static_cast<size_t>(node.parent);
+                    resolve(parent);
+                    worldTransforms[index] = worldTransforms[parent] * local;
+                    worldRotations[index] = glm::normalize(worldRotations[parent] * node.rotation);
+                } else {
+                    worldTransforms[index] = local;
+                    worldRotations[index] = node.rotation;
+                }
+                resolved[index] = true;
+            };
+            for (size_t index = 0; index < nodes.size(); ++index) resolve(index);
+            const glm::vec3 direction = glm::vec3(worldTransforms[static_cast<size_t>(childIndex)][3])
+                - glm::vec3(worldTransforms[static_cast<size_t>(boneIndex)][3]);
+            if (glm::length(direction) < 0.0001f) return;
+            const glm::vec3 from = glm::normalize(direction);
+            const glm::vec3 to = glm::normalize(targetDirection);
+            const float dot = std::clamp(glm::dot(from, to), -1.0f, 1.0f);
+            glm::quat alignment(1.0f, 0.0f, 0.0f, 0.0f);
+            if (dot < -0.9999f) {
+                glm::vec3 axis = glm::cross(from, glm::vec3(1.0f, 0.0f, 0.0f));
+                if (glm::length(axis) < 0.0001f) axis = glm::cross(from, glm::vec3(0.0f, 0.0f, 1.0f));
+                alignment = glm::angleAxis(glm::pi<float>(), glm::normalize(axis));
+            } else if (dot < 0.9999f) {
+                const glm::vec3 axis = glm::cross(from, to);
+                alignment = glm::normalize(glm::quat(1.0f + dot, axis.x, axis.y, axis.z));
+            }
+            const int parent = nodes[static_cast<size_t>(boneIndex)].parent;
+            const glm::quat parentRotation = parent >= 0
+                ? worldRotations[static_cast<size_t>(parent)]
+                : glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+            const glm::quat desiredWorld = glm::normalize(alignment
+                * worldRotations[static_cast<size_t>(boneIndex)]);
+            nodes[static_cast<size_t>(boneIndex)].rotation =
+                glm::normalize(glm::inverse(parentRotation) * desiredWorld);
+        };
+        for (const char* side : {"Left", "Right"}) {
+            const int upperLeg = findNodeWithSuffix(std::string(side) + "UpLeg");
+            const int knee = findNodeWithSuffix(std::string(side) + "Leg", upperLeg);
+            const int foot = findNodeWithSuffix(std::string(side) + "Foot", knee);
+            rotateBoneToward(upperLeg, knee, {0.0f, 0.0f, 1.0f});
+            rotateBoneToward(knee, foot, {0.0f, -1.0f, 0.0f});
+        }
+    }
     std::vector<glm::mat4> nodeWorldTransforms(nodes.size(), glm::mat4(1.0f));
     std::vector<bool> worldResolved(nodes.size(), false);
     std::function<glm::mat4(size_t)> resolveWorld = [&](size_t index) {
@@ -436,7 +914,10 @@ void Model::Draw(Renderer& renderer, const glm::mat4& transform, const glm::vec4
                 skinMatrices.push_back(inverseMeshWorld * nodeWorldTransforms[jointNode] * part.inverseBindMatrices[joint]);
             }
         }
-        renderer.Submit(*part.mesh, transform * meshWorld, tint * part.baseColor, static_cast<bool>(part.texture), part.doubleSided, &skinMatrices, part.alphaMode, part.alphaCutoff);
+        const int alphaMode = alphaModeOverride >= 0 ? alphaModeOverride : part.alphaMode;
+        renderer.Submit(*part.mesh, transform * meshWorld, tint * part.baseColor,
+                        static_cast<bool>(part.texture), part.doubleSided, &skinMatrices,
+                        alphaMode, part.alphaCutoff, part.specularTexture.get());
     }
 }
 } // namespace Bazuko

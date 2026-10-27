@@ -1,6 +1,9 @@
-﻿#include "Renderer.hpp"
+#include "Renderer.hpp"
+#include "../core/Paths.hpp"
+#include "Texture.hpp"
 #include <glad/gl.h>
 #include <algorithm>
+#include <cmath>
 
 namespace Bazuko {
 
@@ -18,8 +21,8 @@ Renderer::Renderer() {
     glEnable(GL_MULTISAMPLE);
 
     m_DefaultShader = std::make_unique<Shader>(
-        "assets/shaders/default.vert",
-        "assets/shaders/default.frag"
+        Paths::Find("assets/shaders/default.vert"),
+        Paths::Find("assets/shaders/default.frag")
     );
 
     m_CameraUBO = std::make_unique<UniformBuffer>(sizeof(CameraBlockData), 0);
@@ -53,18 +56,67 @@ void Renderer::BeginScene(const Camera& camera, float time) {
     m_LightUBO->SetData(&m_LightingData, sizeof(LightBlockData));
 
     m_DefaultShader->Bind();
+    m_DefaultShader->SetFloat("uWetness", m_Wetness);
+    m_DefaultShader->SetFloat("uContrast", m_Contrast);
+    m_DefaultShader->SetFloat("uSaturation", m_Saturation);
+    m_DefaultShader->SetFloat("uHueDegrees", m_HueDegrees);
+}
+
+void Renderer::BeginScaledTarget() {
+    m_ScaledActive = false;
+    if (std::abs(m_RenderScale - 1.0f) < 0.01f) return;
+    glGetIntegerv(GL_VIEWPORT, m_ScreenViewport);
+    const int width = m_ScreenViewport[2];
+    const int height = m_ScreenViewport[3];
+    if (width <= 0 || height <= 0) return;
+    const int scaledWidth = std::max(1, static_cast<int>(std::lround(width * m_RenderScale)));
+    const int scaledHeight = std::max(1, static_cast<int>(std::lround(height * m_RenderScale)));
+    if (!m_ScaledFbo || scaledWidth != m_ScaledWidth || scaledHeight != m_ScaledHeight) {
+        if (m_ScaledFbo) {
+            glDeleteFramebuffers(1, &m_ScaledFbo);
+            glDeleteTextures(1, &m_ScaledColor);
+            glDeleteRenderbuffers(1, &m_ScaledDepth);
+        }
+        glCreateFramebuffers(1, &m_ScaledFbo);
+        glCreateTextures(GL_TEXTURE_2D, 1, &m_ScaledColor);
+        glTextureStorage2D(m_ScaledColor, 1, GL_RGBA8, scaledWidth, scaledHeight);
+        glTextureParameteri(m_ScaledColor, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTextureParameteri(m_ScaledColor, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glCreateRenderbuffers(1, &m_ScaledDepth);
+        glNamedRenderbufferStorage(m_ScaledDepth, GL_DEPTH_COMPONENT24, scaledWidth, scaledHeight);
+        glNamedFramebufferTexture(m_ScaledFbo, GL_COLOR_ATTACHMENT0, m_ScaledColor, 0);
+        glNamedFramebufferRenderbuffer(m_ScaledFbo, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_ScaledDepth);
+        m_ScaledWidth = scaledWidth;
+        m_ScaledHeight = scaledHeight;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, m_ScaledFbo);
+    glViewport(0, 0, m_ScaledWidth, m_ScaledHeight);
+    m_ScaledActive = true;
+}
+
+void Renderer::EndScaledTarget() {
+    if (!m_ScaledActive) return;
+    glBlitNamedFramebuffer(m_ScaledFbo, 0, 0, 0, m_ScaledWidth, m_ScaledHeight,
+                           m_ScreenViewport[0], m_ScreenViewport[1], m_ScreenViewport[0] + m_ScreenViewport[2],
+                           m_ScreenViewport[1] + m_ScreenViewport[3], GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(m_ScreenViewport[0], m_ScreenViewport[1], m_ScreenViewport[2], m_ScreenViewport[3]);
+    m_ScaledActive = false;
 }
 
 void Renderer::EndScene() {
     m_DefaultShader->Unbind();
 }
 
-void Renderer::Submit(const Mesh& mesh, const glm::mat4& transform, const glm::vec4& albedo, bool useTexture, bool doubleSided, const std::vector<glm::mat4>* skinMatrices, int alphaMode, float alphaCutoff) {
+void Renderer::Submit(const Mesh& mesh, const glm::mat4& transform, const glm::vec4& albedo, bool useTexture, bool doubleSided, const std::vector<glm::mat4>* skinMatrices, int alphaMode, float alphaCutoff, const Texture* specularTexture) {
     m_DefaultShader->SetMat4("uModel", transform);
     m_DefaultShader->SetVec4("uAlbedo", albedo);
     m_DefaultShader->SetInt("uUseTexture", useTexture ? 1 : 0);
+    m_DefaultShader->SetInt("uUnlit", m_Sky ? 2 : (m_Unlit ? 1 : 0));
     m_DefaultShader->SetInt("uAlphaMode", alphaMode);
     m_DefaultShader->SetFloat("uAlphaCutoff", alphaCutoff);
+    m_DefaultShader->SetInt("uUseSpecularTexture", specularTexture ? 1 : 0);
+    if (specularTexture) specularTexture->BindUnit(1);
     const bool skinned = skinMatrices && !skinMatrices->empty();
     m_DefaultShader->SetInt("uSkinned", skinned ? 1 : 0);
     const size_t boneCount = skinned ? std::min<size_t>(skinMatrices->size(), 128) : 0;

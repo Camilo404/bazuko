@@ -1,4 +1,4 @@
-﻿#include "Window.hpp"
+#include "Window.hpp"
 #include "../renderer/GL.hpp"
 #include "../core/Log.hpp"
 #include <GLFW/glfw3.h>
@@ -24,6 +24,8 @@ Window::Window(const WindowConfig& config)
     // Habilitar expresamente que la ventana sea redimensionable y tenga decoraciones completas (maximizar, minimizar, cerrar)
     glfwWindowHint(GLFW_RESIZABLE, config.resizable ? GLFW_TRUE : GLFW_FALSE);
     glfwWindowHint(GLFW_DECORATED, GLFW_TRUE);
+    // Arranca maximizada (el tamano de la config queda como tamano al restaurar)
+    glfwWindowHint(GLFW_MAXIMIZED, config.resizable ? GLFW_TRUE : GLFW_FALSE);
 
     m_Window = glfwCreateWindow(m_Width, m_Height, config.title.c_str(), nullptr, nullptr);
     if (!m_Window) {
@@ -33,6 +35,14 @@ Window::Window(const WindowConfig& config)
 
     // Permitir redimensionar sin límite superior (pero con mínimo de 640x480)
     glfwSetWindowSizeLimits(m_Window, 640, 480, GLFW_DONT_CARE, GLFW_DONT_CARE);
+
+    // Si nace maximizada, el tamano real del framebuffer difiere del pedido
+    int framebufferWidth = 0, framebufferHeight = 0;
+    glfwGetFramebufferSize(m_Window, &framebufferWidth, &framebufferHeight);
+    if (framebufferWidth > 0 && framebufferHeight > 0) {
+        m_Width = framebufferWidth;
+        m_Height = framebufferHeight;
+    }
 
     glfwMakeContextCurrent(m_Window);
     glfwSwapInterval(config.vsync ? 1 : 0);

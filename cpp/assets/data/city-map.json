@@ -1,0 +1,481 @@
+{
+ "width": 120,
+ "height": 198,
+ "northRows": 37,
+ "tile": 2.0,
+ "codes": {
+  "b": "building",
+  "r": "road",
+  "B": "busway",
+  "s": "sidewalk",
+  "g": "grass",
+  "p": "plaza",
+  "w": "wall",
+  "W": "water",
+  "f": "floor",
+  "d": "dirt",
+  "R": "ruin",
+  "S": "storeD69",
+  "C": "colpatria",
+  "A": "colpatriaAnnex",
+  "M": "smallBuilding"
+ },
+ "rows": [
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwssrrrrrrBBBBBBrrrrrrsswwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrBBBBBBrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrBBBBBBrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrBBBBBBrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrBBBBBBrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrBBBBBBrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrBBBBBBrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrBBBBBBrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrBBBBBBrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrBBBBBBrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrBBBBBBrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrBBBBBBrrrrrrssssssssssssssrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrBBBBBBrrrrrrssssssssssssssrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrBBBBBBrrrrrrssssssssssssssrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrggggggrrrrrrssssssssssssssrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wbbbbssrrrrrrssRRRRRRRRRRRRssrrrrrrggggggrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssgggggpggggggssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssRRRRRRRRRRRRssrrrrrrggggggrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssgggggpggggggssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssRRRRRRRRRRRRssrrrrrrggggggrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssgggggpggggggssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssRRRddddddRRRssrrrrrrggggggrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssgggggpggggggssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssRRRddddddRRRssrrrrrrggggggrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssgggggpggggggssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssRRRddddddRRRssrrrrrrggggggrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssgggggpggggggssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssddddddddddddssrrrrrrggggggrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssppppppppppppssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssddddddddddddssrrrrrrggggggrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssgggggpggggggssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssRRRddddddRRRssrrrrrrggggggrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssgggggpggggggssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssRRRddddddRRRssrrrrrrggggggrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssgggggpggggggssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssRRRddddddRRRssrrrrrrggggggrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssgggggpggggggssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssRRRRRRRRRRRRssrrrrrrggggggrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssgggggpggggggssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssRRRRRRRRRRRRssrrrrrrggggggrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssgggggpggggggssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssRRRRRRRRRRRRssrrrrrrggggggrrrrrrssbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssgggggpggggggssrrrrrrssbbbbbw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrggggggrrrrrrssssssssssssssrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrggggggrrrrrrssssssssssssssrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrggggggrrrrrrssssssssssssssrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrggggggrrrrrrssssssssssssssrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wbbbbssrrrrrrssbbbbffffbbbbssrrrrrrggggggrrrrrrssggggppggggssrrrrrrssddddfffffffffssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbffffbbbbssrrrrrrggggggrrrrrrssggggppggggssrrrrrrssddddfffffffffssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbffffbbbbssrrrrrrggggggrrrrrrssggggppggggssrrrrrrssddddfffffffffssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssggggppggggssrrrrrrssddddfffffffffssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssggggppggggssrrrrrrssddddfffffffffssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssggggppggggssrrrrrrssddddfffffffffssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssppppppppppssrrrrrrssddddfffffffffssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrgsggggppggggssrrrrrrssddddfffffffffssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrggggggppggggssrrrrrrssddddfffffffffssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrggggggppggggssrrrrrrssddddfffffffffssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrggggggppggggssrrrrrrssddddfffffffffssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrggggggppggggssrrrrrrssddddfffffffffssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrggggggppggggssrrrrrrssddddfffffffffssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrsggggggbbbbbssrrrrrrssbbbbfffffffffssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssgggggggbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrMMMMMMrrrrrrssfgggggggbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrMMMMMMrrrrrrssffgggggggbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrMMMMMMrrrrrrssfffgggggggssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrMMMMMMrrrrrrssffffgggggggsrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrMMMMMMrrrrrrssfffffggggggsrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrMMMMMMrrrrrrssbfffffggggggrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssbbfffffgggggrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssbbbfffffggggrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssbbbbffffggggrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssbbbbbffffgggrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrggggggrrrrrrssssssssssssggrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrggggggrrrrrrssssssssssssggrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrCCCCCCCCCCCCsssssssssssssgrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrCCCCCCCCCCCCsssssssssssssgrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wbbbbssrrrrrrssbbbbbbbSSSSSssrrrrrrCCCCCCCCCCCCAAAAAbbbbfffsgrrrrrrssggggggpggggggssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbSSSSSssrrrrrrCCCCCCCCCCCCAAAAAbbbbfffsgrrrrrrssggggggpggggggssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbSSSSSssrrrrrrCCCCCCCCCCCCAAAAAbbbbfffsgrrrrrrssggggggpggggggssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbSSSSSssrrrrrrCCCCCCCCCCCCAAAAAbbbbfffsgrrrrrrssggggggpggggggssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbSSSSSssrrrrrrCCCCCCCCCCCCAAAAAbbbbfffsgrrrrrrssggggggpggggggssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbSSSSSssrrrrrrCCCCCCCCCCCCAAAAAbbbbfffsgrrrrrrsspppppppppppppssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbSSSSSssrrrrrrCCCCCCCCCCCCAAAAAbbbbfffsgrrrrrrssggggggpggggggssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrCCCCCCCCCCCCAAAAAbbbbfffsgrrrrrrssggggggpggggggssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrCCCCCCCCCCCCAAAAAbbbbfffsgrrrrrrssggggggpggggggssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrCCCCCCCCCCCCssbbbbbbbfffsgrrrrrrssggggggpggggggssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrCCCCCCCCCCCCssbbbbbbbfffsgrrrrrrssggggggpggggggssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssbbbbbbbfffsgrrrrrrssggggggpggggggssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrggggggrrrrrrsssssssssssssgrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrggggggrrrrrrsssssssssssssgrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrggggggrrrrrrsssssssssssgggrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wssssssrrrrrrssssssssssssssssrrrrrrggggggrrrrrrssssssssssggggrrrrrrsssssssssssssssssrrrrrrssssssssssssssssrrrrrrsssssssw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssbbbffffgggggrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssbbfffffgggggrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssbfffffggggggrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssfffffggggggsrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssffffggggggssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssfffgggggggssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssffggggggbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrggggggrrrrrrssfgggggggbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrBBBBBBrrrrrrssBBBBBBbbbbssrrrrrrssbbbbbbbbbbbbbssrrrrrrssbbbbbbbbbbbbssrrrrrrssbbbbbw",
+  "wgggggggggpggggggggggggggggggggggggggggggggBBBBBBBBBBBggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggggggggggggggggggBBBBBBBBBBBgggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wppppppppppppppppppppppppppppppppppppppppBBBBBBBBBBBpppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppw",
+  "wgggggggggpggggggggggggggggggggggggggggggBBBBBBBBBBgggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggggggggggggggggBBBBBBBBBBggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpggggggggggggggggggggppppppppBBBBBBBBBBgggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggpppppppgggggBBBBBBBBBBppggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggpppppgggggggggggBBBBBBBBBggpppppggggggggggggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpggggggggppppgggggWWWWWWWWWBBBBBBBBBWWgggggppppgggggggggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpggggggppppggggWWWWWWWWWWWBBBBBBBBBWWWWWWggggppppgggggggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpggggppppgggWWWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWgggppppgggggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggpppgggWWWWWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWWWgggpppggggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpggppgggWWWWWWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWWWWWWgggppgggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgppgggWWWWWWWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWWWWWWWgggppggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpppgggWWWWWWWWWWWWWWWWWWWBBBBBBBWWWWWWWWWWWWWWWWWWgggppgggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggppgggWWWWWWWWWWWWWWWWWWWWBBBBBBBWWWWWWWWWWWWWWWWWWWgggppggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wggggggggpppggWWWWWWWWWWWWWWWWWWWWWBBBBBBBWWWWWWWWWWWWWWWWWWWWggpppgggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wggggggggppgggWWWWWWWWWWWWWWWWWWWWWBBBBBBBWWWWWWWWWWWWWWWWWWWWgggppgggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wggggggggppggWWWWWWWWWWWWWWWWWWWWWWBBBBBBBWWWWWWWWWWWWWWWWWWWWWggppgggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggpppggWWWWWWWWWWWWWWWWWWWWWWBBBBBBBWWWWWWWWWWWWWWWWWWWWWggpppggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggpppggWWWWWWWWWWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWWWWWWWWWWWWggpppggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggpppggWWWWWWWWWWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWWWWWWWWWWWWggpppggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wggggggggppggWWWWWWWWWWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWWWWWWWWWWWWggppgggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wggggggggppgggWWWWWWWWWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWWWWWWWWWWWgggppgggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wggggggggpppggWWWWWWWWWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWWWWWWWWWWWggpppgggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggppgggWWWWWWWWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWWWWWWWWWWgggppggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpppgggWWWWWWWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWWWWWWWWWgggppgggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgppgggWWWWWWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWWWWWWWWgggppggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpggppgggWWWWWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWWWWWWWgggppgggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggpppgggWWWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWWWWWgggpppggggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpggggppppgggWWWWWWWWWWWWBBBBBBBBWWWWWWWWWWWWgggppppgggggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpggggggppppggggWWWWWWWWWBBBBBBBBWWWWWWWWWggggppppgggggggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpggggggggppppgggggWWWWWWBBBBBBBBWWWWWWgggggppppgggggggggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggpppppgggggggBBBBBBBBgggggggpppppggggggggggggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggpppppppgBBBBBBBBgpppppppggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggpggggggw",
+  "wgggggggggpggggggggggggggggggggpppBBBBBBBBpppgggggggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggggggggggBBBBBBBBggggggggggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggggggggggBBBBBBBBggggggggggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggggggggggBBBBBBBBggggggggggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggggggggggBBBBBBBBggggggggggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggggggggggBBBBBBBBggggggggggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggggggggggBBBBBBBBggggggggggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggggggggggBBBBBBBBggggggggggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggggggggggBBBBBBBBggggggggggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wpppppppppppppppppppppppppppppppppBBBBBBBBpppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppw",
+  "wgggggggggpgggggggggggggggggggggggBBBBBBBBggggggggggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggggggggggBBBBBBBBggggggggggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggggggggggBBBBBBBBggggggggggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wgggggggggpgggggggggggggggggggggggBBBBBBBBggggggggggggggggggggggggggggggggggggggggggggpgggggggggggggggggggggggggpggggggw",
+  "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww"
+ ],
+ "carreras": [
+  [
+   7,
+   12
+  ],
+  [
+   61,
+   66
+  ],
+  [
+   84,
+   89
+  ],
+  [
+   106,
+   111
+  ]
+ ],
+ "carrerasNames": [
+  "Carrera 15",
+  "Carrera 10",
+  "Carrera 8",
+  "Carrera 6"
+ ],
+ "calles": [
+  [
+   13,
+   18
+  ],
+  [
+   37,
+   42
+  ],
+  [
+   72,
+   77
+  ],
+  [
+   94,
+   99
+  ]
+ ],
+ "callesNames": [
+  "Calle 10",
+  "Calle 9",
+  "Calle 8",
+  "Calle 7"
+ ],
+ "caracasLanes": [
+  [
+   29,
+   34
+  ],
+  [
+   41,
+   46
+  ]
+ ],
+ "caracasBusway": [
+  35,
+  40
+ ],
+ "extensionParks": [
+  {
+   "x0": 92,
+   "x1": 103,
+   "z0": 21,
+   "z1": 34,
+   "name": "Parque de la Estación"
+  },
+  {
+   "x0": 69,
+   "x1": 81,
+   "z0": 80,
+   "z1": 91,
+   "name": "Parque del Sur"
+  }
+ ],
+ "reserved": {
+  "spawn": [
+   112.98,
+   97.84
+  ],
+  "bed": [
+   112.98,
+   94.64
+  ],
+  "sell": [
+   41.0,
+   92.0
+  ],
+  "dealer": [
+   41.0,
+   55.0
+  ],
+  "craft": [
+   45.0,
+   61.0
+  ],
+  "shop": [
+   108.0,
+   71.0
+  ]
+ },
+ "vendors": [
+  {
+   "name": "Chaza de don Efraín",
+   "x": 55.0,
+   "z": 49.0,
+   "rot": 1.5707963267948966,
+   "kind": "chaza",
+   "items": [
+    "cigarrillo",
+    "cafe",
+    "pan",
+    "agua"
+   ]
+  },
+  {
+   "name": "Fritanga La Mona",
+   "x": 95.0,
+   "z": 71.0,
+   "rot": 0,
+   "kind": "fritanga",
+   "items": [
+    "lataComida",
+    "pan",
+    "refresco"
+   ]
+  },
+  {
+   "name": "Dulces y minutos",
+   "x": 119.0,
+   "z": 96.0,
+   "rot": -1.5707963267948966,
+   "kind": "chaza",
+   "items": [
+    "cigarrillo",
+    "refresco",
+    "agua"
+   ]
+  },
+  {
+   "name": "Chaza del callejón",
+   "x": 49.0,
+   "z": 55.0,
+   "rot": 0,
+   "kind": "chaza",
+   "items": [
+    "cigarrillo",
+    "pan",
+    "agua"
+   ]
+  },
+  {
+   "name": "Chaza de la Carrera 8",
+   "x": 165.0,
+   "z": 110.0,
+   "rot": 1.5707963267948966,
+   "kind": "chaza",
+   "items": [
+    "agua",
+    "pan",
+    "cafe"
+   ]
+  },
+  {
+   "name": "Fritanga del Sur",
+   "x": 104.0,
+   "z": 141.0,
+   "rot": 0,
+   "kind": "fritanga",
+   "items": [
+    "lataComida",
+    "pan",
+    "refresco"
+   ]
+  }
+ ],
+ "pigeonParks": [
+  [
+   99.0,
+   115.0,
+   91.0,
+   113.0
+  ],
+  [
+   185.0,
+   205.0,
+   43.0,
+   67.0
+  ],
+  [
+   139.0,
+   161.0,
+   161.0,
+   181.0
+  ]
+ ],
+ "parkSigns": [
+  {
+   "x": 98.0,
+   "z": 90.0,
+   "lines": [
+    "Parque",
+    "Tercer Milenio"
+   ]
+  },
+  {
+   "x": 184.0,
+   "z": 54.0,
+   "lines": [
+    "Parque de la Estación",
+    "Bogotá"
+   ]
+  },
+  {
+   "x": 138.0,
+   "z": 170.0,
+   "lines": [
+    "Parque del Sur",
+    "Bogotá"
+   ]
+  },
+  {
+   "x": 150,
+   "z": 226,
+   "lines": [
+    "Parque del Lago",
+    "Lago · Puente TransMilenio"
+   ]
+  }
+ ],
+ "busRoute": {
+  "centerX": 75.0,
+  "endZ": -62,
+  "stationZ": -30
+ },
+ "streetLanes": {
+  "carreras": [
+   [
+    16.0,
+    22.0
+   ],
+   [
+    124.0,
+    130.0
+   ],
+   [
+    170.0,
+    176.0
+   ],
+   [
+    214.0,
+    220.0
+   ]
+  ]
+ }
+}
