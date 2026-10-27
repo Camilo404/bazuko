@@ -56,6 +56,21 @@ struct TalentDef {
     std::map<std::string, float> effects;
 };
 
+struct CambuchePieceDef {
+    std::string id;
+    std::string name;
+    std::string desc;
+    std::string needs;                               // pieza previa ("base") o vacio
+    std::vector<std::pair<std::string, int>> req;    // materiales (id de objeto, cantidad)
+};
+
+// Efectos de dormir segun lo construido (SLEEP de src/data/cambuche.js)
+struct SleepData {
+    float energia = 45.0f, energiaCama = 35.0f, salud = 10.0f, saludTecho = 15.0f;
+    float animoFogon = 15.0f, hambreFogon = 15.0f, vicioVela = 15.0f;
+    float roboProb = 0.25f, roboDinero = 0.4f, roboMaterial = 0.5f;
+};
+
 struct GameData {
     float costalBonus = 20.0f;
     std::vector<ItemDef> items;
@@ -64,10 +79,13 @@ struct GameData {
     std::vector<LootEntry> lootRare;
     std::vector<LootEntry> lootSubstance;
     std::vector<TalentDef> talents;
+    std::vector<CambuchePieceDef> cambuche;
+    SleepData sleep;
 
     const ItemDef* FindItem(const std::string& id) const;
     int ItemIndex(const std::string& id) const;   // -1 si no existe
     const TalentDef* FindTalent(const std::string& id) const;
+    const CambuchePieceDef* FindCambuchePiece(const std::string& id) const;
 
     // Valor acumulado de un efecto entre los talentos desbloqueados (reglas de TalentSystem.getEffect):
     // las claves con "Mult" o "Resist" multiplican, el resto suma.

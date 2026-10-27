@@ -1,5 +1,5 @@
 {
-  "generatedFrom": "src/data/items.js, src/data/talents.js",
+  "generatedFrom": "src/data/items.js, src/data/talents.js, src/data/cambuche.js",
   "costalBonus": 20,
   "items": [
     {
@@ -885,6 +885,75 @@
       "weight": 20
     }
   ],
+  "cambuche": [
+    {
+      "id": "base",
+      "name": "Base de cartón",
+      "req": {
+        "carton": 8
+      },
+      "needs": "",
+      "desc": "Para dormir sin tocar el piso. Sin base no se puede dormir."
+    },
+    {
+      "id": "techo",
+      "name": "Techo de lona",
+      "req": {
+        "lona": 1
+      },
+      "needs": "base",
+      "desc": "Duermes mejor: recuperas más salud."
+    },
+    {
+      "id": "paredes",
+      "name": "Paredes de tablas",
+      "req": {
+        "madera": 6
+      },
+      "needs": "base",
+      "desc": "Nadie te roba mientras duermes."
+    },
+    {
+      "id": "cama",
+      "name": "Colchón",
+      "req": {
+        "colchon": 1
+      },
+      "needs": "base",
+      "desc": "Recuperas mucha más energía al dormir."
+    },
+    {
+      "id": "fogon",
+      "name": "Fogón de latas",
+      "req": {
+        "lata": 6,
+        "madera": 2
+      },
+      "needs": "base",
+      "desc": "Calienta: despiertas con más ánimo y sin tanta hambre."
+    },
+    {
+      "id": "vela",
+      "name": "Vela y foto",
+      "req": {
+        "vela": 1
+      },
+      "needs": "base",
+      "desc": "Despiertas más tranquilo: calma el vicio."
+    }
+  ],
+  "sleep": {
+    "energia": 45,
+    "energiaCama": 35,
+    "salud": 10,
+    "saludTecho": 15,
+    "animoFogon": 15,
+    "hambreFogon": 15,
+    "vicioVela": 15,
+    "roboProb": 0.25,
+    "roboDinero": 0.4,
+    "roboMaterial": 0.5
+  },
   "branches": [
     {
       "id": "recoleccion",

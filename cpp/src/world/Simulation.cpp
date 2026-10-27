@@ -7,6 +7,7 @@
 #include "../character/CharacterAnimations.hpp"
 #include "../core/Log.hpp"
 #include "../core/Paths.hpp"
+#include "../game/Harvest.hpp"
 #include <limits>
 #include <queue>
 #include <unordered_map>
@@ -628,6 +629,12 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
             m_Pickups.push_back({variant, spot, false, true, 0.0f});
             ++placed;
         }
+        // Reserva renovable: cada bolsa inicial trae parte de los materiales de un cambuche completo
+        std::vector<size_t> bagIndices;
+        for (size_t index = 0; index < m_Pickups.size(); ++index)
+            if (!m_Pickups[index].container) bagIndices.push_back(index);
+        auto shelterLoot = DistributeShelterLoot(GameData::Get(), bagIndices.size(), m_Random);
+        for (size_t slot = 0; slot < bagIndices.size(); ++slot) m_Pickups[bagIndices[slot]].guaranteedLoot = std::move(shelterLoot[slot]);
     }
     const auto worldTile = [](float tile, int count) {
         return (tile + 0.5f) * CityLayout::TILE_SIZE - count * CityLayout::TILE_SIZE * 0.5f;
@@ -966,10 +973,16 @@ bool Simulation::CollectPickup(size_t index, PickupItem& pickup) {
     if (pickup.container) {
         m_Pickups[index].available = false;
         m_Pickups[index].cooldownRemaining = 120.0f;
+        m_Pickups[index].pendingLoot.clear();
+        m_Pickups[index].pendingSorted = false;
     } else {
         m_Pickups.erase(m_Pickups.begin() + static_cast<std::ptrdiff_t>(index));
     }
     return true;
+}
+
+void Simulation::RecycleGuaranteedLoot(const std::vector<std::string>& loot) {
+    if (!loot.empty()) m_RenewableLoot.push_back(loot);
 }
 
 void Simulation::RestorePickup(const PickupItem& pickup) {
@@ -980,6 +993,8 @@ void Simulation::RestorePickup(const PickupItem& pickup) {
         if (found != m_Pickups.end()) {
             found->available = true;
             found->cooldownRemaining = 0.0f;
+            found->pendingLoot = pickup.pendingLoot;
+            found->pendingSorted = pickup.pendingSorted;
         }
         return;
     }
@@ -1509,6 +1524,10 @@ void Simulation::UpdatePickups(float dt, const glm::vec3& playerPosition) {
         // Colocar bolsa
         const size_t variant = static_cast<size_t>(m_Unit(m_Random) * m_PickupMeshes.size()) % m_PickupMeshes.size();
         m_Pickups.push_back({variant, spot, false, true, 0.0f});
+        if (!m_RenewableLoot.empty()) {
+            m_Pickups.back().guaranteedLoot = std::move(m_RenewableLoot.front());
+            m_RenewableLoot.erase(m_RenewableLoot.begin());
+        }
         // Reaparición: 5–12 s (ciudad sucia pero no instantánea)
         m_PickupSpawnTimer = 5.0f + m_Unit(m_Random) * 7.0f;
         return;

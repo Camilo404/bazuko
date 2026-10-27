@@ -45,6 +45,11 @@ const TalentDef* GameData::FindTalent(const std::string& id) const {
     return found == talents.end() ? nullptr : &*found;
 }
 
+const CambuchePieceDef* GameData::FindCambuchePiece(const std::string& id) const {
+    const auto found = std::find_if(cambuche.begin(), cambuche.end(), [&](const CambuchePieceDef& piece) { return piece.id == id; });
+    return found == cambuche.end() ? nullptr : &*found;
+}
+
 float GameData::TalentEffect(const std::unordered_set<std::string>& unlocked, const std::string& key, float base) const {
     float value = base;
     for (const TalentDef& talent : talents) {
@@ -119,6 +124,20 @@ std::optional<GameData> GameData::LoadFromFile(const std::string& path, std::str
             for (const auto& [key, amount] : source.at("effects").items()) talent.effects[key] = amount.get<float>();
             data.talents.push_back(std::move(talent));
         }
+        for (const auto& source : json.at("cambuche")) {
+            CambuchePieceDef piece;
+            piece.id = source.at("id").get<std::string>();
+            piece.name = source.at("name").get<std::string>();
+            piece.desc = source.at("desc").get<std::string>();
+            piece.needs = source.value("needs", std::string{});
+            for (const auto& [item, quantity] : source.at("req").items()) piece.req.emplace_back(item, quantity.get<int>());
+            data.cambuche.push_back(std::move(piece));
+        }
+        const auto& sleep = json.at("sleep");
+        data.sleep = {sleep.at("energia").get<float>(), sleep.at("energiaCama").get<float>(), sleep.at("salud").get<float>(),
+                      sleep.at("saludTecho").get<float>(), sleep.at("animoFogon").get<float>(), sleep.at("hambreFogon").get<float>(),
+                      sleep.at("vicioVela").get<float>(), sleep.at("roboProb").get<float>(), sleep.at("roboDinero").get<float>(),
+                      sleep.at("roboMaterial").get<float>()};
         return data;
     } catch (const std::exception& problem) {
         return fail(std::string("JSON inválido: ") + problem.what());

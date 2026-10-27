@@ -148,7 +148,7 @@ add_executable(bazuko
     src/character/CharacterManager.cpp src/character/CharacterPreview.cpp src/character/Ragdoll.cpp
     src/world/CityLayout.cpp src/world/Simulation.cpp src/world/BirdFlock.cpp
     src/world/TextRaster.cpp src/world/SignAtlas.cpp
-    src/game/GameData.cpp
+    src/game/GameData.cpp src/game/Harvest.cpp
 )
 if(WIN32)
     set_target_properties(bazuko PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -190,6 +190,14 @@ target_compile_definitions(bazuko_gamedata_test PRIVATE BAZUKO_GAME_DATA_PATH="$
                            BAZUKO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(bazuko_gamedata_test PRIVATE glm::glm)
 add_test(NAME bazuko_gamedata COMMAND bazuko_gamedata_test)
+
+# Botin de las bolsas de basura: tiradas, probabilidades de objeto raro y reserva de materiales del cambuche
+add_executable(bazuko_harvest_test tests/HarvestTest.cpp src/game/Harvest.cpp src/game/GameData.cpp src/core/Paths.cpp)
+target_include_directories(bazuko_harvest_test PRIVATE src third_party/include)
+target_compile_definitions(bazuko_harvest_test PRIVATE BAZUKO_GAME_DATA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/data/game-data.json"
+                           BAZUKO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(bazuko_harvest_test PRIVATE glm::glm)
+add_test(NAME bazuko_harvest COMMAND bazuko_harvest_test)
 
 # Prueba de trafico con la simulacion real (ventana oculta para el contexto GL). No esta en CTest por defecto:
 #   build\Release\bazuko_traffic_test.exe [segundos] [semilla]

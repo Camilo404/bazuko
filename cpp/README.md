@@ -88,6 +88,13 @@ El orden de los objetos es fijo porque las partidas guardadas referencian su ín
 en el port (tela, alambre, plástico, mochila, arma casera, curita y cartón de rifa) se definen en el propio exportador.
 `ctest` ejecuta `bazuko_gamedata`, que comprueba el orden, la tienda y los efectos de los talentos.
 
+### Basura y clasificación
+
+Las bolsas y canecas dan botín por tiradas como en el original (`game/Harvest`): con `E` o con un toque de `Q` salen 2 objetos
+comunes (4 con adrenalina) y 5 % de uno raro; manteniendo `Q` 1,5 s se clasifica: 4 objetos (6) y 12 % de raro, con más riesgo
+de enfermar. Lo que no cabe en el costal se queda en la bolsa. Los materiales de un cambuche completo (cartón, tablas, latas,
+lona, colchón y vela) viajan en las bolsas y vuelven a aparecer cuando se recogen.
+
 ### Emisoras de radio
 
 Las emisoras disponibles se configuran en `assets/radio_stations.json`. Para añadir una, agrega un objeto a

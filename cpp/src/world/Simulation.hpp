@@ -95,11 +95,14 @@ struct StreetLamp {
 };
 
 struct PickupItem {
-    size_t itemIndex = 0;
+    size_t itemIndex = 0;        // variante visual de la bolsa (no es un objeto del inventario)
     glm::vec3 position{0.0f};
     bool container = false;
     bool available = true;
     float cooldownRemaining = 0.0f;
+    std::vector<std::string> guaranteedLoot;   // materiales de la reserva del cambuche que siempre trae esta bolsa
+    std::vector<std::string> pendingLoot;      // objetos que no cupieron en el costal y siguen en la bolsa
+    bool pendingSorted = false;
 };
 
 struct ShadowPerson {
@@ -156,6 +159,8 @@ public:
     std::vector<PickupItem> CollectPickups(const glm::vec3& position, float radius);
     bool CollectPickup(size_t index, PickupItem& pickup);
     void RestorePickup(const PickupItem& pickup);
+    // Devuelve a la reserva renovable el botin garantizado de una bolsa ya vaciada: la proxima bolsa que aparezca lo trae.
+    void RecycleGuaranteedLoot(const std::vector<std::string>& loot);
     const std::vector<PickupItem>& GetPickups() const { return m_Pickups; }
     size_t GetNearbyCar(const glm::vec3& position, float radius) const;
     size_t GetNearbyParkedCar(const glm::vec3& position, float radius) const;
@@ -406,6 +411,7 @@ private:
     std::shared_ptr<Mesh> m_MissionMarker;
     glm::vec3 m_MissionNpcPosition{3.0f, 0.0f, 0.0f};
     float m_PickupSpawnTimer = 0.0f;
+    std::vector<std::vector<std::string>> m_RenewableLoot;
     float m_Elapsed = 0.0f;
     std::vector<glm::vec3> m_ValidTrashSpots;  // Andenes limpios sin bloqueo
     glm::vec2 m_PlayerFacing{0.0f, 1.0f};      // Dirección de vista del jugador (XZ)

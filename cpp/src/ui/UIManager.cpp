@@ -1467,9 +1467,27 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
     else if (nearbyParkedCar < simulation.GetParkedCarCount()) interactionPrompt = "[E] Robar retrovisores del auto estacionado";
     else if (nearbyCar < simulation.GetTrafficCount()) interactionPrompt = "[E] Intentar robar retrovisores del auto";
     else if (simulation.IsNearShop(playerPos, 2.2f)) interactionPrompt = "[E] Tienda · comprar un articulo";
-    else if (nearContainer) interactionPrompt = "[E] Revisar caneca · buscar objetos";
-    else if (nearPickup) interactionPrompt = "[E] Recoger objeto del suelo";
+    else if (nearContainer) interactionPrompt = "[E] Revisar caneca · mantén [Q] para clasificar (más botín)";
+    else if (nearPickup) interactionPrompt = "[E] Recoger bolsa · mantén [Q] para clasificar (más botín)";
     else if (inventorySummary.find("Pan duro") != std::string::npos || inventorySummary.find("Botella agua") != std::string::npos || inventorySummary.find("Vendaje") != std::string::npos || inventorySummary.find("Curita") != std::string::npos || inventorySummary.find("Tinto") != std::string::npos || inventorySummary.find("Comida enlatada") != std::string::npos || inventorySummary.find("Refresco") != std::string::npos || inventorySummary.find("Tintico") != std::string::npos || inventorySummary.find("Pegante") != std::string::npos || inventorySummary.find("Pastilla") != std::string::npos || inventorySummary.find("Cigarrillo") != std::string::npos || inventorySummary.find("Jabón") != std::string::npos || inventorySummary.find("Cepillo") != std::string::npos || inventorySummary.find("Vacuna") != std::string::npos || inventorySummary.find("Carbón activo") != std::string::npos || inventorySummary.find("Jarabe") != std::string::npos || inventorySummary.find("Pomada") != std::string::npos || inventorySummary.find("Antiparasitario") != std::string::npos || inventorySummary.find("Antibiótico") != std::string::npos) interactionPrompt = "[E] Usar el primer consumible o medicamento del costal";
+    if (m_SortProgress >= 0.0f && !m_Paused) {
+        const bool complete = m_SortProgress >= 1.0f;
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y - 112.0f), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.80f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 10.0f));
+        if (ImGui::Begin("Clasificando", nullptr, hudFlags | ImGuiWindowFlags_NoInputs)) {
+            ImGui::PushFont(SignUI::GetFonts().mono14);
+            ImGui::TextColored(complete ? ImVec4(1.0f, 0.82f, 0.40f, 1.0f) : ImVec4(0.86f, 0.90f, 0.96f, 1.0f), "%s",
+                               complete ? "¡Lista! Suelta Q para recoger" : "Clasificando basura… mantén Q");
+            ImGui::PopFont();
+            SignUI::StatBar(m_SortProgress, complete ? IM_COL32(255, 209, 102, 255) : IM_COL32(39, 174, 96, 255), 260.0f, 10.0f);
+        }
+        ImGui::End();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(2);
+    }
+
     if (!interactionPrompt.empty()) {
         ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y - 62.0f), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.80f));

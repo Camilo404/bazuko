@@ -89,6 +89,12 @@ int main() {
     CHECK(near(data.TalentEffect({"crime1"}, "stealCaughtMult"), 0.8f), "stealCaughtMult con crime1");
     CHECK(near(data.TalentEffect({"collector1"}, "rareChanceMult"), 1.25f), "rareChanceMult con collector1");
 
+    // Cambuche y sueño (src/data/cambuche.js)
+    CHECK(data.cambuche.size() == 6 && data.cambuche[0].id == "base" && data.cambuche[0].needs.empty(), "piezas del cambuche");
+    const CambuchePieceDef* stove = data.FindCambuchePiece("fogon");
+    CHECK(stove && stove->needs == "base" && stove->req.size() == 2, "el fogon necesita la base, latas y madera");
+    CHECK(data.sleep.energia == 45.0f && data.sleep.roboProb == 0.25f && data.sleep.vicioVela == 15.0f, "constantes de dormir");
+
     if (g_failures == 0) std::printf("GameData: todo OK (%zu objetos, %zu productos, %zu talentos)\n", data.items.size(), data.shop.size(), data.talents.size());
     else std::printf("GameData: %d fallos\n", g_failures);
     return g_failures == 0 ? 0 : 1;

@@ -113,6 +113,8 @@ public:
     // Datos vivos de los menus de lugares; main los actualiza cada cuadro antes de RenderHUD.
     void SetPlaceMenuData(const std::vector<ShopOption>& shop, const std::vector<RecyclerRow>& recycler,
                           float money, float weight, float capacity);
+    // Progreso (0..1) de la clasificacion de basura con Q; negativo = no se esta clasificando.
+    void SetSortProgress(float fraction) { m_SortProgress = fraction; }
     std::string ConsumeShopPurchaseRequest();
     bool ConsumeRecyclerSellRequest();
     void ToggleCraftMenu();
@@ -201,6 +203,7 @@ private:
     bool m_InventorySortRequest = false;
     std::string m_TalentUnlockRequest;
     std::string m_DealerPurchaseRequest;
+    float m_SortProgress = -1.0f;
     std::string m_ShopTitle;
     std::string m_ShopSubtitle;
     std::vector<std::string> m_ShopFilter;

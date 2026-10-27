@@ -15,6 +15,7 @@
 #include "renderer/Model.hpp"
 #include "ui/UIManager.hpp"
 #include "game/GameData.hpp"
+#include "game/Harvest.hpp"
 #include "audio/AudioManager.hpp"
 #include "world/CityLayout.hpp"
 #include "world/Simulation.hpp"
@@ -131,6 +132,9 @@ int main(int argc, char** argv) {
     int level = 1;
     int talentPoints = 0;
     bool bigSack = false;   // Costal grande comprado en la tienda
+    bool sorting = false;   // manteniendo Q sobre una bolsa
+    float sortProgress = 0.0f;
+    glm::vec3 sortPosition{0.0f};
     std::unordered_set<std::string> unlockedTalents;
     std::string companionName = "El Chato";
     int companionCoat = 0;
@@ -255,6 +259,11 @@ int main(int argc, char** argv) {
     const auto talentEffect = [&](const std::string& key, float base = 1.0f) {
         return gameData.TalentEffect(unlockedTalents, key, base);
     };
+    const auto cambucheBuilt = [&](const std::string& id) {
+        const auto& state = simulation.GetCambucheState();
+        return id == "base" ? state.base : id == "techo" ? state.techo : id == "paredes" ? state.paredes
+             : id == "cama" ? state.cama : id == "fogon" ? state.fogon : id == "vela" ? state.vela : false;
+    };
     const auto inventoryCapacity = [&]() {
         return 20.0f + talentEffect("maxWeightBonus", 0.0f) + (bigSack ? gameData.costalBonus : 0.0f);
     };
@@ -358,9 +367,10 @@ int main(int argc, char** argv) {
         ui.SetSaveNotification("¡Partida nueva iniciada!");
         LogInfo("Partida nueva iniciada desde cero.");
     };
-    const auto tryInfectFromPickup = [&]() -> std::string {
-        float chance = 0.12f * (needs[4] < 30.0f ? 1.5f : 1.0f)
-            * talentEffect("diseaseResist") * characterManager.GetDiseaseResistance();
+    const auto tryInfectFromPickup = [&](bool sortedBag = false) -> std::string {
+        const float resistance = talentEffect("diseaseResist") * characterManager.GetDiseaseResistance()
+            * (sortedBag ? talentEffect("sortDiseaseMult") : 1.0f);
+        float chance = InfectionChance(sortedBag, resistance) * (needs[4] < 30.0f ? 1.5f : 1.0f);
         if (std::uniform_real_distribution<float>(0.0f, 1.0f)(lootRandom) >= chance) return {};
 
         const std::array<DiseaseState, 3> types{{
@@ -389,7 +399,9 @@ int main(int argc, char** argv) {
         inventoryWeight += item->weight;
         return true;
     };
-    auto collectNearbyPickup = [&](float radius) {
+    // Recolecta la bolsa o caneca mas cercana. `sorted`: se mantuvo Q el tiempo completo (mas botin y mas riesgo).
+    // Lo que no cabe en el costal se queda en la bolsa para la proxima vez.
+    auto harvestNearbyPickup = [&](float radius, bool sorted) {
         size_t nearest = simulation.GetPickups().size();
         float nearestDistance = radius;
         for (size_t index = 0; index < simulation.GetPickups().size(); ++index) {
@@ -399,43 +411,78 @@ int main(int argc, char** argv) {
         }
         PickupItem pickup;
         if (nearest >= simulation.GetPickups().size() || !simulation.CollectPickup(nearest, pickup)) return false;
-        const Item& item = lootTable[pickup.itemIndex];
-        if (inventoryWeight + item.weight > inventoryCapacity()) {
+
+        std::vector<std::string> items;
+        std::string rareFound;
+        bool bagSorted = sorted;
+        if (!pickup.pendingLoot.empty()) {
+            items = pickup.pendingLoot;
+            bagSorted = pickup.pendingSorted;
+        } else {
+            const HarvestParams params{boostActive, sorted, talentEffect("rareChanceMult"), characterManager.GetExtraLoot()};
+            HarvestResult result = RollHarvest(gameData, params, lootRandom, pickup.guaranteedLoot);
+            items = std::move(result.items);
+            rareFound = std::move(result.rare);
+        }
+        std::vector<std::string> added, leftover;
+        for (const std::string& id : items) (addLootById(id) ? added : leftover).push_back(id);
+        pickup.pendingLoot = leftover;
+        pickup.pendingSorted = bagSorted;
+        if (added.empty()) {
+            pickup.pendingLoot = items;
             simulation.RestorePickup(pickup);
             audio.Play(AudioCue::Full);
+            ui.SetPickupNotification("El costal está lleno: la bolsa conserva su contenido.");
             return false;
         }
-        auto entry = std::find_if(inventory.begin(), inventory.end(), [&](const InventoryEntry& value) { return value.itemIndex == pickup.itemIndex; });
-        if (entry == inventory.end()) inventory.push_back({pickup.itemIndex, 1}); else ++entry->quantity;
-        inventoryWeight += item.weight;
-        ++itemsCollected;
+        if (!leftover.empty()) simulation.RestorePickup(pickup);
+        else simulation.RecycleGuaranteedLoot(pickup.guaranteedLoot);
+
+        itemsCollected += static_cast<int>(added.size());
         awardXp(3);
-        if (item.id == "reloj") needs[5] = std::min(100.0f, needs[5] + 8.0f);
-        // Origen Reciclador: un objeto comun mas por cada bolsa (tabla de botin comun del original)
-        std::string extraItemName;
-        for (int extra = 0; extra < characterManager.GetExtraLoot(); ++extra) {
-            float totalWeight = 0.0f;
-            for (const LootEntry& entry : gameData.lootCommon) totalWeight += entry.weight;
-            float roll = std::uniform_real_distribution<float>(0.0f, totalWeight)(lootRandom);
-            for (const LootEntry& entry : gameData.lootCommon) {
-                roll -= entry.weight;
-                if (roll > 0.0f) continue;
-                if (const ItemDef* bonus = gameData.FindItem(entry.item); bonus && addLootById(bonus->id)) extraItemName = bonus->name;
-                break;
-            }
+        const auto isRareItem = [&](const std::string& id) {
+            const ItemDef* item = gameData.FindItem(id);
+            return item && (item->rarity == "rare" || item->rarity == "veryRare");
+        };
+        const bool foundRare = !rareFound.empty() || std::any_of(added.begin(), added.end(), isRareItem);
+        if (foundRare) needs[5] = std::min(100.0f, needs[5] + 8.0f);
+        const std::string contractedDisease = tryInfectFromPickup(bagSorted);
+        audio.Play(foundRare ? AudioCue::Treasure : AudioCue::Pickup);
+
+        // "+ Lata vacía ×2 (Común) · Reloj oxidado (Raro)"
+        std::string summary;
+        std::vector<std::string> shown;
+        for (const std::string& id : added) {
+            if (std::find(shown.begin(), shown.end(), id) != shown.end()) continue;
+            shown.push_back(id);
+            const ItemDef* item = gameData.FindItem(id);
+            if (!item) continue;
+            const int count = static_cast<int>(std::count(added.begin(), added.end(), id));
+            if (!summary.empty()) summary += " · ";
+            summary += item->name;
+            if (count > 1) summary += " ×" + std::to_string(count);
+            if (!item->rarityLabel.empty()) summary += " (" + item->rarityLabel + ")";
         }
-        const std::string contractedDisease = tryInfectFromPickup();
-        audio.Play(AudioCue::Pickup);
-        if (!contractedDisease.empty()) {
-            ui.SetPickupNotification("Te enfermaste de " + contractedDisease + " al rebuscar. Busca el tratamiento adecuado.");
-        } else if (item.id == "reloj") {
-            ui.SetPickupNotification("+ " + item.name + " · +8 de ánimo.");
-        } else if (!extraItemName.empty()) {
-            ui.SetPickupNotification("+ " + item.name + " · +" + extraItemName + " (origen Reciclador)");
-        } else {
-            ui.SetPickupNotification("+ " + item.name);
-        }
+        std::string message = std::string(bagSorted ? "Clasificaste: " : "+ ") + summary;
+        if (foundRare) message += " · +8 de ánimo";
+        if (!leftover.empty()) message += " · El costal se llenó: el resto sigue en la bolsa.";
+        if (!contractedDisease.empty()) message = "Te enfermaste de " + contractedDisease + " al rebuscar. " + message;
+        ui.SetPickupNotification(message, foundRare);
         return true;
+    };
+    // Empieza a clasificar la bolsa cercana: hay que mantener Q kSortSeconds; soltar antes recoge sin clasificar.
+    const auto beginSorting = [&](float radius) {
+        float nearestDistance = radius;
+        for (const PickupItem& pickup : simulation.GetPickups()) {
+            if (!pickup.available) continue;
+            const float distance = glm::distance(playerPos, pickup.position);
+            if (distance >= nearestDistance) continue;
+            nearestDistance = distance;
+            sortPosition = pickup.position;
+            sorting = true;
+            sortProgress = 0.0f;
+        }
+        return sorting;
     };
     const auto inventoryCount = [&](const std::string& id) {
         int count = 0;
@@ -755,8 +802,22 @@ int main(int argc, char** argv) {
                     }
                 }
                 } else {
-                    collectNearbyPickup(1.8f);
+                    beginSorting(1.8f);
                 }
+            }
+        }
+        if (sorting) {
+            const bool canSort = !ui.IsPaused() && !characterCreatorUI.IsOpen() && !ui.IsDeathScreenOpen();
+            if (!canSort || glm::distance(playerPos, sortPosition) > 2.2f) {
+                sorting = false;
+                sortProgress = 0.0f;
+            } else if (Input::IsKeyDown(GLFW_KEY_Q)) {
+                sortProgress = std::min(kSortSeconds, sortProgress + std::max(0.0f, dt));
+            } else {
+                const bool complete = sortProgress >= kSortSeconds;
+                sorting = false;
+                sortProgress = 0.0f;
+                harvestNearbyPickup(2.2f, complete);
             }
         }
         if (!ui.IsPaused() && Input::IsKeyPressed(GLFW_KEY_F)) {
@@ -973,7 +1034,7 @@ int main(int argc, char** argv) {
                 }
             } else if (nearShop) {
                 ui.OpenShopMenu("Tienda La Esquinita", "Doña Rosa fía, pero solo a los conocidos.");
-            } else if (collectNearbyPickup(1.8f)) {
+            } else if (harvestNearbyPickup(1.8f, false)) {
             } else {
                 auto usable = std::find_if(inventory.begin(), inventory.end(), [&](const InventoryEntry& entry) {
                     const Item& item = lootTable[entry.itemIndex];
@@ -1057,16 +1118,17 @@ int main(int argc, char** argv) {
                     }
                 };
                 bool canBuild = false;
-                if (buildRequest == "base"    && countItem("madera") >= 4 && countItem("carton") >= 3) { consumeItem("madera", 4); consumeItem("carton", 3); canBuild = true; }
-                else if (buildRequest == "techo"   && countItem("lona") >= 1 && countItem("plastico") >= 2)  { consumeItem("lona", 1); consumeItem("plastico", 2); canBuild = true; }
-                else if (buildRequest == "paredes" && countItem("carton") >= 4 && countItem("alambre") >= 1) { consumeItem("carton", 4); consumeItem("alambre", 1); canBuild = true; }
-                else if (buildRequest == "cama"    && countItem("carton") >= 2 && countItem("tela") >= 2)    { consumeItem("carton", 2); consumeItem("tela", 2); canBuild = true; }
-                else if (buildRequest == "fogon"   && countItem("lata") >= 2 && countItem("madera") >= 1)    { consumeItem("lata", 2); consumeItem("madera", 1); canBuild = true; }
-                else if (buildRequest == "vela"    && countItem("vela") >= 1)                                { consumeItem("vela", 1); canBuild = true; }
+                const CambuchePieceDef* piece = gameData.FindCambuchePiece(buildRequest);
+                if (piece && !cambucheBuilt(piece->id) && (piece->needs.empty() || cambucheBuilt(piece->needs))
+                    && std::all_of(piece->req.begin(), piece->req.end(),
+                                   [&](const auto& need) { return countItem(need.first) >= need.second; })) {
+                    for (const auto& need : piece->req) consumeItem(need.first, need.second);
+                    canBuild = true;
+                }
                 if (canBuild && simulation.BuildCambuchePiece(buildRequest)) {
                     awardXp(15);
                     audio.Play(AudioCue::Treasure);
-                    ui.SetPickupNotification("Construiste: " + buildRequest + ". ¡El cambuche crece!");
+                    ui.SetPickupNotification("Construiste: " + piece->name + ". ¡El cambuche crece!");
                     saveGame("Cambuche actualizado");
                 }
             }
@@ -1263,6 +1325,7 @@ int main(int argc, char** argv) {
                 }
             }
             ui.SetPlaceMenuData(shopOptions, recyclerRows, money, inventoryWeight, inventoryCapacity());
+            ui.SetSortProgress(sorting ? sortProgress / kSortSeconds : -1.0f);
         }
         ui.RenderHUD(dt, playerPos, camera, renderer, window, city, simulation, audio,
                      characterManager.GetLook().nombre, characterManager.GetOriginInfo().name,
@@ -1387,38 +1450,22 @@ int main(int argc, char** argv) {
                 return qty;
             };
             const auto& cs = simulation.GetCambucheState();
-            const std::vector<CambuchePieceOption> cambuchePieces{
-                {"base",    "Base (tarima de madera y cartón)",
-                 "Madera (" + std::to_string(countItem("madera")) + "/4) · Cartón (" + std::to_string(countItem("carton")) + "/3)",
-                 "",
-                 cs.base, false,
-                 !cs.base && countItem("madera") >= 4 && countItem("carton") >= 3},
-                {"techo",   "Techo (lona y plástico)",
-                 "Lona (" + std::to_string(countItem("lona")) + "/1) · Plástico (" + std::to_string(countItem("plastico")) + "/2)",
-                 "Requiere base",
-                 cs.techo, !cs.base,
-                 cs.base && !cs.techo && countItem("lona") >= 1 && countItem("plastico") >= 2},
-                {"paredes", "Paredes (cartón y alambre)",
-                 "Cartón (" + std::to_string(countItem("carton")) + "/4) · Alambre (" + std::to_string(countItem("alambre")) + "/1)",
-                 "Requiere base",
-                 cs.paredes, !cs.base,
-                 cs.base && !cs.paredes && countItem("carton") >= 4 && countItem("alambre") >= 1},
-                {"cama",    "Cama (cartón y tela)",
-                 "Cartón (" + std::to_string(countItem("carton")) + "/2) · Tela (" + std::to_string(countItem("tela")) + "/2)",
-                 "Requiere base",
-                 cs.cama, !cs.base,
-                 cs.base && !cs.cama && countItem("carton") >= 2 && countItem("tela") >= 2},
-                {"fogon",   "Fogón de latas (latas y madera)",
-                 "Lata (" + std::to_string(countItem("lata")) + "/2) · Madera (" + std::to_string(countItem("madera")) + "/1)",
-                 "Requiere base",
-                 cs.fogon, !cs.base,
-                 cs.base && !cs.fogon && countItem("lata") >= 2 && countItem("madera") >= 1},
-                {"vela",    "Vela encendida",
-                 "Vela (" + std::to_string(countItem("vela")) + "/1)",
-                 "Requiere base",
-                 cs.vela, !cs.base,
-                 cs.base && !cs.vela && countItem("vela") >= 1}
-            };
+            std::vector<CambuchePieceOption> cambuchePieces;
+            for (const CambuchePieceDef& piece : gameData.cambuche) {
+                const bool built = cambucheBuilt(piece.id);
+                const bool locked = !piece.needs.empty() && !cambucheBuilt(piece.needs);
+                bool enough = true;
+                std::string requirements;
+                for (const auto& need : piece.req) {
+                    const int have = countItem(need.first);
+                    enough = enough && have >= need.second;
+                    const ItemDef* material = gameData.FindItem(need.first);
+                    if (!requirements.empty()) requirements += " · ";
+                    requirements += (material ? material->name : need.first) + " (" + std::to_string(have) + "/" + std::to_string(need.second) + ")";
+                }
+                cambuchePieces.push_back({piece.id, piece.name, locked ? "Primero arma la base." : piece.desc,
+                                          built || locked ? std::string{} : requirements, built, locked, !built && !locked && enough});
+            }
             ui.RenderCambucheMenu(cambuchePieces, cs.base, simulation.IsNight());
         }
 

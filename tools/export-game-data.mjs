@@ -8,6 +8,7 @@ import {
   ITEMS, SHOP_ITEMS, LOOT_COMMON, LOOT_RARE, LOOT_SUBSTANCE, COSTAL_BONUS, isRecyclable, itemRarityLabel
 } from '../src/data/items.js';
 import { TALENTS, BRANCHES } from '../src/data/talents.js';
+import { CAMBUCHE, SLEEP } from '../src/data/cambuche.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const out = resolve(root, 'cpp/assets/data/game-data.json');
@@ -60,7 +61,7 @@ function exportItem(id) {
 
 const ids = [...LEGACY_ORDER, ...Object.keys(ITEMS).filter((id) => !LEGACY_ORDER.includes(id))];
 const data = {
-  generatedFrom: 'src/data/items.js, src/data/talents.js',
+  generatedFrom: 'src/data/items.js, src/data/talents.js, src/data/cambuche.js',
   costalBonus: COSTAL_BONUS,
   items: ids.map(exportItem),
   shop: SHOP_ITEMS.map((entry) => ({
@@ -74,6 +75,8 @@ const data = {
   lootCommon: LOOT_COMMON,
   lootRare: LOOT_RARE,
   lootSubstance: LOOT_SUBSTANCE,
+  cambuche: CAMBUCHE.map(({ id, name, req, needs, desc }) => ({ id, name, req, needs: needs ?? '', desc })),
+  sleep: SLEEP,
   branches: BRANCHES.map(({ id, name }) => ({ id, name })),
   talents: Object.values(TALENTS).map((talent) => ({
     id: talent.id,
