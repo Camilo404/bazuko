@@ -185,38 +185,6 @@ canvas { display: block; width: 100vw; height: 100vh; }
 .talent-node .talent-cost { color: #ffd166; font-size: 11px; margin-top: 4px; }
 .talent-hint { color: #666; font-size: 11px; margin-top: 12px; text-align: center; }
 
-/* === Panel de crafteo === */
-#craft-panel {
-  position: fixed; top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 500px; max-width: 95vw; max-height: 80vh;
-  background: rgba(15,15,20,0.97);
-  border: 2px solid #27ae60;
-  padding: 16px;
-  font-family: monospace; color: #ddd;
-  display: none; flex-direction: column;
-  overflow-y: auto; z-index: 200;
-}
-#craft-panel.open { display: flex; }
-.craft-header { border-bottom: 1px solid #444; padding-bottom: 8px; margin-bottom: 12px; }
-.craft-header h2 { color: #27ae60; font-size: 18px; }
-.craft-recipes { display: flex; flex-direction: column; gap: 10px; }
-.craft-recipe {
-  border: 1px solid #333; padding: 10px;
-  background: rgba(0,0,0,0.4);
-}
-.craft-recipe.craftable { border-color: #27ae60; }
-.recipe-name { font-weight: bold; color: #eee; margin-bottom: 4px; }
-.recipe-ingredients { font-size: 12px; margin-bottom: 6px; }
-.recipe-ingredients .ing-ok { color: #27ae60; }
-.recipe-ingredients .ing-missing { color: #c0392b; }
-.craft-btn {
-  background: #27ae60; color: #fff; border: none;
-  padding: 4px 12px; cursor: pointer; font-family: monospace;
-}
-.craft-btn:disabled { background: #444; cursor: not-allowed; }
-.craft-hint { color: #666; font-size: 11px; margin-top: 12px; text-align: center; }
-
 /* === Controles help === */
 #camera-controls {
   position: fixed; top: 55px; left: 12px;

@@ -3,7 +3,10 @@ import { TALENTS, BRANCHES } from '../data/talents.js';
 import { XP_PER_LEVEL, XP_CRAFT } from '../utils/constants.js';
 import { NEEDS } from '../systems/StatsSystem.js';
 import { cop } from '../utils/money.js';
-import { itemRarityLabel } from '../data/items.js';
+import { ITEMS, itemRarityLabel } from '../data/items.js';
+import { itemArtHTML, itemCategory } from './itemArt.js';
+
+const NEED_LABELS = { hambre: 'hambre', sed: 'sed', energia: 'energía', salud: 'salud', higiene: 'higiene', animo: 'ánimo', vicio: 'vicio' };
 
 export class HUD {
   constructor() {
@@ -66,6 +69,8 @@ export class HUD {
     this._talentOpen = false;
     this._craftOpen = false;
     this._dealerOpen = false;
+    this._craftSelected = null;
+    this.craftPanel?.addEventListener('click', (e) => this._onCraftClick(e));
 
     // Toasts
     this._bindEvents();
@@ -183,6 +188,7 @@ export class HUD {
     if (this._craftOpen) {
       const game = window.__game;
       if (game?.crafting && game.inventory) this.renderCrafting(game.crafting, game.inventory, game.talents);
+      this.craftPanel?.querySelector?.('.craft-recipe.selected')?.focus({ preventScroll: true });
     }
   }
 
@@ -493,46 +499,135 @@ else if (type === 'cart') text = interaction.currentTarget?.isAttached ? '[E] So
 
   renderCrafting(craftingSystem, inventory, talentSystem) {
     if (!this.craftPanel) return;
+    this._craftCtx = { craftingSystem, inventory, talentSystem };
     const recipes = craftingSystem.getAvailable(inventory);
+    // La selección sobrevive a los redibujados; por defecto, la primera receta lista.
+    if (!recipes.some((r) => r.id === this._craftSelected)) {
+      this._craftSelected = (recipes.find((r) => r.craftable && r.fits !== false) ?? recipes[0])?.id ?? null;
+    }
 
-    const recipesHtml = recipes.map((r) => {
-      const ingredients = Object.entries(r.ingredients).map(([id, qty]) => {
-        const have = inventory.count(id);
-        const ok = have >= qty;
-        return `<span class="${ok ? 'ing-ok' : 'ing-missing'}">${id} (${have}/${qty})</span>`;
-      }).join(', ');
-
+    const slots = recipes.map((r) => {
+      const ready = r.craftable && r.fits !== false;
+      const heavy = r.craftable && !ready;
+      const selected = r.id === this._craftSelected;
+      const state = ready ? 'disponible' : heavy ? 'no cabe en el costal' : 'faltan materiales';
+      const cls = ['craft-recipe', `cat-${itemCategory(r.result)}`, ready && 'craftable', heavy && 'heavy', selected && 'selected']
+        .filter(Boolean).join(' ');
+      const flag = ready ? '✓' : heavy ? 'kg' : '';
       return `
-        <div class="craft-recipe ${r.craftable ? 'craftable' : ''}" data-id="${r.id}">
-          <div class="recipe-name">${r.emoji} ${r.name} x${r.qty}</div>
-          <div class="recipe-ingredients">${ingredients}</div>
-          <button class="craft-btn" ${r.craftable ? '' : 'disabled'}>Craftear</button>
-        </div>
+        <button type="button" class="${cls}" data-id="${r.id}" aria-pressed="${selected}" aria-label="${r.name} ×${r.qty}: ${state}">
+          ${itemArtHTML(r.result, 'craft-slot-art')}
+          <span class="craft-slot-qty">×${r.qty}</span>
+          ${flag ? `<span class="craft-slot-flag" aria-hidden="true">${flag}</span>` : ''}
+          <span class="craft-slot-name">${r.name}</span>
+        </button>
       `;
     }).join('');
 
-    if (!this._setHTML(this.craftPanel, `
-      <div class="craft-header">
-        <h2>🔨 Mesa de Crafteo</h2>
+    this._setHTML(this.craftPanel, `
+      <header class="craft-header">
+        ${itemArtHTML('yunque', 'craft-header-art')}
+        <h2>Mesa de Crafteo</h2>
+        <span class="craft-load" title="Carga del costal">${inventory.totalWeight.toFixed(1)}/${inventory.maxWeight} kg</span>
+        <button type="button" class="craft-close" data-act="close" aria-label="Cerrar mesa de crafteo">✕</button>
+      </header>
+      <div class="craft-body">
+        <div class="craft-recipes" aria-label="Recetas">${slots}</div>
+        ${this._craftBench(recipes.find((r) => r.id === this._craftSelected), inventory)}
       </div>
-      <div class="craft-recipes">${recipesHtml}</div>
-      <div class="craft-hint">Pulsa C o ESC para cerrar.</div>
-    `)) return;
+      <div class="craft-hint">Clic: elegir receta · C / Esc: cerrar</div>
+    `);
+  }
 
-    this.craftPanel.querySelectorAll('.craft-recipe.craftable .craft-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const recipeEl = btn.closest('.craft-recipe');
-        const id = recipeEl.dataset.id;
-        const recipe = craftingSystem.recipes.find((r) => r.id === id);
-        if (recipe) {
-          const result = craftingSystem.craft(recipe, inventory);
-          if (result && window.__game) {
-            window.__game.stats.addXP(XP_CRAFT, window.__game.talents);
-          }
-          this.renderCrafting(craftingSystem, inventory, talentSystem);
-        }
-      });
-    });
+  /** Banco de trabajo: resultado grande, materiales y acción principal. */
+  _craftBench(r, inventory) {
+    if (!r) return '<section class="craft-bench"><p class="craft-reason">No hay recetas.</p></section>';
+    const item = ITEMS[r.result];
+    const ready = r.craftable && r.fits !== false;
+    let missing = 0;
+    const mats = Object.entries(r.ingredients).map(([id, qty]) => {
+      const have = inventory.count(id);
+      const ok = have >= qty;
+      missing += Math.max(0, qty - have);
+      return `
+        <li class="craft-mat cat-${itemCategory(id)} ${ok ? 'ok' : 'missing'}">
+          ${itemArtHTML(id, 'craft-mat-art')}
+          <span class="craft-mat-name">${ITEMS[id]?.name ?? id}</span>
+          <span class="craft-mat-count">${Math.min(have, qty)}/${qty}</span>
+          <span class="craft-mat-flag" title="${ok ? 'Suficiente' : 'Falta'}">${ok ? '✓' : '✗'}</span>
+        </li>
+      `;
+    }).join('');
+    const state = ready ? 'ready' : r.craftable ? 'heavy' : 'missing';
+    const reason = ready ? 'Listo para fabricar'
+      : r.craftable ? 'No te cabe en el costal'
+      : missing === 1 ? 'Te falta 1 material' : `Te faltan ${missing} materiales`;
+
+    return `
+      <section class="craft-bench cat-${itemCategory(r.result)} ${state}">
+        <div class="craft-pedestal">
+          ${itemArtHTML(r.result, 'craft-result-art')}
+          <span class="craft-yield">×${r.qty}</span>
+        </div>
+        <h3 class="craft-result-name">${r.name}</h3>
+        <p class="craft-effect">${this._craftEffect(item)}</p>
+        <h4 class="craft-mats-title">Materiales</h4>
+        <ul class="craft-mats">${mats}</ul>
+        <p class="craft-reason" role="status">${reason}</p>
+        <button type="button" class="craft-go" data-act="craft" ${ready ? '' : 'disabled'}>
+          ${itemArtHTML('yunque', 'craft-go-art')}<span>Fabricar</span>
+        </button>
+      </section>
+    `;
+  }
+
+  /** Una línea con lo que hace el objeto, a partir de sus datos reales. */
+  _craftEffect(item) {
+    if (!item) return '';
+    const parts = [];
+    if (item.consumable) parts.push(`+${item.amount} ${NEED_LABELS[item.consumable]}`);
+    for (const k of NEEDS) {
+      if (k !== item.consumable && item[k]) parts.push(`${item[k] > 0 ? '+' : ''}${item[k]} ${NEED_LABELS[k]}`);
+    }
+    if (item.cure) parts.push(`Cura: ${item.cure}`);
+    if (!parts.length) parts.push(item.usable ? 'Se usa desde el inventario' : `Se vende por ${cop(item.value)}`);
+    parts.push(`${item.weight} kg`);
+    return parts.join(' · ');
+  }
+
+  _onCraftClick(e) {
+    const target = e.target.closest?.('[data-act], .craft-recipe');
+    if (!target || !this._craftCtx) return;
+    const { craftingSystem, inventory, talentSystem } = this._craftCtx;
+    if (target.dataset.act === 'close') { this.toggleCraftPanel(); return; }
+
+    if (target.dataset.act !== 'craft') {
+      this._craftSelected = target.dataset.id;
+      this.renderCrafting(craftingSystem, inventory, talentSystem);
+      this.craftPanel.querySelector('.craft-recipe.selected')?.focus({ preventScroll: true });
+      return;
+    }
+
+    const recipe = craftingSystem.recipes.find((r) => r.id === this._craftSelected);
+    if (!recipe) return;
+    const game = window.__game;
+    const result = craftingSystem.craft(recipe, inventory);
+    if (result) {
+      game?.stats?.addXP(XP_CRAFT, game.talents);
+      game?.audio?.play('treasure');
+    } else {
+      game?.audio?.play('full');
+    }
+    this.renderCrafting(craftingSystem, inventory, talentSystem);
+    const bench = this.craftPanel.querySelector('.craft-bench');
+    if (result && bench) {
+      // Reinicia la animación aunque el HTML no haya cambiado.
+      bench.classList.remove('just-crafted');
+      void bench.offsetWidth;
+      bench.classList.add('just-crafted');
+    }
+    (this.craftPanel.querySelector('.craft-go:not([disabled])') ?? this.craftPanel.querySelector('.craft-recipe.selected'))
+      ?.focus({ preventScroll: true });
   }
 
   renderDealer(dealer = null) {

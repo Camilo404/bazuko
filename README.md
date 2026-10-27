@@ -165,7 +165,7 @@ Las pruebas automatizadas cubren colisiones, cámaras, visibilidad de edificios,
 
 ## Estructura
 
-El archivo [AGENTS.md](AGENTS.md) reúne el contexto técnico, los comandos de trabajo, los puntos de entrada y las decisiones que deben conservarse al continuar el desarrollo. La procedencia de las integraciones está documentada en [modelos importados](docs/modelos-importados.md) e [integración de funcionalidades](docs/integracion-cristian.md).
+El archivo [AGENTS.md](AGENTS.md) reúne el contexto técnico, los comandos de trabajo, los puntos de entrada y las decisiones que deben conservarse al continuar el desarrollo. La procedencia de las integraciones está documentada en [modelos importados](docs/modelos-importados.md) e [integración de funcionalidades](docs/integracion-cristian.md). Los iconos de la mesa de fabricación y sus autores se detallan en [iconos de objetos](docs/iconos.md).
 
 ```text
 src/
