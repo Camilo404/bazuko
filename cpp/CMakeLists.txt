@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
 project(bazuko_cpp VERSION 1.0.0 LANGUAGES C CXX)
+if(WIN32)
+    enable_language(RC)   # icono del ejecutable (resources/bazuko.rc)
+endif()
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
@@ -152,6 +155,7 @@ add_executable(bazuko
     src/audio/RadioSynth.cpp src/world/SafeSpawn.cpp
 )
 if(WIN32)
+    target_sources(bazuko PRIVATE resources/bazuko.rc)
     set_target_properties(bazuko PROPERTIES WIN32_EXECUTABLE TRUE)
     if(MSVC)
         target_link_options(bazuko PRIVATE "/SUBSYSTEM:WINDOWS" "/ENTRY:mainCRTStartup")

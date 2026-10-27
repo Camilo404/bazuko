@@ -1,0 +1,2 @@
+// Icono del ejecutable (Explorador, barra de tareas y barra de titulo). GLFW usa el recurso GLFW_ICON.
+GLFW_ICON ICON "bazuko.ico"
