@@ -94,6 +94,8 @@ struct BusState {
     float endZ = 0.0f;
     float stationZ = 0.0f;
     float direction = -1.0f;
+    float laneX = 0.0f;               // carril del eje del viaducto (78,5 hacia el norte, 71,5 hacia el sur)
+    glm::vec2 heading{0.0f, -1.0f};   // direccion de la marcha (x, z): sigue la curva del rodeo de Colpatria
     bool servedStation = false;
     // Sobre el viaducto: a esa altura no interactua con lo que pasa por la calle inferior
     bool Elevated() const { return position.y > 1.6f; }
@@ -183,6 +185,10 @@ public:
     // Devuelve a la reserva renovable el botin garantizado de una bolsa ya vaciada: la proxima bolsa que aparezca lo trae.
     void RecycleGuaranteedLoot(const std::vector<std::string>& loot);
     const std::vector<PickupItem>& GetPickups() const { return m_Pickups; }
+    // Posiciones de los elementos fijos de la calle (para pruebas de colocacion)
+    std::vector<glm::vec3> StreetLampPositions() const { std::vector<glm::vec3> r; for (const auto& l : m_StreetLamps) r.push_back(l.position); return r; }
+    std::vector<glm::vec3> TrafficSignalPoles() const { std::vector<glm::vec3> r; for (const auto& s : m_TrafficSignals) r.push_back(s.polePosition); return r; }
+    const std::vector<StreetVendor>& GetStreetVendors() const { return m_StreetVendors; }
     size_t GetNearbyCar(const glm::vec3& position, float radius) const;
     size_t GetNearbyParkedCar(const glm::vec3& position, float radius) const;
     size_t GetNearbyPedestrian(const glm::vec3& position, float radius) const;
@@ -369,6 +375,10 @@ private:
     std::shared_ptr<Model> m_VendorCartModel;
     std::shared_ptr<Model> m_GrassModel;
     std::array<std::shared_ptr<Model>, 2> m_BirdModels;
+    // Aves por piezas (cuerpo, ala izquierda interior/exterior, ala derecha interior/exterior): permiten batir las alas
+    // con hombro y muneca. Si faltan, se dibuja el modelo completo rigido.
+    static constexpr size_t kBirdPartCount = 5;
+    std::array<std::array<std::shared_ptr<Model>, kBirdPartCount>, 2> m_BirdParts;
     std::shared_ptr<Model> m_RatModel;
     std::shared_ptr<Model> m_PetModel;
     glm::mat4 m_CarModelFit{1.0f};

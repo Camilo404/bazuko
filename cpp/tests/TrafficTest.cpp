@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
     float movedTotal = 0.0f;
     int stuckEvents = 0;
     float busStopped = 0.0f, busWorst = 0.0f;
-    long overlapFrames = 0, frames = 0;
+    long overlapFrames = 0, frames = 0, offRoadFrames = 0;
     for (float t = 0.0f; t < totalSeconds; t += dt) {
         simulation.Update(dt, farPlayer);
         const auto& cars = simulation.GetTrafficVehicles();
@@ -55,6 +55,12 @@ int main(int argc, char** argv) {
         busWorst = std::max(busWorst, busStopped);
         // carros cuyos centros estan a menos de 2 m (la longitud es 4.3 m) estan atravesados entre si
         ++frames;
+        // los carros circulan por calzada: ningun centro cae fuera de la calzada
+        for (size_t a = 0; a < count; ++a) {
+            if (city.IsRoad(cars[a].position.x, cars[a].position.z)) continue;
+            ++offRoadFrames;
+            if (offRoadFrames < 4) std::printf("  carro %zu fuera de la calzada en (%.1f, %.1f), ruta %zu\n", a, cars[a].position.x, cars[a].position.z, cars[a].routeIndex);
+        }
         bool anyOverlap = false;
         for (size_t a = 0; a < count && !anyOverlap; ++a)
             for (size_t b = a + 1; b < count; ++b)
@@ -119,5 +125,6 @@ int main(int argc, char** argv) {
                 seed, totalSeconds, count, movedTotal, globalWorst, stuckEvents);
     glfwDestroyWindow(window);
     glfwTerminate();
+    if (offRoadFrames > 0) { std::printf("FALLO: carros fuera de la calzada en %ld cuadros\n", offRoadFrames); ++stuckEvents; }
     return stuckEvents == 0 ? 0 : 1;
 }

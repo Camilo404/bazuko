@@ -19,9 +19,9 @@ static int g_failures = 0;
 int main() {
     using namespace Viaduct;
 
-    // Alturas: a ras fuera del tablero, 7,82 m en la cresta, sin saltos y con pendiente acotada
+    // Alturas (marco del original): a ras fuera del tablero, 7,82 m en la cresta, sin saltos y con pendiente acotada
     CHECK(Height(-200.0f) == kBase && Height(kEndZ) == kBase && Height(kEndZ + 5.0f) == kBase, "fuera del tablero va a ras");
-    CHECK(std::fabs(Height(0.0f) - 7.82f) < 0.001f, "la cresta mide 7,82 m: %.3f", Height(0.0f));
+    CHECK(std::fabs(Height(100.0f) - 7.82f) < 0.001f, "la cresta mide 7,82 m: %.3f", Height(100.0f));
     float previous = Height(kStartZ - 5.0f), worstJump = 0.0f, worstSlope = 0.0f;
     for (float z = kStartZ - 5.0f; z <= kEndZ + 5.0f; z += 0.05f) {
         const float h = Height(z);
@@ -33,40 +33,54 @@ int main() {
     CHECK(worstSlope < 0.40f, "pendiente maxima: %.3f", worstSlope);
     for (float z = kStartZ; z < kCrestStartZ; z += 0.5f) CHECK(Height(z + 0.5f) >= Height(z), "la rampa norte sube de forma continua en %.1f", z);
 
+    // El eje se desvia 44 m hacia el este para rodear Colpatria y vuelve a X 75; los carriles lo siguen sin saltos
+    CHECK(BridgeCenter(40.0f) == kAxisX && std::fabs(BridgeCenter(154.0f) - (kAxisX + kDetourOffset)) < 0.01f &&
+          std::fabs(BridgeCenter(300.0f) - kAxisX) < 0.01f, "el rodeo llega a 44 m en Z 154");
+    for (float z = 60.0f; z < 280.0f; z += 0.5f) {
+        CHECK(std::fabs(BusPathX(z + 0.5f) - BusPathX(z)) < 1.2f, "el carril salta en z=%.1f", z);
+        CHECK(std::fabs(Lateral(BridgeCenter(z), z)) < 0.001f, "el eje no esta a distancia cero de si mismo en z=%.1f", z);
+    }
+
     // Subir al tablero solo por el extremo bajo; por debajo se pasa en la cresta
     float y = 0.0f;
     bool onDeck = false;
-    onDeck = StepLayer(onDeck, 0.0f, kStartZ - 1.0f, y);
+    onDeck = StepLayer(onDeck, kAxisX, kStartZ - 1.0f, y);
     CHECK(!onDeck && y == 0.0f, "antes de la rampa se esta en la calle");
-    onDeck = StepLayer(onDeck, 0.0f, kStartZ + 0.5f, y);
+    onDeck = StepLayer(onDeck, kAxisX, kStartZ + 0.5f, y);
     CHECK(onDeck && y > 0.0f && y <= kBoardHeight, "se sube al entrar por el extremo bajo (y=%.2f)", y);
     for (float z = kStartZ + 0.5f; z < kEndZ - 0.5f; z += 0.1f) {
-        onDeck = StepLayer(onDeck, 0.0f, z, y);
+        onDeck = StepLayer(onDeck, BridgeCenter(z), z, y);
         CHECK(onDeck && std::fabs(y - Height(z)) < 0.001f, "se mantiene sobre el tablero hasta el final (z=%.1f)", z);
         if (!onDeck) break;
     }
-    onDeck = StepLayer(onDeck, 0.0f, kEndZ + 0.5f, y);
+    onDeck = StepLayer(onDeck, kAxisX, kEndZ + 9.0f, y);
     CHECK(!onDeck && y == 0.0f, "al salir por el extremo sur vuelve a la calle");
 
     bool below = false;
-    below = StepLayer(below, 0.0f, 0.0f, y);
+    below = StepLayer(below, kAxisX, 100.0f, y);
     CHECK(!below && y == 0.0f, "bajo la cresta se pasa por debajo, en la calle");
-    below = StepLayer(below, 0.0f, kStartZ + 8.0f, y);
+    below = StepLayer(below, kAxisX, kStartZ + 8.0f, y);
     CHECK(!below, "no se sube a la rampa por la mitad");
-    CHECK(BlockedOnGround(0.0f, kStartZ + 4.0f) && !BlockedOnGround(0.0f, kStartZ + 0.5f) && !BlockedOnGround(0.0f, 0.0f),
+    CHECK(BlockedOnGround(kAxisX, kStartZ + 4.0f) && !BlockedOnGround(kAxisX, kStartZ + 0.5f) && !BlockedOnGround(kAxisX, 100.0f),
           "el muro bajo de la rampa bloquea, el extremo y la cresta no");
-    CHECK(!BlockedOnGround(kHalfWidth + 1.0f, kStartZ + 4.0f), "fuera del tablero no hay muro");
+    CHECK(!BlockedOnGround(kAxisX + kHalfWidth + 1.0f, kStartZ + 4.0f), "fuera del tablero no hay muro");
 
     // Barandas
-    CHECK(BlockedOnDeck(kWalkHalfWidth, 0.0f, 0.35f) && !BlockedOnDeck(0.0f, 0.0f, 0.35f) && !BlockedOnDeck(5.0f, 0.0f, 0.35f), "las barandas limitan el paso");
+    const auto onNormal = [](float z, float offset) {
+        const glm::vec2 n = BridgeNormal(z);
+        return glm::vec2(BridgeCenter(z) + n.x * offset, z + n.y * offset);
+    };
+    const glm::vec2 rail = onNormal(100.0f, kWalkHalfWidth), middle = onNormal(100.0f, 0.0f), walk = onNormal(100.0f, 5.0f);
+    CHECK(BlockedOnDeck(rail.x, rail.y, 0.35f) && !BlockedOnDeck(middle.x, middle.y, 0.35f) && !BlockedOnDeck(walk.x, walk.y, 0.35f),
+          "las barandas limitan el paso");
 
-    // Pilares: no invaden las calles transversales y no quedan pegados entre si
-    const std::vector<std::pair<float, float>> streets{{-35.0f, -23.0f}, {9.0f, 21.0f}, {33.0f, 45.0f}, {77.0f, 89.0f}};
-    const auto pillars = PillarPositions(streets);
-    CHECK(pillars.size() >= 8, "hay pilares (%zu)", pillars.size());
+    // Pilares: cada 14 m desde Z 50, 4 m al oeste del carril de ida, y ninguno sobre una calle
+    const auto isRoad = [](float, float z) { return (z > 70.0f && z < 84.0f) || (z > 150.0f && z < 166.0f); };
+    const auto pillars = PillarPositions(isRoad);
+    CHECK(pillars.size() >= 12, "hay pilares (%zu)", pillars.size());
     for (const glm::vec2& pillar : pillars) {
-        for (const auto& street : streets) CHECK(pillar.y < street.first - 2.0f || pillar.y > street.second + 2.0f, "un pilar invade una calle en z=%.1f", pillar.y);
-        CHECK(std::fabs(pillar.x) == 4.5f, "los pilares quedan bajo los carriles");
+        CHECK(!isRoad(pillar.x, pillar.y), "un pilar invade una calle en z=%.1f", pillar.y);
+        CHECK(std::fabs(pillar.x - (BusPathX(pillar.y) - 4.0f)) < 0.001f, "los pilares quedan junto al carril");
     }
 
     if (g_failures == 0) std::printf("Viaduct: todo OK\n");

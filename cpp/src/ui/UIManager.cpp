@@ -1597,7 +1597,7 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                     if (localX * localX + localZ * localZ > 0.94f) continue;
                     const float worldX = playerPos.x + localX * range;
                     const float worldZ = playerPos.z + localZ * range;
-                    const int tileX = static_cast<int>(std::floor((worldX + CityLayout::WIDTH) / CityLayout::TILE_SIZE));
+                    const int tileX = static_cast<int>(std::floor((worldX + CityLayout::ORIGIN_X) / CityLayout::TILE_SIZE));
                     const int tileZ = static_cast<int>(std::floor((worldZ + CityLayout::ORIGIN_Z) / CityLayout::TILE_SIZE));
                     const TileType tile = city.GetTileAt(tileX, tileZ);
                     ImU32 color = IM_COL32(48, 50, 53, 255);

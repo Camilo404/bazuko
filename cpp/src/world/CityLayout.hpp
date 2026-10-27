@@ -24,7 +24,9 @@ enum class TileType : uint8_t {
     Wall,
     Water,   // lago: no transitable
     Floor,   // suelo duro de un lote (gasolinera), transitable como un anden
-    Solid    // edificio unico (tienda D69): bloquea el paso pero no genera la caja generica
+    Solid,   // edificio unico (tienda D69, Colpatria...): bloquea el paso pero no genera la caja generica
+    Dirt,    // tierra del Cartucho y del lote del cambuche: transitable
+    Ruin     // casa en ruina del Cartucho: baja, oscura y solida
 };
 
 // Caja solida de un hito urbano (surtidores, columnas, torres de la pasarela...)
@@ -46,13 +48,14 @@ class CityLayout {
 public:
     static constexpr int WIDTH = 120;
     static constexpr float TILE_SIZE = 2.0f;
-    // El mapa mide 120 x 161 baldosas (240 x 322 m): el centro original de 120 x 111 mas el Parque del Lago al sur.
-    // El origen del mundo sigue anclado al centro original (ORIGIN_Z) para que las partidas guardadas y todas las
-    // posiciones fijas conserven sus coordenadas al ampliar el mapa.
-    static constexpr int BASE_HEIGHT = 111;
-    static constexpr int HEIGHT = 161;
-    static constexpr float ORIGIN_X = WIDTH * TILE_SIZE * 0.5f;
-    static constexpr float ORIGIN_Z = BASE_HEIGHT * TILE_SIZE * 0.5f;
+    // El mapa es el del juego original (src/world/bogota/CityLayout.js), generado por tools/export-city-map.py:
+    // 120 baldosas de ancho y 198 de alto (las 161 del original mas 37 al norte con la estacion Portal del Centro).
+    // El marco de coordenadas es el del original: la baldosa (x, z) del original esta centrada en (2x, 2z) metros, asi que
+    // todas las posiciones del original (cambuche, hitos, bus...) se usan tal cual.
+    static constexpr int NORTH_ROWS = 37;
+    static constexpr int HEIGHT = 161 + NORTH_ROWS;
+    static constexpr float ORIGIN_X = 1.0f;
+    static constexpr float ORIGIN_Z = 1.0f + NORTH_ROWS * TILE_SIZE;
 
     using CityLoadProgress = std::function<void(size_t completed, size_t total, const std::string& stage)>;
     explicit CityLayout(const CityLoadProgress& progressCallback = nullptr);
@@ -67,6 +70,21 @@ public:
     bool IsBlocked(float worldX, float worldZ, float radius = 0.0f) const;
 
     glm::vec3 GetSpawnPoint() const;
+
+    // Datos del mapa del original (assets/data/city-map.json)
+    struct Band { int first, last; };
+    struct ParkSign { float x, z; std::array<std::string, 2> lines; };
+    struct VendorSite { std::string name, kind; float x, z, rotation; std::vector<std::string> items; };
+    struct CityData {
+        std::vector<Band> carreras, calles, caracasLanes;
+        std::vector<std::string> carrerasNames, callesNames;
+        Band caracasBusway{35, 40};
+        std::vector<VendorSite> vendors;
+        glm::vec2 spawn{112.98f, 97.84f}, bed{112.98f, 94.64f}, sell, dealer, craft, shop;
+        std::vector<glm::vec4> parks;   // x0, x1, z0, z1 de los parques con palomas (metros)
+        std::vector<ParkSign> parkSigns;
+    };
+    const CityData& GetData() const { return m_Data; }
 
     // Hitos con nombre para el radar: gasolinera, tienda D69, pasarela y Parque del Lago
     struct Landmark {
@@ -84,6 +102,7 @@ private:
     void GenerateCityMap();
     void BuildMeshes(const CityLoadProgress& progressCallback = nullptr);
 
+    CityData m_Data;
     std::vector<TileType> m_Grid;
     std::shared_ptr<Mesh> m_GroundMesh;
     std::shared_ptr<Mesh> m_SidewalkMesh;
@@ -92,6 +111,7 @@ private:
     std::shared_ptr<Mesh> m_BuildingMesh;
     std::shared_ptr<Mesh> m_FacadeDetailMesh;
     std::shared_ptr<Mesh> m_SignMesh;
+    std::shared_ptr<Mesh> m_WindowLightMesh;      // ventanas encendidas de los edificios (brillan de noche)
     std::shared_ptr<Mesh> m_ColpatriaLightMesh;   // franjas de colores de la torre (brillan de noche)
     std::shared_ptr<Mesh> m_GlassMesh;            // vidrios de la estacion (mezcla alfa)
     float m_NightGlow = 0.0f;

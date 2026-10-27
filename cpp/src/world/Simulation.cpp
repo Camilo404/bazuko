@@ -357,13 +357,25 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
         if (m_GrassModel)
             m_GrassModelFit = FitModelTransform(*m_GrassModel, {1.9f, 0.52f, 1.9f}, 0.0f, true);
         reportModelLoad("Vegetación: Pasto FBX");
+        // Piezas separadas del ave (hechas en Blender a partir del modelo): cuerpo, ala I interior/exterior, ala D interior/exterior
+        const auto loadBirdParts = [&](size_t bird, const std::string& stem) {
+            static const char* suffixes[kBirdPartCount] = {"_body", "_L_in", "_L_out", "_R_in", "_R_out"};
+            bool complete = true;
+            for (size_t part = 0; part < kBirdPartCount; ++part) {
+                m_BirdParts[bird][part] = Model::LoadFromFile(modelsRoot + stem + suffixes[part] + ".gltf");
+                complete = complete && m_BirdParts[bird][part];
+            }
+            if (!complete) for (auto& part : m_BirdParts[bird]) part.reset();
+        };
         m_BirdModels[0] = Model::LoadFromFile(modelsRoot + "Ave 1/Woodpecker.gltf");
         if (m_BirdModels[0])
             m_BirdModelFits[0] = FitModelTransform(*m_BirdModels[0], {0.42f, 0.18f, 0.30f}, 0.0f, true);
+        loadBirdParts(0, "Ave 1/Woodpecker");
         reportModelLoad("Fauna: Ave carpintero GLTF");
         m_BirdModels[1] = Model::LoadFromFile(modelsRoot + "Ave 2/Seagull.gltf");
         if (m_BirdModels[1])
             m_BirdModelFits[1] = FitModelTransform(*m_BirdModels[1], {0.72f, 0.22f, 0.38f}, 0.0f, true);
+        loadBirdParts(1, "Ave 2/Seagull");
         reportModelLoad("Fauna: Ave gaviota GLTF");
         m_RatModel = Model::LoadFromFile(modelsRoot + "Rata/Rat.gltf");
         if (m_RatModel)
@@ -463,15 +475,11 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
     for (size_t drop = 0; drop < kRainDropCount; ++drop) {
         m_RainOffsets.emplace_back(rainHorizontal(m_Random), rainHeight(m_Random), rainHorizontal(m_Random));
     }
-    const std::array<std::array<int, 4>, 3> parkBounds{{
-        {{26, 33, 24, 35}},
-        {{44, 50, 24, 35}},
-        {{69, 81, 80, 91}}
-    }};
+    const auto& parkBounds = m_City.GetData().parks;   // x0, x1, z0, z1 en metros (Bogota.js)
     for (int z = 1; z < CityLayout::HEIGHT - 1; ++z) {
         for (int x = 1; x < CityLayout::WIDTH - 1; ++x) {
             if (m_City.GetTileAt(x, z) != TileType::Grass) continue;
-            const glm::vec3 point((x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
+            const glm::vec3 point((x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_X,
                                   0.0f,
                                   (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
             m_GrassPositions.push_back(point);
@@ -481,9 +489,9 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
                     return glm::distance(glm::vec2(tree.x, tree.z), glm::vec2(point.x, point.z)) >= 6.0f;
                 });
             if (treeTile && treeHasRoom) m_TreePositions.push_back(point);
-            for (size_t parkIndex = 0; parkIndex < parkBounds.size(); ++parkIndex) {
-                const auto& bounds = parkBounds[parkIndex];
-                if (x >= bounds[0] && x <= bounds[1] && z >= bounds[2] && z <= bounds[3]) {
+            for (size_t parkIndex = 0; parkIndex < parkBounds.size() && parkIndex < m_ParkGrassPositions.size(); ++parkIndex) {
+                const glm::vec4& bounds = parkBounds[parkIndex];
+                if (point.x >= bounds.x && point.x <= bounds.y && point.z >= bounds.z && point.z <= bounds.w) {
                     m_ParkGrassPositions[parkIndex].push_back(point);
                     break;
                 }
@@ -499,7 +507,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
                 || m_City.GetTileAt(x, z - 1) == TileType::Road
                 || m_City.GetTileAt(x, z + 1) == TileType::Road;
             if (!besideRoad) continue;
-            m_RatWalkPoints.emplace_back((x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
+            m_RatWalkPoints.emplace_back((x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_X,
                                          0.15f,
                                          (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
         }
@@ -530,8 +538,10 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
                     m_City.GetTileAt(tx, tz + 1) == TileType::Road || m_City.GetTileAt(tx, tz - 1) == TileType::Road;
                 if (!adjacentToRoad) continue;
                 const glm::vec3 candidate(
-                    (tx + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH, 0.0f,
+                    (tx + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_X, 0.0f,
                     (tz + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
+                // Sin farolas bajo el tablero del viaducto ni pegadas a sus bordes
+                if (Viaduct::Covers(candidate.x, candidate.z) || (Viaduct::Covers(candidate.x - 1.5f, candidate.z) || Viaduct::Covers(candidate.x + 1.5f, candidate.z))) continue;
                 // Garantizar separación mínima real de 18 m entre postes
                 const bool tooClose = std::any_of(m_StreetLamps.begin(), m_StreetLamps.end(),
                     [&](const StreetLamp& lamp) {
@@ -564,7 +574,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
                         m_City.GetTileAt(tx, tz + 1) == TileType::Road ||
                         m_City.GetTileAt(tx, tz - 1) == TileType::Road;
                     if (!adjacentToRoad) continue;
-                    const glm::vec3 position((tx + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
+                    const glm::vec3 position((tx + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_X,
                                              0.0f,
                                              (tz + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
                     // Descartar si hay obstáculo o poste muy cerca
@@ -600,7 +610,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
                 m_City.GetTileAt(x, z - 1) == TileType::Road;
             if (!adjacentToRoad) continue;
             const glm::vec3 pos(
-                (x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
+                (x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_X,
                 0.0f,
                 (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
             // Descartar si bloqueado por edificio, pared u objeto
@@ -647,34 +657,43 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
         auto shelterLoot = DistributeShelterLoot(GameData::Get(), bagIndices.size(), m_Random);
         for (size_t slot = 0; slot < bagIndices.size(); ++slot) m_Pickups[bagIndices[slot]].guaranteedLoot = std::move(shelterLoot[slot]);
     }
-    const auto worldTile = [](float tile, int count) {
-        return (tile + 0.5f) * CityLayout::TILE_SIZE - count * CityLayout::TILE_SIZE * 0.5f;
+    const auto worldTile = [](float tile, float origin) {
+        return (tile + 0.5f) * CityLayout::TILE_SIZE - origin;
     };
     const auto laneX = [&](int first, int last, int side) {
-        return worldTile((first + last) * 0.5f + side * (last - first + 1) * 0.25f, CityLayout::WIDTH);
+        return worldTile((first + last) * 0.5f + side * (last - first + 1) * 0.25f, CityLayout::ORIGIN_X);
     };
     const auto laneZ = [&](int first, int last, int side) {
         return worldTile((first + last) * 0.5f + side * (last - first + 1) * 0.25f, CityLayout::ORIGIN_Z);
     };
-    const std::array<std::pair<int, int>, 4> carreras{{
-        {18, 23}, {36, 41}, {84, 89}, {106, 111}
+    // Calles del original (assets/data/city-map.json): 4 carreras, los dos carriles de la Caracas y 4 calles
+    const auto& carreras = m_City.GetData().carreras;
+    const auto& caracas = m_City.GetData().caracasLanes;
+    // Las bandas de las calles estan en filas del original: las 37 filas del norte (estacion) desplazan la cuadricula
+    auto calles = m_City.GetData().calles;
+    for (auto& band : calles) { band.first += CityLayout::NORTH_ROWS; band.last += CityLayout::NORTH_ROWS; }
+    const float top = laneZ(calles[0].first, calles[0].last, 1);
+    const float bottom = laneZ(calles[1].first, calles[1].last, -1);
+    const float farBottom = laneZ(calles.back().first, calles.back().last, -1);
+    const float upperMiddle = laneZ(calles[1].first, calles[1].last, 1);
+    // El costado oriental ocupado por Colpatria deja de ser via de paso: los circuitos que pasan por la Caracas oriental
+    // giran en la calle 8 (getTrafficRoutes del original).
+    const float colpatriaTurn = laneZ(calles[2].first, calles[2].last, -1);
+    const auto clampBottom = [&](float left, float right, float lowest) {
+        const bool nearColpatria = (left >= 83.0f && left <= 93.0f) || (right >= 83.0f && right <= 93.0f);
+        return nearColpatria && lowest > 155.0f ? colpatriaTurn : lowest;
+    };
+    const auto routeLeft = [&](const std::array<float, 4>& r) { return std::min(r[0], r[1]); };
+    std::array<std::array<float, 4>, 6> routeBounds{{
+        {{laneX(carreras[0].first, carreras[0].last, 1), laneX(caracas[0].first, caracas[0].last, -1), top, bottom}},
+        {{laneX(caracas[1].first, caracas[1].last, 1), laneX(carreras[1].first, carreras[1].last, -1), top, bottom}},
+        {{laneX(carreras[1].first, carreras[1].last, 1), laneX(carreras[2].first, carreras[2].last, -1), top, farBottom}},
+        {{laneX(carreras[2].first, carreras[2].last, 1), laneX(carreras[3].first, carreras[3].last, -1), top, farBottom}},
+        {{laneX(carreras[0].first, carreras[0].last, 1), laneX(caracas[0].first, caracas[0].last, -1), upperMiddle, farBottom}},
+        {{laneX(caracas[1].first, caracas[1].last, 1), laneX(carreras[1].first, carreras[1].last, -1), upperMiddle, farBottom}}
     }};
-    const std::array<std::pair<int, int>, 2> caracas{{{53, 56}, {63, 66}}};
-    const std::array<std::pair<int, int>, 5> calles{{
-        {16, 21}, {38, 43}, {60, 65}, {72, 77}, {94, 99}
-    }};
-    const float top = laneZ(calles[0].first, calles[0].second, 1);
-    const float bottom = laneZ(calles[1].first, calles[1].second, -1);
-    const float farBottom = laneZ(calles.back().first, calles.back().second, -1);
-    const float upperMiddle = laneZ(calles[1].first, calles[1].second, 1);
-    const std::array<std::array<float, 4>, 6> routeBounds{{
-        {{laneX(carreras[0].first, carreras[0].second, 1), laneX(caracas[0].first, caracas[0].second, -1), top, bottom}},
-        {{laneX(caracas[1].first, caracas[1].second, 1), laneX(carreras[1].first, carreras[1].second, -1), top, bottom}},
-        {{laneX(carreras[1].first, carreras[1].second, 1), laneX(carreras[2].first, carreras[2].second, -1), top, farBottom}},
-        {{laneX(carreras[2].first, carreras[2].second, 1), laneX(carreras[3].first, carreras[3].second, -1), top, farBottom}},
-        {{laneX(carreras[0].first, carreras[0].second, 1), laneX(caracas[0].first, caracas[0].second, -1), upperMiddle, farBottom}},
-        {{laneX(caracas[1].first, caracas[1].second, 1), laneX(carreras[1].first, carreras[1].second, -1), upperMiddle, farBottom}}
-    }};
+    (void)routeLeft;
+    for (auto& bounds : routeBounds) bounds[3] = clampBottom(bounds[0], bounds[1], bounds[3]);
     for (size_t routeIndex = 0; routeIndex < routeBounds.size(); ++routeIndex) {
         const float left = std::min(routeBounds[routeIndex][0], routeBounds[routeIndex][1]);
         const float right = std::max(routeBounds[routeIndex][0], routeBounds[routeIndex][1]);
@@ -698,13 +717,13 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
             glm::vec3 polePosition(0.0f);
             float bestDistanceSquared = 9.5f * 9.5f;
             const int centerTileX = static_cast<int>(std::floor(
-                (intersection.x + CityLayout::WIDTH * CityLayout::TILE_SIZE * 0.5f) / CityLayout::TILE_SIZE));
+                (intersection.x + CityLayout::ORIGIN_X) / CityLayout::TILE_SIZE));
             const int centerTileZ = static_cast<int>(std::floor(
                 (intersection.z + CityLayout::ORIGIN_Z) / CityLayout::TILE_SIZE));
             for (int tileZ = centerTileZ - 6; tileZ <= centerTileZ + 6; ++tileZ) {
                 for (int tileX = centerTileX - 6; tileX <= centerTileX + 6; ++tileX) {
                     const glm::vec3 candidate(
-                        (tileX + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH * CityLayout::TILE_SIZE * 0.5f,
+                        (tileX + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_X,
                         0.0f,
                         (tileZ + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
                     const glm::vec2 offset(candidate.x - intersection.x, candidate.z - intersection.z);
@@ -739,25 +758,32 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
     } else {
         LogInfo("Semaforos de trafico preparados: {}", m_TrafficSignals.size());
     }
-    // Dos buses: el del norte sale del extremo sur del puente del lago, sube por el viaducto y para en la estacion;
-    // el del sur parte de la estacion, cruza el viaducto y el puente, y relevan en los extremos.
+    // Dos buses (Bogota.js, getBusRoute): el del norte sale del extremo sur del puente del lago, sube por el viaducto
+    // y para en la estacion Portal del Centro; el del sur parte de la estacion, cruza el viaducto y el puente, y relevan
+    // en los extremos. Siguen la curva del rodeo de Colpatria.
     {
-        const float northEnd = worldTile(1.0f, CityLayout::ORIGIN_Z) + 9.1f;
-        const float southEnd = Viaduct::kEndZ - 10.0f;
+        const float southEnd = static_cast<float>(CityLayout::HEIGHT - CityLayout::NORTH_ROWS - 2) * CityLayout::TILE_SIZE - 9.1f;   // 308,9
+        const float northEnd = Station::kTerminalNorthZ + 12.0f;                                                                        // -62
+        const auto placeBus = [&](BusState& bus, float z) {
+            bus.position = {Viaduct::BusPathX(z, bus.laneX), Viaduct::Height(z), z};
+            bus.heading = Viaduct::BusHeading(z, bus.laneX, bus.direction);
+            bus.previousPosition = bus.position;
+        };
         BusState northbound;
         northbound.direction = -1.0f;
+        northbound.laneX = Station::kNorthLaneX;
         northbound.startZ = southEnd;
         northbound.endZ = northEnd;
         northbound.stationZ = Station::kCenterZ;
-        northbound.position = {Station::kCenterX + 3.5f, Viaduct::Height(southEnd), southEnd};
+        placeBus(northbound, southEnd);
         BusState southbound;
         southbound.direction = 1.0f;
+        southbound.laneX = Station::kSouthLaneX;
         southbound.startZ = northEnd;
         southbound.endZ = southEnd;
         southbound.stationZ = Station::kCenterZ;
-        southbound.position = {Station::kCenterX - 3.5f, Viaduct::Height(40.0f), 40.0f};   // ya en marcha, para cruzarse con el otro
+        placeBus(southbound, 40.0f);   // ya en marcha, para cruzarse con el otro
         southbound.servedStation = true;
-        for (BusState* bus : {&northbound, &southbound}) bus->previousPosition = bus->position;
         m_Buses = {northbound, southbound};
     }
     for (const auto& bounds : routeBounds) {
@@ -819,7 +845,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
             if (!alongX && !alongZ) continue;
             TrafficVehicle parked;
             parked.position = {
-                (x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
+                (x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_X,
                 0.0f,
                 (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z
             };
@@ -842,59 +868,13 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
         }
     }
 
-    struct VendorSite {
-        int tileX;
-        int tileZ;
-        bool fritanga;
-        const char* name;
-        std::vector<std::string> items;
-    };
-    const std::array<VendorSite, 6> vendorSites{{
-        {30, 14, false, "Chaza de don Efraín", {"cigarrillo", "cafe", "pan", "agua"}},
-        {48, 22, true, "Fritanga La Mona", {"lataComida", "pan", "refresco"}},
-        {76, 36, false, "Dulces y minutos", {"cigarrillo", "refresco", "agua"}},
-        {83, 55, false, "Chaza de la Carrera 8", {"agua", "pan", "cafe"}},   // junto a la gasolinera, como en el original (baldosa X 82,5, Z 55)
-        {52, 70, true, "Fritanga del Sur", {"lataComida", "pan", "refresco"}},   // baldosa X 52, Z 70,5 del original
-        {76, 80, false, "Chaza de la avenida", {"cigarrillo", "pan", "agua"}}
-    }};
-    for (const VendorSite& site : vendorSites) {
-        float bestDistanceSquared = std::numeric_limits<float>::max();
-        StreetVendor selected;
-        bool found = false;
-        for (int z = std::max(2, site.tileZ - 5); z <= std::min(CityLayout::HEIGHT - 3, site.tileZ + 5); ++z) {
-            for (int x = std::max(2, site.tileX - 5); x <= std::min(CityLayout::WIDTH - 3, site.tileX + 5); ++x) {
-                if (m_City.GetTileAt(x, z) != TileType::Sidewalk) continue;
-                glm::vec3 facing(0.0f);
-                if (m_City.GetTileAt(x + 1, z) == TileType::Road) facing.x = 1.0f;
-                else if (m_City.GetTileAt(x - 1, z) == TileType::Road) facing.x = -1.0f;
-                else if (m_City.GetTileAt(x, z + 1) == TileType::Road) facing.z = 1.0f;
-                else if (m_City.GetTileAt(x, z - 1) == TileType::Road) facing.z = -1.0f;
-                if (glm::dot(facing, facing) < 0.5f) continue;
-                const glm::vec3 position(
-                    (x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
-                    0.15f,
-                    (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
-                if (m_City.IsBlocked(position.x, position.z, 0.55f)) continue;
-                const bool tooClose = std::any_of(m_StreetVendors.begin(), m_StreetVendors.end(),
-                    [&](const StreetVendor& vendor) {
-                        return glm::distance(glm::vec2(position.x, position.z),
-                                             glm::vec2(vendor.position.x, vendor.position.z)) < 14.0f;
-                    });
-                if (tooClose) continue;
-                const float dx = static_cast<float>(x - site.tileX);
-                const float dz = static_cast<float>(z - site.tileZ);
-                const float distanceSquared = dx * dx + dz * dz;
-                if (distanceSquared >= bestDistanceSquared) continue;
-                const glm::vec3 serverPosition = position - facing * 1.05f;
-                selected = {position, serverPosition, facing, site.name, site.fritanga,
-                            m_PedestrianAppearances.empty() ? 0 : m_StreetVendors.size() % m_PedestrianAppearances.size(),
-                            site.items};
-                bestDistanceSquared = distanceSquared;
-                found = true;
-            }
-        }
-        if (found) m_StreetVendors.push_back(std::move(selected));
-        else LogWarn("No se encontro una acera libre para el vendedor: {}", site.name);
+    for (const CityLayout::VendorSite& site : m_City.GetData().vendors) {
+        // puesto de Bogota.js (_vendor): el vendedor queda detras, a 0,9 m, mirando hacia donde mira el puesto
+        const glm::vec3 facing(std::sin(site.rotation), 0.0f, std::cos(site.rotation));
+        const glm::vec3 position(site.x, 0.15f, site.z);
+        m_StreetVendors.push_back({position, position - facing * 0.9f, facing, site.name, site.kind == "fritanga",
+                                   m_PedestrianAppearances.empty() ? 0 : m_StreetVendors.size() % m_PedestrianAppearances.size(),
+                                   site.items});
     }
 
     const auto findMarketSidewalk = [&](const glm::vec3& target, float minDistance) {
@@ -904,7 +884,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
             for (int x = 1; x < CityLayout::WIDTH - 1; ++x) {
                 if (m_City.GetTileAt(x, z) != TileType::Sidewalk) continue;
                 const glm::vec3 candidate(
-                    (x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
+                    (x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_X,
                     0.15f,
                     (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
                 if (m_City.IsBlocked(candidate.x, candidate.z, 0.5f)) continue;
@@ -922,9 +902,13 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
         }
         return nearest;
     };
-    m_RecyclerPosition = findMarketSidewalk({-5.0f, 0.15f, 0.0f}, 0.0f);
-    m_MissionNpcPosition = findMarketSidewalk(m_RecyclerPosition + glm::vec3(2.0f, 0.0f, 0.0f), 1.0f);
-    m_DealerPosition = findMarketSidewalk({-45.0f, 0.15f, -20.0f}, 0.0f);
+    // Puntos reservados de Bogota.js: la bodega de reciclaje (sell), la olla del Cartucho (dealer) y el vecino de la mision
+    // junto a la recicladora
+    (void)findMarketSidewalk;
+    const CityLayout::CityData& cityData = m_City.GetData();
+    m_RecyclerPosition = {cityData.sell.x, 0.15f, cityData.sell.y};
+    m_MissionNpcPosition = {cityData.sell.x + 2.0f, 0.15f, cityData.sell.y};
+    m_DealerPosition = {cityData.dealer.x, 0.15f, cityData.dealer.y};
     BuildBirdSpots();
 }
 
@@ -942,12 +926,12 @@ bool Simulation::FindSidewalkPoint(glm::vec3& point, const glm::vec3& center, fl
 }
 
 bool Simulation::FindSidewalkPath(const glm::vec3& start, const glm::vec3& target, std::vector<glm::vec3>& path) const {
-    const auto toTile = [](float coordinate, int count) {
-        return static_cast<int>(std::floor((coordinate + count * CityLayout::TILE_SIZE * 0.5f) / CityLayout::TILE_SIZE));
+    const auto toTile = [](float coordinate, float origin) {
+        return static_cast<int>(std::floor((coordinate + origin) / CityLayout::TILE_SIZE));
     };
-    const int startX = toTile(start.x, CityLayout::WIDTH);
+    const int startX = toTile(start.x, CityLayout::ORIGIN_X);
     const int startZ = toTile(start.z, CityLayout::ORIGIN_Z);
-    const int goalX = toTile(target.x, CityLayout::WIDTH);
+    const int goalX = toTile(target.x, CityLayout::ORIGIN_X);
     const int goalZ = toTile(target.z, CityLayout::ORIGIN_Z);
     if (startX < 0 || startX >= CityLayout::WIDTH || startZ < 0 || startZ >= CityLayout::HEIGHT ||
         goalX < 0 || goalX >= CityLayout::WIDTH || goalZ < 0 || goalZ >= CityLayout::HEIGHT) return false;
@@ -987,7 +971,7 @@ bool Simulation::FindSidewalkPath(const glm::vec3& start, const glm::vec3& targe
     for (auto it = reversed.rbegin(); it != reversed.rend(); ++it) {
         const int x = *it % CityLayout::WIDTH;
         const int z = *it / CityLayout::WIDTH;
-        path.emplace_back((x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH * CityLayout::TILE_SIZE * 0.5f,
+        path.emplace_back((x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_X,
                           0.0f,
                           (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
     }
@@ -1085,7 +1069,7 @@ size_t Simulation::GetNearbyVendor(const glm::vec3& position, float radius) cons
 }
 
 bool Simulation::IsNearShop(const glm::vec3& position, float radius) const {
-    const float halfWidth = CityLayout::WIDTH * CityLayout::TILE_SIZE * 0.5f;
+    const float halfWidth = CityLayout::ORIGIN_X;
     const float halfHeight = CityLayout::ORIGIN_Z;
     const int tileX = static_cast<int>(std::floor((position.x + halfWidth) / CityLayout::TILE_SIZE));
     const int tileZ = static_cast<int>(std::floor((position.z + halfHeight) / CityLayout::TILE_SIZE));
@@ -1306,7 +1290,7 @@ void Simulation::BuildBirdSpots() {
             const TileType tile = m_City.GetTileAt(x, z);
             if (tile != TileType::Sidewalk && tile != TileType::Plaza) continue;
             if ((x * 5 + z * 3) % 4 != 0) continue;
-            const glm::vec3 point((static_cast<float>(x) + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH, 0.0f,
+            const glm::vec3 point((static_cast<float>(x) + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_X, 0.0f,
                                   (static_cast<float>(z) + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
             if (!m_City.IsWalkable(point.x, point.z)) continue;
             spots.push_back({point, BirdPerch::Ground});
@@ -1846,8 +1830,9 @@ void Simulation::UpdateTraffic(float dt) {
                     if (bus.Elevated()) continue;
                     const float busLookAhead = std::max(5.0f, bus.speed * bus.speed / 8.0f + bus.speed * 0.2f + 2.0f);
                     for (float busAhead = 0.0f; busAhead <= busLookAhead && !committedInBusLane; busAhead += probeStep) {
-                        committedInBusLane = OrientedBoxesOverlap(bus.position + glm::vec3(0.0f, 0.0f, bus.direction * busAhead),
-                                                                  {0.0f, bus.direction}, 18.2f, 2.52f, vehicle.position, forward,
+                        const float aheadZ = bus.position.z + bus.direction * busAhead;
+                        committedInBusLane = OrientedBoxesOverlap({Viaduct::BusPathX(aheadZ, bus.laneX), bus.position.y, aheadZ},
+                                                                  bus.heading, 18.2f, 2.52f, vehicle.position, forward,
                                                                   vehicle.length, vehicle.width);
                     }
                     if (committedInBusLane) break;
@@ -1910,7 +1895,7 @@ void Simulation::UpdateTraffic(float dt) {
                 if (!committedInBusLane
                     && std::any_of(m_Buses.begin(), m_Buses.end(), [&](const BusState& bus) {
                         return !bus.Elevated() && OrientedBoxesOverlap(probePosition, probeForward, vehicle.length, vehicle.width,
-                                                                       bus.position, {0.0f, bus.direction}, 18.2f, 2.52f);
+                                                                       bus.position, bus.heading, 18.2f, 2.52f);
                     })) {
                     clearance = std::min(clearance, std::max(0.0f, ahead - probeStep));
                     break;
@@ -2036,11 +2021,12 @@ void Simulation::UpdateBus(float dt) {
             if (!bus.servedStation) clearance = std::min(clearance, bus.direction * (bus.stationZ - bus.position.z));
             const float lookAhead = std::max(5.0f, bus.speed * bus.speed / (2.0f * braking) + bus.speed * 0.2f + 2.0f);
             for (float ahead = 0.0f; ahead <= std::min(lookAhead, clearance); ahead += 0.5f) {
-                const glm::vec3 probe = bus.position + glm::vec3(0.0f, 0.0f, bus.direction * ahead);
+                const float probeZ = bus.position.z + bus.direction * ahead;
+                const glm::vec3 probe(Viaduct::BusPathX(probeZ, bus.laneX), bus.position.y, probeZ);
                 if (Viaduct::Height(probe.z) > Viaduct::kElevated && Viaduct::Height(bus.position.z) > Viaduct::kElevated) break;
                 bool blockedByVehicle = false;
                 const auto checkVehicle = [&](const TrafficVehicle& vehicle) {
-                    return OrientedBoxesOverlap(probe, {0.0f, bus.direction}, 18.2f, 2.52f,
+                    return OrientedBoxesOverlap(probe, bus.heading, 18.2f, 2.52f,
                                                 vehicle.position, {vehicle.direction.x, vehicle.direction.z},
                                                 vehicle.length, vehicle.width);
                 };
@@ -2065,8 +2051,10 @@ void Simulation::UpdateBus(float dt) {
                 && Viaduct::Height(bus.position.z + bus.direction * 9.1f) > Viaduct::kElevated;
             const auto actorClearance = [&](const glm::vec3& actor) {
                 if (busOverStreet) return std::numeric_limits<float>::infinity();
-                if (std::abs(actor.x - bus.position.x) > 2.52f * 0.5f + 0.55f) return std::numeric_limits<float>::infinity();
-                const float aheadOfBus = bus.direction * (actor.z - bus.position.z);   // >0: delante del bus
+                const glm::vec2 fromBus(actor.x - bus.position.x, actor.z - bus.position.z);
+                const float sideways = fromBus.x * -bus.heading.y + fromBus.y * bus.heading.x;
+                if (std::abs(sideways) > 2.52f * 0.5f + 0.55f) return std::numeric_limits<float>::infinity();
+                const float aheadOfBus = glm::dot(fromBus, bus.heading);   // >0: delante del bus
                 if (aheadOfBus < -(18.2f * 0.5f + 0.55f)) return std::numeric_limits<float>::infinity();
                 return std::max(0.0f, aheadOfBus - 18.2f * 0.5f - 0.8f);
             };
@@ -2076,7 +2064,9 @@ void Simulation::UpdateBus(float dt) {
             bus.speed = std::clamp(desiredSpeed, bus.speed - rate * step, bus.speed + rate * step);
             const float travel = std::min(bus.speed * step, std::max(0.0f, clearance));
             bus.position.z += bus.direction * travel;
+            bus.position.x = Viaduct::BusPathX(bus.position.z, bus.laneX);
             bus.position.y = Viaduct::Height(bus.position.z);
+            bus.heading = Viaduct::BusHeading(bus.position.z, bus.laneX, bus.direction);
             bus.speed = travel / step;
             bus.wheelRotation += travel / 0.5f;
             if (!bus.servedStation && bus.direction * (bus.stationZ - bus.position.z) <= 1e-8f) {
@@ -2087,7 +2077,9 @@ void Simulation::UpdateBus(float dt) {
             }
             if (bus.direction * (bus.endZ - bus.position.z) <= 1e-8f) {
                 bus.position.z = bus.startZ;
+                bus.position.x = Viaduct::BusPathX(bus.startZ, bus.laneX);
                 bus.position.y = Viaduct::Height(bus.startZ);
+                bus.heading = Viaduct::BusHeading(bus.startZ, bus.laneX, bus.direction);
                 bus.servedStation = false;
                 bus.speed = 0.0f;
             }
@@ -2113,7 +2105,7 @@ bool Simulation::IsBlocked(const glm::vec3& position, float radius) const {
     }
     for (const BusState& bus : m_Buses) {
         if (std::abs(position.y - bus.position.y) < 2.5f
-            && PointInVehicleBox(position, bus.position, {0.0f, bus.direction}, 9.1f, 1.26f, radius)) {
+            && PointInVehicleBox(position, bus.position, bus.heading, 9.1f, 1.26f, radius)) {
             return true;
         }
     }
@@ -2142,17 +2134,17 @@ bool Simulation::GetVehicleImpact(const glm::vec3& position, float& speed, glm::
     }
     for (const BusState& bus : m_Buses) {
         if (bus.speed < 1.5f || std::abs(position.y - bus.position.y) >= 2.5f) continue;
-        bool frontContact = PointAtVehicleFront(position, bus.position, {0.0f, bus.direction},
+        bool frontContact = PointAtVehicleFront(position, bus.position, bus.heading,
                                                 9.1f, 1.26f, 0.4f);
         for (int sample = 0; !frontContact && sample <= 8; ++sample) {
             const float fraction = static_cast<float>(sample) / 8.0f;
             const glm::vec3 sweptPosition = glm::mix(bus.previousPosition, bus.position, fraction);
-            frontContact = PointAtVehicleFront(position, sweptPosition, {0.0f, bus.direction},
+            frontContact = PointAtVehicleFront(position, sweptPosition, bus.heading,
                                                9.1f, 1.26f, 0.4f);
         }
         if (frontContact) {
             speed = bus.speed;
-            direction = {0.0f, 0.0f, bus.direction};
+            direction = {bus.heading.x, 0.0f, bus.heading.y};
             return true;
         }
     }
@@ -2294,8 +2286,45 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
             bird = glm::rotate(bird, std::sin(time * pigeon.flapRate * 0.5f + pigeon.phase) * 0.12f, {0.0f, 0.0f, 1.0f});
         }
         if (flying && m_BirdModels[pigeon.modelIndex]) {
-            m_BirdModels[pigeon.modelIndex]->Draw(
-                renderer, bird * m_BirdModelFits[pigeon.modelIndex]);
+            const glm::mat4 fit = bird * m_BirdModelFits[pigeon.modelIndex];
+            const auto& parts = m_BirdParts[pigeon.modelIndex];
+            if (!parts[0]) {
+                m_BirdModels[pigeon.modelIndex]->Draw(renderer, fit);
+                continue;
+            }
+            // Pivotes en el espacio del modelo (glTF, Y arriba, el frente hacia -Z; las alas se abren sobre X): hombro en el
+            // borde del cuerpo y muneca a media envergadura. Medidos en Blender al separar las piezas.
+            struct WingRig { float shoulderX, shoulderY, elbowX, elbowY; };
+            static const WingRig rigs[2] = {{0.045f, 0.0631f, 0.105f, 0.0660f}, {0.10f, 0.1807f, 0.38f, 0.1782f}};
+            const WingRig& rig = rigs[pigeon.modelIndex];
+            // Ciclo real de aleteo: la bajada es la fase de potencia y la subida recoge el ala doblando la muneca; la punta va
+            // retrasada respecto al hombro. Despegando y aterrizando bate con toda la amplitud; en crucero alterna rafagas de
+            // aleteo con planeo (alas extendidas con un leve diedro).
+            const float progress = pigeon.flightDuration > 0.001f ? 1.0f - pigeon.flightRemaining / pigeon.flightDuration : 0.0f;
+            const float cycle = time * pigeon.flapRate * 0.85f + pigeon.phase;
+            const float glideWave = std::sin(progress * 6.2831853f * (1.5f + std::fmod(pigeon.phase, 1.0f)) + pigeon.phase * 3.0f);
+            const bool cruising = pigeon.flightDuration > 2.2f && progress > 0.22f && progress < 0.78f;
+            const float glide = cruising ? glm::smoothstep(0.35f, 0.75f, glideWave) : 0.0f;
+            const float amplitude = glm::mix(1.0f, 0.12f, glide);
+            const float phaseSin = std::sin(cycle), phaseCos = std::cos(cycle);
+            const float shoulder = 0.62f * amplitude * phaseSin + 0.10f + 0.12f * glide;
+            const float wrist = (phaseCos > 0.0f ? -0.85f : -0.30f) * phaseCos * amplitude + 0.05f - 0.04f * glide;
+            const float bob = 0.012f * amplitude * (-phaseSin);   // el cuerpo sube con la bajada de las alas
+            const glm::mat4 body = fit * glm::translate(glm::mat4(1.0f), {0.0f, bob, 0.0f});
+            parts[0]->Draw(renderer, body);
+            for (int sideIndex = 0; sideIndex < 2; ++sideIndex) {
+                const float side = sideIndex == 0 ? -1.0f : 1.0f;   // izquierda -X, derecha +X
+                const glm::vec3 shoulderPivot(side * rig.shoulderX, rig.shoulderY, 0.0f);
+                const glm::vec3 elbowPivot(side * rig.elbowX, rig.elbowY, 0.0f);
+                glm::mat4 inner = body * glm::translate(glm::mat4(1.0f), shoulderPivot)
+                    * glm::rotate(glm::mat4(1.0f), side * shoulder, {0.0f, 0.0f, 1.0f})
+                    * glm::translate(glm::mat4(1.0f), -shoulderPivot);
+                glm::mat4 outer = inner * glm::translate(glm::mat4(1.0f), elbowPivot)
+                    * glm::rotate(glm::mat4(1.0f), side * wrist, {0.0f, 0.0f, 1.0f})
+                    * glm::translate(glm::mat4(1.0f), -elbowPivot);
+                parts[1 + sideIndex * 2]->Draw(renderer, inner);
+                parts[2 + sideIndex * 2]->Draw(renderer, outer);
+            }
             continue;
         }
         if (!flying && pigeon.perch == BirdPerch::Ground) {
@@ -2495,7 +2524,7 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
         const glm::vec4 busRed(0.70f, 0.15f, 0.12f, busOpacity);
         const glm::vec4 busWindow(0.08f, 0.12f, 0.16f, busOpacity);
         glm::mat4 busRoot = glm::translate(glm::mat4(1.0f), bus.position);
-        if (bus.direction > 0.0f) busRoot = glm::rotate(busRoot, glm::pi<float>(), glm::vec3(0.0f, 1.0f, 0.0f));
+        busRoot = glm::rotate(busRoot, std::atan2(-bus.heading.x, -bus.heading.y), glm::vec3(0.0f, 1.0f, 0.0f));
         // el frente (-Z local) sube cuando la cota crece en el sentido de la marcha
         busRoot = glm::rotate(busRoot, std::atan(bus.direction * Viaduct::Slope(bus.position.z)), glm::vec3(1.0f, 0.0f, 0.0f));
         if (m_BusModel) {

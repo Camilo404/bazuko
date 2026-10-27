@@ -13,7 +13,7 @@ namespace {
 constexpr int kCellW = 512;
 constexpr int kCellH = 128;
 const std::vector<std::string> kStreetNames{
-    "Calle 10", "Calle 9", "Calle 8A", "Calle 8", "Calle 7", "Carrera 15", "Carrera 10", "Av. Caracas", "Carrera 8", "Carrera 6",
+    "Calle 10", "Calle 9", "Calle 8", "Calle 7", "Carrera 15", "Carrera 10", "Av. Caracas", "Carrera 8", "Carrera 6",
     "Parque", "Tercer Milenio", "Parque del Sur", "Parque de la Estación", "Parque del Lago", "Lago · Puente TransMilenio", "Bogotá"};
 const int kCells = SignAtlas::kShopSigns + SignAtlas::kTags + SignAtlas::kNotes + SignAtlas::kLandmarks + static_cast<int>(kStreetNames.size());
 

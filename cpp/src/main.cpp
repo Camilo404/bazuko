@@ -286,12 +286,17 @@ int main(int argc, char** argv) {
                     if (disease.remaining > 0.0f && disease.healthDrain > 0.0f) diseases.push_back(std::move(disease));
                 }
                 if (state.contains("dayProgress")) simulation.SetDayProgress(state.value("dayProgress", 0.30f));
-                playerPos.x = state.value("playerX", playerPos.x);
-                playerPos.z = state.value("playerZ", playerPos.z);
+                // Las partidas guardadas con la distribucion de calles anterior (sin mapVersion) usan otro marco de
+                // coordenadas: conservan todo menos la posicion, y el jugador vuelve al cambuche
+                const bool sameMap = state.value("mapVersion", 1) >= 2;
+                if (sameMap) {
+                    playerPos.x = state.value("playerX", playerPos.x);
+                    playerPos.z = state.value("playerZ", playerPos.z);
+                }
                 {
                     const glm::vec3 savedPosition = playerPos;
                     float deckY = 0.0f;
-                    if (state.value("playerOnDeck", false) && Viaduct::StepLayer(true, playerPos.x, playerPos.z, deckY)) {
+                    if (sameMap && state.value("playerOnDeck", false) && Viaduct::StepLayer(true, playerPos.x, playerPos.z, deckY)) {
                         playerOnDeck = true;   // guardo sobre el tablero: se queda alli
                         playerPos.y = deckY;
                     } else {
@@ -369,6 +374,7 @@ int main(int argc, char** argv) {
         for (const auto& disease : diseases) {
             state["diseases"].push_back({{"id", disease.id}, {"remaining", disease.remaining}, {"healthDrain", disease.healthDrain}, {"mentalDrain", disease.mentalDrain}});
         }
+        state["mapVersion"] = 2;   // mapa del original (assets/data/city-map.json)
         state["playerX"] = playerPos.x;
         state["playerZ"] = playerPos.z;
         state["playerOnDeck"] = playerOnDeck;
@@ -1813,7 +1819,7 @@ int main(int argc, char** argv) {
                 for (int tileX = 1; tileX < CityLayout::WIDTH - 1; ++tileX) {
                     const glm::vec2 candidate(
                         static_cast<float>(tileX) * CityLayout::TILE_SIZE
-                            - CityLayout::WIDTH * CityLayout::TILE_SIZE * 0.5f
+                            - CityLayout::ORIGIN_X
                             + CityLayout::TILE_SIZE * 0.5f,
                         static_cast<float>(tileZ) * CityLayout::TILE_SIZE
                             - CityLayout::ORIGIN_Z
