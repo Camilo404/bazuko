@@ -60,6 +60,8 @@ Para las pruebas de navegador, instalar Chromium con `npx playwright install chr
 - La calidad gráfica elegida limita la resolución automática. Mantener el descarte fuera de cámara, la geometría agrupada y los presupuestos de luces y audio.
 - Las primeras partidas usan calidad baja; la calidad efectiva puede bajar bajo carga sin cambiar la preferencia guardada. Cámara, sombras, silueta y animación visual usan ese perfil efectivo. Ver `docs/rendimiento.md`.
 - Las cajas estáticas usan un índice espacial: al mover una caja existente invalidarlo con `invalidateStaticIndex()`. Las luces añadidas dentro de ramas existentes se registran con `LocalLights.register`; refrescar posiciones tras mover fuentes estáticas.
+- El mobiliario con `staticMergeKey` comparte lotes solo si sus materiales son inmutables e iguales. Las lámparas se instancian después de cargar sus GLB, manteniendo las luces originales. Los semáforos conservan sus atributos de fase por instancia y se descartan por sector; no reunirlos en una sola malla sin descarte. La altura del viaducto usa un índice de los mismos triángulos dibujados: actualizar ambos si cambia su geometría. `npm run benchmark:performance` mide cinco vistas en un navegador aislado; comprobar el renderer y no confundir software con GPU real.
+- El render omite el recorrido de matrices de la ciudad congelada. Sus raíces móviles deben figurar en `renderer.dynamicWorldRoots`, que `_registerRenderGroups` llena con los buses y `district.animated`. Registrar allí cualquier raíz dinámica nueva que viva dentro de un grupo estático; los hijos directos dinámicos de la escena siguen actualizándose automáticamente.
 
 ## Forma de trabajar
 

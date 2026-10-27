@@ -43,18 +43,44 @@ export function paintViaductClearance(map) {
   }
 }
 
-/** Cota de la superficie curva real, también en los bordes interiores de los giros. */
-export function viaductSurface(x, z) {
-  if (z < VIADUCT.start - 16 || z > VIADUCT.end + 16 || Math.abs(x - busPathX(z)) > 24) return null;
-  for (let t = Math.max(Math.floor(VIADUCT.start), Math.floor(z - 16)); t < Math.min(VIADUCT.end, z + 16); t += 1) {
-    const a = edge(Math.max(t, VIADUCT.start), -1), b = edge(Math.max(t, VIADUCT.start), 1), c = edge(Math.min(t + 1, VIADUCT.end), -1), d = edge(Math.min(t + 1, VIADUCT.end), 1);
+const SURFACE_CELL = 8;
+let surfaceCells;
+
+// El trazado es estático: guardar los mismos triángulos evita reconstruir bordes,
+// vectores y funciones trigonométricas en cada apoyo de ambos buses y del jugador.
+function indexSurface() {
+  const cells = new Map();
+  for (let t = Math.floor(VIADUCT.start); t < VIADUCT.end; t++) {
+    const a = edge(Math.max(t, VIADUCT.start), -1), b = edge(Math.max(t, VIADUCT.start), 1);
+    const c = edge(Math.min(t + 1, VIADUCT.end), -1), d = edge(Math.min(t + 1, VIADUCT.end), 1);
     for (const [p, q, r] of [[a, b, c], [b, d, c]]) {
       const den = (q.z - r.z) * (p.x - r.x) + (r.x - q.x) * (p.z - r.z);
       if (Math.abs(den) < 1e-9) continue;
-      const u = ((q.z - r.z) * (x - r.x) + (r.x - q.x) * (z - r.z)) / den;
-      const v = ((r.z - p.z) * (x - r.x) + (p.x - r.x) * (z - r.z)) / den;
-      if (u >= -1e-6 && v >= -1e-6 && u + v <= 1.000001) return u * p.y + v * q.y + (1 - u - v) * r.y;
+      const triangle = { p, q, r, den, station: t,
+        minX: Math.min(p.x, q.x, r.x) - 1e-4, maxX: Math.max(p.x, q.x, r.x) + 1e-4,
+        minZ: Math.min(p.z, q.z, r.z) - 1e-4, maxZ: Math.max(p.z, q.z, r.z) + 1e-4 };
+      for (let cell = Math.floor(triangle.minZ / SURFACE_CELL); cell <= Math.floor(triangle.maxZ / SURFACE_CELL); cell++) {
+        if (!cells.has(cell)) cells.set(cell, []);
+        cells.get(cell).push(triangle);
+      }
     }
+  }
+  return cells;
+}
+
+/** Cota de los triángulos dibujados, con el mismo orden y tolerancia de bordes. */
+export function viaductSurface(x, z) {
+  if (z < VIADUCT.start - 16 || z > VIADUCT.end + 16 || Math.abs(x - busPathX(z)) > 24) return null;
+  surfaceCells ??= indexSurface();
+  const candidates = surfaceCells.get(Math.floor(z / SURFACE_CELL));
+  if (!candidates) return null;
+  const first = Math.max(Math.floor(VIADUCT.start), Math.floor(z - 16)), end = Math.min(VIADUCT.end, z + 16);
+  for (const triangle of candidates) {
+    if (triangle.station < first || triangle.station >= end || x < triangle.minX || x > triangle.maxX || z < triangle.minZ || z > triangle.maxZ) continue;
+    const { p, q, r, den } = triangle;
+    const u = ((q.z - r.z) * (x - r.x) + (r.x - q.x) * (z - r.z)) / den;
+    const v = ((r.z - p.z) * (x - r.x) + (p.x - r.x) * (z - r.z)) / den;
+    if (u >= -1e-6 && v >= -1e-6 && u + v <= 1.000001) return u * p.y + v * q.y + (1 - u - v) * r.y;
   }
   return null;
 }
@@ -86,6 +112,7 @@ export function buildColpatriaViaduct(map, { pavement: streetAsphalt = null } = 
     const prism = new THREE.BufferGeometry(), vertices = [];
     for (const depth of [.06, .06 + VIADUCT.thickness]) for (const p of [a,b,c,d]) vertices.push(p.x,p.y-depth,p.z);
     prism.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    prism.setAttribute('uv', new THREE.Float32BufferAttribute(vertices.flatMap((value, i) => i % 3 === 0 ? [value / 14, vertices[i + 2] / 14] : []), 2));
     prism.setIndex([0,2,1,1,2,3,4,5,6,5,7,6,0,1,4,1,5,4,2,6,3,3,6,7,0,4,2,2,4,6,1,3,5,3,7,5]);
     prism.computeVertexNormals();
     const deck = new THREE.Mesh(prism, concrete); deck.castShadow = deck.receiveShadow = true;

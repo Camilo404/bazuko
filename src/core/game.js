@@ -716,7 +716,14 @@ export class Game {
       this.cameraRig.releaseControls();
       this.audio.setPaused(true);
       this.audio.updateSteps(false, false);
-      this._renderFrame(now, false);
+      // El mundo inmóvil detrás de un panel no necesita renderizar a la frecuencia
+      // del monitor. Una pestaña oculta no envía trabajo a la GPU.
+      this.performanceHUD.metrics.sample(now, false);
+      this.renderer.resolution.resetWindow();
+      if (!globalThis.document?.hidden && now >= (this._nextPausedRender ?? 0)) {
+        this._nextPausedRender = now + 1000 / 15;
+        this._renderFrame(now, false);
+      }
       this.input.endFrame();
       return;
     }
@@ -892,10 +899,11 @@ export class Game {
     const elapsed = this._lastRenderTime === undefined ? 0 : (now - this._lastRenderTime) / 1000;
     this._lastRenderTime = now;
     this.localLights.update(elapsed, this.player.position, (x, z) => this.world.active?.getGroundHeight?.(x, z) ?? 0, this.cameraRig.camera);
-    const showSilhouette = this.collisions.mayOccludePlayer?.(this.cameraRig.camera.position, this.player.position) ?? true;
+    const showSilhouette = GRAPHICS_PROFILES[quality].silhouette &&
+      (this.collisions.mayOccludePlayer?.(this.cameraRig.camera.position, this.player.position) ?? true);
     this.renderer.render(this.sceneMgr.scene, this.cameraRig.camera, this.player.root, [this.sceneMgr.sun], showSilhouette);
     if (this.performanceHUD.update(now, this.player.position, this.renderer, active, this.localLights)) {
-      this.renderer.adaptResolution(this.performanceHUD.metrics.frameMs);
+      this.renderer.adaptResolution(this.performanceHUD.metrics.frameMs, performance.now() - now);
     } else this.renderer.resolution.resetWindow();
   }
 
@@ -940,6 +948,10 @@ export class Game {
     // Las fuentes de la ciudad y del fogón no cambian de posición; sí de intensidad/visibilidad.
     this.localLights.refreshSources({ static: true });
     const culling = this.renderer.culling, district = this.world.active;
+    this.renderer.dynamicWorldRoots = [
+      ...(district?.animated ?? []),
+      ...(district?.busServices ?? [district?.busService].filter(Boolean)).map(bus => bus.group)
+    ];
     culling.clear();
     if (this.dog) culling.register(this.dog.group, { dynamic: true, margin: 1 });
     for (const flock of district?.pigeonFlocks ?? []) culling.register(flock.group);

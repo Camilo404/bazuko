@@ -86,7 +86,8 @@ test('todos los refugios de El Cartucho quedan separados del terreno, incluso al
       const hits = ray.intersectObject(city.group, true);
       const ground = hits.find(hit => groundMaterials.has(hit.object.material));
       if (!ground) continue; // Hay partes de la base sobre tiles de edificios sin suelo dibujado.
-      const card = hits.find(hit => hit.object.material === material);
+      const card = hits.find(hit => hit.object.material === material ||
+        (material.userData.staticMergeKey && hit.object.material.userData.staticMergeKey === material.userData.staticMergeKey));
       assert.ok(card, `base no visible en ${point.x},${point.z}`);
       assert.ok(card.point.y - ground.point.y > 0.03, `cartón y suelo superpuestos en ${point.x},${point.z}`);
       checked++;

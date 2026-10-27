@@ -136,10 +136,19 @@ test('el cambuche permanece oculto hasta construir base y techo y conserva las m
 test('las lentes del semáforo se iluminan sobre el GLB, sin discos flotantes ni luces dinámicas', async () => {
   const signals = new TrafficSignals();
   await signals.preloadModel();
-  assert.equal(signals.poleMesh.count, signals.poles.length);
-  assert.equal(signals.group.children.length, 1);
-  const axes = signals.poleMesh.geometry.getAttribute('trafficAxis');
-  assert.deepEqual([...axes.array], signals.poles.map(pole => pole.axis));
+  assert.equal(signals.poleMeshes.reduce((sum, mesh) => sum + mesh.count, 0), signals.poles.length);
+  assert.equal(signals.group.children.length, signals.poleMeshes.length);
+  for (const pole of signals.poles) {
+    const batch = signals.poleMeshes[pole.batchIndex];
+    assert.equal(batch.geometry.getAttribute('trafficAxis').getX(pole.instanceIndex), pole.axis);
+    assert.equal(batch.material, signals.poleMesh.material);
+  }
+  const camera = new THREE.PerspectiveCamera(60, 1, .1, 50);
+  camera.position.set(75, 8, 95); camera.lookAt(75, 0, 70); camera.updateMatrixWorld();
+  const frustum = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  const visible = signals.poleMeshes.filter(mesh => frustum.intersectsObject(mesh));
+  assert.ok(visible.reduce((sum, mesh) => sum + mesh.count, 0) < signals.poles.length / 2);
+  assert.ok(signals.poleMeshes.every(mesh => mesh.frustumCulled && mesh.boundingSphere));
   let pointLights = 0;
   signals.group.traverse(object => { if (object.isLight) pointLights++; });
   assert.equal(pointLights, 0);

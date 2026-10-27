@@ -158,19 +158,31 @@ export class Renderer {
 
   render(scene, camera, playerRoot = null, shadowLights = [], showSilhouette = true) {
     this.instance.info.reset();
-    this.culling.apply(camera, this.instance.shadowMap.enabled ? shadowLights : []);
+    const autoUpdate = scene.matrixWorldAutoUpdate;
     try {
+      // Los inmuebles ya tienen matrices mundiales fijas. El recorrido automático
+      // de Scene aún visitaba sus miles de nodos, incluso con matrices congeladas.
+      if (autoUpdate && this.dynamicWorldRoots && !scene.parent) {
+        if (scene.matrixAutoUpdate) scene.updateMatrix();
+        scene.matrixWorld.copy(scene.matrix);
+        scene.matrixWorldNeedsUpdate = false;
+        for (const root of scene.children) if (root.matrixWorldAutoUpdate !== false) root.updateMatrixWorld();
+        for (const root of this.dynamicWorldRoots) root.updateMatrixWorld();
+        scene.matrixWorldAutoUpdate = false;
+      }
+      this.culling.apply(camera, this.instance.shadowMap.enabled ? shadowLights : []);
       this.instance.render(scene, camera);
       if (playerRoot && showSilhouette && GRAPHICS_PROFILES[this.effectiveQuality].silhouette) {
         this.silhouette.render(this.instance, scene, camera, playerRoot, this.overlayLights);
       }
     } finally {
+      scene.matrixWorldAutoUpdate = autoUpdate;
       this.culling.restore();
     }
   }
 
-  adaptResolution(frameMs) {
-    if (this.resolution.sample(frameMs)) {
+  adaptResolution(frameMs, workMs = 0) {
+    if (this.resolution.sample(frameMs, workMs)) {
       if (this.instance.getPixelRatio() !== this.resolution.ratio) this.instance.setPixelRatio(this.resolution.ratio);
       const shadows = this.effectiveQuality !== 'baja';
       if (this.instance.shadowMap.enabled !== shadows) {

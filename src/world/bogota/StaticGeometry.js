@@ -64,3 +64,43 @@ export function createRenderSectors(root, excluded = new Set()) {
   }
   return [...sectors.values()];
 }
+
+/** Instancias de mobiliario ya cargado: mantiene luces y referencias en sus raíces. */
+export function instanceStaticModels(roots, parent) {
+  parent.updateWorldMatrix(true, false);
+  const inverse = parent.matrixWorld.clone().invert(), buckets = new Map();
+  for (const root of roots) {
+    root.updateWorldMatrix(true, true);
+    root.traverseVisible(mesh => {
+      if (!mesh.isMesh || mesh.isSkinnedMesh || mesh.isInstancedMesh || mesh.morphTargetInfluences) return;
+      const matrix = inverse.clone().multiply(mesh.matrixWorld);
+      // InstancedMesh no admite escalas reflejadas.
+      if (matrix.determinant() <= 0) return;
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      if (materials.some(material => material.transparent)) return;
+      const key = `${mesh.geometry.uuid}|${materials.map(material => material.uuid).join(',')}|${mesh.castShadow}|${mesh.receiveShadow}|${mesh.layers.mask}|${mesh.renderOrder}|${geometryChunk(mesh.geometry, matrix)}`;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push({ mesh, matrix });
+    });
+  }
+  const group = new THREE.Group();
+  group.name = 'Mobiliario importado instanciado';
+  group.userData.noMerge = true;
+  for (const entries of buckets.values()) {
+    const source = entries[0].mesh;
+    const batch = new THREE.InstancedMesh(source.geometry, source.material, entries.length);
+    batch.castShadow = source.castShadow;
+    batch.receiveShadow = source.receiveShadow;
+    batch.layers.mask = source.layers.mask;
+    batch.renderOrder = source.renderOrder;
+    for (let i = 0; i < entries.length; i++) {
+      batch.setMatrixAt(i, entries[i].matrix);
+      entries[i].mesh.visible = false;
+    }
+    batch.instanceMatrix.needsUpdate = true;
+    batch.computeBoundingBox();
+    batch.computeBoundingSphere();
+    group.add(batch);
+  }
+  return group;
+}

@@ -15,6 +15,8 @@ export class Banca {
       color: 0x1a1a20,
       flatShading: true
     });
+    woodMat.userData.staticMergeKey = 'banca:madera';
+    metalMat.userData.staticMergeKey = 'banca:metal';
 
     // Asiento
     const seatGeo = new THREE.BoxGeometry(1.6, 0.08, 0.5);

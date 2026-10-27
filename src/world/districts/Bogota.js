@@ -35,7 +35,7 @@ import { VIADUCT, buildColpatriaViaduct, viaductHeight, viaductSurface } from '.
 import { TERMINAL, inTerminal, terminalGroundHeight, buildTransitTerminal } from '../bogota/TransitTerminal.js';
 import { LAKE_PARK, onLakeBridge, bridgeHeight, buildLakeWater } from '../bogota/LakePark.js';
 import { PigeonFlock } from '../../entities/PigeonFlock.js';
-import { geometryChunk, mergeByChunk, freezeStaticTransforms, createRenderSectors } from '../bogota/StaticGeometry.js';
+import { geometryChunk, mergeByChunk, freezeStaticTransforms, createRenderSectors, instanceStaticModels } from '../bogota/StaticGeometry.js';
 import { CITY_WIDTH, CITY_HEIGHT, CITY_AREA_MULTIPLIER, CITY_CARRERAS as CARRERAS,
   CITY_CALLES as CALLES, ORIGINAL_CITY_WIDTH, ORIGINAL_CITY_HEIGHT, EXTENSION_PARKS,
   expandCity } from '../bogota/CityLayout.js';
@@ -977,12 +977,13 @@ export class Bogota {
     this.group.updateMatrixWorld(true);
     const buckets = new Map();
     const replacedGeometries = new Set();
+    const replacedMaterials = new Set();
     const visit = (o) => {
       if (o.userData.update || o.userData.noMerge) return; // animados y faroles quedan aparte
       if (o.isMesh && !Array.isArray(o.material) && !o.isSkinnedMesh) {
         if (!o.geometry.attributes.uv || !o.geometry.attributes.normal) return;
         // Conserva los índices: expandir cajas y planos duplicaba sus vértices.
-        const key = `${o.material.uuid}|${o.castShadow}|${o.receiveShadow}|${!!o.geometry.index}|${geometryChunk(o.geometry, o.matrixWorld)}`;
+        const key = `${o.material.userData.staticMergeKey ?? o.material.uuid}|${o.castShadow}|${o.receiveShadow}|${!!o.geometry.index}|${geometryChunk(o.geometry, o.matrixWorld)}`;
         const g = o.geometry.clone();
         for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(name)) g.deleteAttribute(name);
         g.applyMatrix4(o.matrixWorld);
@@ -1003,6 +1004,7 @@ export class Bogota {
       for (const source of sources) {
         source.parent.remove(source);
         replacedGeometries.add(source.geometry);
+        replacedMaterials.add(source.material);
       }
       const mesh = new THREE.Mesh(merged, mat);
       mesh.castShadow = cast;
@@ -1011,8 +1013,12 @@ export class Bogota {
       this.group.add(mesh);
     }
     // Una geometría compartida por objetos animados sigue en uso.
-    this.group.traverse((o) => replacedGeometries.delete(o.geometry));
+    this.group.traverse((o) => {
+      replacedGeometries.delete(o.geometry);
+      for (const material of Array.isArray(o.material) ? o.material : [o.material]) replacedMaterials.delete(material);
+    });
     for (const geometry of replacedGeometries) geometry.dispose();
+    for (const material of replacedMaterials) material.dispose();
   }
 
   // ---------- ciclo ----------
@@ -1022,6 +1028,12 @@ export class Bogota {
       this.signals.preloadModel(),
       ...this.props.map(prop => prop.instance.preloadModel?.())
     ]);
+    if (!this._lampInstances) {
+      this._lampInstances = instanceStaticModels(this.props.map(prop => prop.instance.model).filter(Boolean), this.group);
+      this.group.add(this._lampInstances);
+      this.renderSectors.push(...createRenderSectors(this._lampInstances));
+      freezeStaticTransforms(this._lampInstances);
+    }
     // Actualizar los límites después de cargar el mobiliario.
     this.group.updateWorldMatrix(true, true);
   }
@@ -1066,6 +1078,7 @@ export class Bogota {
     scene.remove(this.group);
     for (const n of this.npcs) n.dispose();
     this.group.traverse((o) => {
+      if (o.isInstancedMesh) o.dispose();
       o.geometry?.dispose?.();
       const mats = Array.isArray(o.material) ? o.material : [o.material];
       for (const m of mats) { m?.map?.dispose?.(); m?.dispose?.(); }
