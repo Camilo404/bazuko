@@ -108,6 +108,8 @@ El mapa mide 120 x 161 baldosas (240 x 322 m): el centro de 120 x 111 y, al sur,
 
 Estacion Portal del Centro (`src/world/Station.hpp`): isla accesible de 4 m entre los dos carriles del troncal en el extremo norte (Z -108 a -72), con rampas peatonales en cada extremo (la cota del suelo sube a 0,92 m), cubierta, columnas, galerias de vidrio y rotulos; el jugador la sube por sus rampas. Hay dos buses articulados (`BusState`): el del norte sale del extremo sur del puente, sube por el viaducto y para 4 s en la estacion por el carril este; el del sur sale de la estacion por el carril oeste, cruza el viaducto y el puente, y ambos relevan en los extremos. Cada uno tiene su voz de motor y se inclina con la rampa. La torre Colpatria (112 m, con costillas, franjas de colores que brillan de noche, anexo gris y rotulos) queda en la orilla este del lago, y junto al extremo sur del viaducto hay un edificio de ladrillo de cinco pisos. A diferencia del original, el viaducto es recto: Colpatria no esta sobre el eje de la avenida del port, asi que no hace falta el rodeo curvo.
 
+Cielo nocturno (`src/world/StarField.hpp`): 700 estrellas blancas, azuladas y calidas sobre una semiesfera que sigue a la camara, sin iluminacion ni niebla (modo cielo del renderer). Aparecen al oscurecer (con las farolas) y se apagan con la lluvia y la neblina. Los postes de nomenclatura vial (Calle 10, Carrera 15, Av. Caracas...) marcan cada cruce y los parques.
+
 Verificacion visual sin pulsar teclas: `BAZUKO_SHOT=captura.png` guarda una captura a los 6 s y cierra el juego (`BAZUKO_SHOT_DELAY`, `BAZUKO_YAW`, `BAZUKO_PITCH` y `BAZUKO_DIST` ajustan el retardo y la camara; la posicion sale del guardado).
 
 ### Radio transistor

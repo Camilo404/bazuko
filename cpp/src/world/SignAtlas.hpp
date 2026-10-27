@@ -1,6 +1,8 @@
 #pragma once
 #include <filesystem>
 #include <memory>
+#include <string>
+#include <vector>
 #include <glm/glm.hpp>
 #include "../renderer/Texture.hpp"
 
@@ -20,6 +22,12 @@ public:
     static constexpr int kTags = 8;
     static constexpr int kNotes = 8;
     static constexpr int kLandmarks = 10;   // gasolinera (4), D69, estacion Portal del Centro (2) y torre Colpatria (3)
+
+    // Placas blancas de nomenclatura vial (Calle 10, Carrera 15, Av. Caracas...) y de parques; indices en `StreetNames()`.
+    static const std::vector<std::string>& StreetNames();
+    SignUV StreetName(size_t i) const { return Cell(kShopSigns + kTags + kNotes + kLandmarks + i); }
+    // Celda de la placa con ese texto (la primera si no existe)
+    SignUV StreetName(const std::string& name) const;
 
     // false si no hay fuente: el llamador dibuja los rotulos de color liso como antes.
     bool Build(const std::string& fontPath);

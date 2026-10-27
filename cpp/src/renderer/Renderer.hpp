@@ -66,6 +66,8 @@ public:
 
     // Dibuja sin iluminacion (bombillas, ventanas): el color es el propio albedo
     void SetUnlit(bool unlit) { m_Unlit = unlit; }
+    // Cielo: sin iluminacion ni niebla (estrellas)
+    void SetSky(bool sky) { m_Sky = sky; }
 
     Shader& GetDefaultShader() { return *m_DefaultShader; }
     LightBlockData& GetLighting() { return m_LightingData; }
@@ -88,6 +90,7 @@ private:
     int m_ScreenViewport[4] = {0, 0, 0, 0};
     bool m_ScaledActive = false;
     bool m_Unlit = false;
+    bool m_Sky = false;
     float m_Wetness = 0.0f;
     float m_Contrast = 1.0f;
     float m_Saturation = 1.0f;

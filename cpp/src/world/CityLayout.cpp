@@ -3,6 +3,7 @@
 #include "../core/Paths.hpp"
 #include <cmath>
 #include <algorithm>
+#include <tuple>
 #include <array>
 #include <random>
 #include <cstdint>
@@ -989,6 +990,46 @@ void CityLayout::BuildMeshes(const CityLoadProgress& progressCallback) {
         }
         if (!lightVertices.empty()) m_ColpatriaLightMesh = std::make_shared<Mesh>(lightVertices, lightIndices);
         if (!glassVertices.empty()) m_GlassMesh = std::make_shared<Mesh>(glassVertices, glassIndices);
+
+
+        // ---- Postes de nomenclatura vial (streetSign del original): una placa blanca por cada esquina de calle y carrera,
+        //      y las de los parques y el lago. Poste de 2,8 m con dos placas cruzadas, legibles por ambas caras ----
+        if (m_SignAtlas.GetTexture()) {
+            const auto streetPost = [&](float px, float pz, const std::string& first, const std::string& second) {
+                if (!IsWalkable(px, pz) || IsBlocked(px, pz, 0.2f)) return;   // solo sobre suelo libre (anden, plaza o prado)
+                box({px, 1.4f, pz}, {0.08f, 2.8f, 0.08f}, 0x666666);
+                obstacle({px, 0.0f, pz}, 0.08f, 0.08f, 0.15f);
+                const std::array<std::string, 2> lines{first, second};
+                for (size_t line = 0; line < lines.size(); ++line) {
+                    if (lines[line].empty()) continue;
+                    const SignUV uv = m_SignAtlas.StreetName(lines[line]);
+                    const float y = 2.65f - static_cast<float>(line) * 0.32f;
+                    const glm::vec3 front = line % 2 == 0 ? glm::vec3(0, 0, 1) : glm::vec3(1, 0, 0);
+                    appendSignQuad({px, y, pz}, front * 1.0f, 1.1f, 0.28f, uv, 0.0f, 0.0f);
+                    appendSignQuad({px, y, pz}, -front, 1.1f, 0.28f, uv, 0.0f, 0.0f);
+                }
+            };
+            const std::array<std::tuple<int, int, const char*>, 5> streets{{
+                {16, 21, "Calle 10"}, {38, 43, "Calle 9"}, {60, 65, "Calle 8A"}, {72, 77, "Calle 8"}, {94, 99, "Calle 7"}}};
+            const std::array<std::tuple<int, int, const char*>, 5> avenues{{
+                {18, 23, "Carrera 15"}, {36, 41, "Carrera 10"}, {53, 66, "Av. Caracas"}, {84, 89, "Carrera 8"}, {106, 111, "Carrera 6"}}};
+            for (const auto& [z0, z1, street] : streets) {
+                for (const auto& [x0, x1, avenue] : avenues) {
+                    // esquina noroeste del cruce, en el anden (la baldosa diagonal a la calzada)
+                    streetPost((static_cast<float>(x0 - 1) + 0.5f) * TILE_SIZE - ORIGIN_X,
+                               (static_cast<float>(z0 - 1) + 0.5f) * TILE_SIZE - ORIGIN_Z, street, avenue);
+                }
+            }
+            const auto tilePosition = [&](float tx, float tz) {
+                return glm::vec2((tx + 0.5f) * TILE_SIZE - ORIGIN_X, (tz + 0.5f) * TILE_SIZE - ORIGIN_Z);
+            };
+            const glm::vec2 centralPark = tilePosition(25.0f, 29.0f), stationPark = tilePosition(43.0f, 29.0f),
+                            southPark = tilePosition(68.0f, 85.0f), lakeSign = tilePosition(75.0f, 112.0f);
+            streetPost(centralPark.x, centralPark.y, "Parque", "Tercer Milenio");
+            streetPost(stationPark.x, stationPark.y, "Parque de la Estación", "Bogotá");
+            streetPost(southPark.x, southPark.y, "Parque del Sur", "Bogotá");
+            streetPost(lakeSign.x, lakeSign.y, "Parque del Lago", "Lago · Puente TransMilenio");
+        }
 
         // Parque del Lago: el radar lo marca en el centro del agua
         m_Landmarks.push_back({"Parque del Lago", {0.0f, 0.0f, 131.5f * TILE_SIZE - ORIGIN_Z}});

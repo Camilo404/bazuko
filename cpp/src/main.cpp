@@ -18,6 +18,7 @@
 #include "world/SafeSpawn.hpp"
 #include "world/Atmosphere.hpp"
 #include "world/Viaduct.hpp"
+#include "world/StarField.hpp"
 #include "core/ScreenshotPng.hpp"
 #include "core/AdaptiveResolution.hpp"
 #include "game/Harvest.hpp"
@@ -116,6 +117,8 @@ int main(int argc, char** argv) {
     glm::vec3 playerPos = city.GetSpawnPoint();
     playerPos.y = 0.0f;
     bool knockedOnDeck = false;  // la caida empezo sobre el tablero: se levanta alli
+    StarField starField;
+    float starVisibility = 0.0f;   // 0..1: las estrellas aparecen al oscurecer y con el cielo despejado
     bool playerOnDeck = false;   // sobre el tablero del viaducto (capa elevada); en la calle pasa por debajo
     // Regla estricta: el jugador nunca aparece ni se carga dentro de un edificio, un modelo o un recinto sin salida.
     // Toda posicion que se le asigna (inicio, partida guardada, partida nueva, recuperacion, fin de una caida)
@@ -1419,6 +1422,8 @@ int main(int argc, char** argv) {
                 }
             }
             simulation.SetLampGlow(atmosphere.lampPower);
+            starVisibility = std::clamp((atmosphere.lampPower - 0.35f) / 0.5f, 0.0f, 1.0f)
+                * (1.0f - std::min(1.0f, 0.85f * simulation.GetRainIntensity() + 0.9f * simulation.GetMist()));
             city.SetNightGlow(atmosphere.lampPower);
         }
         renderer.BeginScaledTarget();
@@ -1427,6 +1432,7 @@ int main(int argc, char** argv) {
         // Renderizar ciudad de Bogotá
         city.Render(renderer, playerPos);
         simulation.Render(renderer, clock.GetElapsedTime(), playerPos);
+        starField.Render(renderer, camera.GetPosition(), starVisibility, clock.GetElapsedTime());
 
         // Renderizar personaje
         {

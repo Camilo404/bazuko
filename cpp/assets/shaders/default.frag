@@ -32,7 +32,7 @@ layout(std140, binding = 1) uniform LightBlock {
 
 uniform vec4 uAlbedo;
 uniform int uUseTexture;
-uniform int uUnlit = 0;   // bombillas: sin iluminacion
+uniform int uUnlit = 0;   // 1 bombillas (sin iluminacion), 2 cielo (sin iluminacion ni niebla)
 uniform int uAlphaMode;
 uniform float uAlphaCutoff;
 layout(binding = 0) uniform sampler2D uTexture;
@@ -98,6 +98,7 @@ void main() {
     result = mix(result, uFogColor, fogFactor);
     // bombillas y halos: casi no los apaga la niebla, se ven encendidos desde lejos
     if (uUnlit == 1) result = mix(baseColor.rgb, uFogColor, fogFactor * 0.25);
+    else if (uUnlit == 2) result = baseColor.rgb;   // cielo: las estrellas no llevan niebla
 
     if (uContrast != 1.0 || uSaturation != 1.0 || uHueDegrees != 0.0) {
         const vec3 luma = vec3(0.2126, 0.7152, 0.0722);

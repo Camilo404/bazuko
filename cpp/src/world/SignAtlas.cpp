@@ -12,7 +12,10 @@ namespace {
 
 constexpr int kCellW = 512;
 constexpr int kCellH = 128;
-constexpr int kCells = SignAtlas::kShopSigns + SignAtlas::kTags + SignAtlas::kNotes + SignAtlas::kLandmarks;
+const std::vector<std::string> kStreetNames{
+    "Calle 10", "Calle 9", "Calle 8A", "Calle 8", "Calle 7", "Carrera 15", "Carrera 10", "Av. Caracas", "Carrera 8", "Carrera 6",
+    "Parque", "Tercer Milenio", "Parque del Sur", "Parque de la Estación", "Parque del Lago", "Lago · Puente TransMilenio", "Bogotá"};
+const int kCells = SignAtlas::kShopSigns + SignAtlas::kTags + SignAtlas::kNotes + SignAtlas::kLandmarks + static_cast<int>(kStreetNames.size());
 
 // Nombres de local de src/world/districts/Bogota.js (SHOP_NAMES)
 const std::array<std::pair<const char*, const char*>, SignAtlas::kShopSigns> kShops{{
@@ -105,8 +108,22 @@ bool SignAtlas::Build(const std::string& fontPath) {
         place(index, cell);
     }
 
+    for (size_t i = 0; i < kStreetNames.size(); ++i, ++index) {
+        Image cell(kCellW, kCellH, HexColor(0xffffff));   // placa blanca con letras oscuras, como streetSign del original
+        font.DrawCentered(cell, kStreetNames[i], kCellW * 0.5f, 64.0f, 70.0f, 480.0f, HexColor(0x1b1b1b));
+        place(index, cell);
+    }
+
     m_Texture = std::make_shared<Texture>(static_cast<uint32_t>(atlas.width), static_cast<uint32_t>(atlas.height), atlas.pixels.data());
     return true;
+}
+
+const std::vector<std::string>& SignAtlas::StreetNames() { return kStreetNames; }
+
+SignUV SignAtlas::StreetName(const std::string& name) const {
+    for (size_t i = 0; i < kStreetNames.size(); ++i)
+        if (kStreetNames[i] == name) return StreetName(i);
+    return StreetName(size_t{0});
 }
 
 SignUV SignAtlas::Cell(size_t index) const {
