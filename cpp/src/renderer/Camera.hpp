@@ -28,6 +28,7 @@ public:
     const glm::mat4& GetViewProjectionMatrix() const { return m_ViewProjectionMatrix; }
     const glm::vec3& GetPosition() const { return m_Position; }
     float GetYaw() const { return m_Yaw; }
+    void SetOrbit(float yaw, float pitch, float distance) { m_Yaw = yaw; m_Pitch = pitch; m_Distance = distance; }
     void SetPsychosisFovOffset(float offset) { m_PsychosisFovOffset = offset; }
     void SetPsychosisRoll(float radians) { m_PsychosisRoll = radians; }
 

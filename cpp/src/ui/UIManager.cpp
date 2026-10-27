@@ -1598,12 +1598,14 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                     const float worldX = playerPos.x + localX * range;
                     const float worldZ = playerPos.z + localZ * range;
                     const int tileX = static_cast<int>(std::floor((worldX + CityLayout::WIDTH) / CityLayout::TILE_SIZE));
-                    const int tileZ = static_cast<int>(std::floor((worldZ + CityLayout::HEIGHT) / CityLayout::TILE_SIZE));
+                    const int tileZ = static_cast<int>(std::floor((worldZ + CityLayout::ORIGIN_Z) / CityLayout::TILE_SIZE));
                     const TileType tile = city.GetTileAt(tileX, tileZ);
                     ImU32 color = IM_COL32(48, 50, 53, 255);
                     if (tile == TileType::Road) color = IM_COL32(104, 106, 108, 255);
                     else if (tile == TileType::Busway) color = IM_COL32(133, 87, 60, 255);
-                    else if (tile == TileType::Sidewalk || tile == TileType::Plaza) color = IM_COL32(115, 112, 105, 255);
+                    else if (tile == TileType::Sidewalk || tile == TileType::Plaza || tile == TileType::Floor) color = IM_COL32(115, 112, 105, 255);
+                    else if (tile == TileType::Water) color = IM_COL32(48, 96, 128, 255);
+                    else if (tile == TileType::Solid) color = IM_COL32(92, 78, 70, 255);
                     else if (tile == TileType::Grass) color = IM_COL32(62, 92, 58, 255);
                     const ImVec2 cell0(center.x - radius + x * cell, center.y - radius + z * cell);
                     draw->AddRectFilled(cell0, ImVec2(cell0.x + cell + 0.5f, cell0.y + cell + 0.5f), color);
@@ -1618,11 +1620,17 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                 if (!simulation.IsMissionComplete()) marker(simulation.GetMissionNpcPosition(), 3.0f, IM_COL32(237, 84, 72, 255));
                 marker(simulation.GetDogPosition(), 2.5f, IM_COL32(117, 184, 255, 255));
                 struct Place { const char* name; glm::vec3 position; ImU32 color; };
-                const Place places[] = {
+                std::vector<Place> places{
                     {"Cambuche", simulation.GetCambuchePosition(), IM_COL32(255, 209, 102, 255)},
                     {"Recicladora", simulation.GetRecyclerPosition(), IM_COL32(42, 183, 202, 255)},
                     {"Dealer", simulation.GetDealerPosition(), IM_COL32(155, 89, 182, 255)},
                 };
+                for (const auto& landmark : city.GetLandmarks()) {
+                    if (landmark.name == "Pasarela") continue;
+                    const ImU32 landmarkColor = landmark.name == "Gasolinera" ? IM_COL32(222, 62, 62, 255)
+                        : landmark.name == "Tienda D69" ? IM_COL32(236, 76, 118, 255) : IM_COL32(92, 168, 226, 255);
+                    places.push_back({landmark.name.c_str(), landmark.position, landmarkColor});
+                }
                 const Place* nearestPlace = nullptr;
                 float nearestPlaceDistance = 1.0e9f;
                 for (const Place& place : places) {

@@ -19,6 +19,7 @@ public:
     static constexpr int kShopSigns = 16;
     static constexpr int kTags = 8;
     static constexpr int kNotes = 8;
+    static constexpr int kLandmarks = 10;   // gasolinera (4), D69, estacion Portal del Centro (2) y torre Colpatria (3)
 
     // false si no hay fuente: el llamador dibuja los rotulos de color liso como antes.
     bool Build(const std::string& fontPath);
@@ -27,6 +28,7 @@ public:
     SignUV Shop(size_t i) const { return Cell(i % kShopSigns); }
     SignUV Tag(size_t i) const { return Cell(kShopSigns + i % kTags); }
     SignUV Note(size_t i) const { return Cell(kShopSigns + kTags + i % kNotes); }
+    SignUV Landmark(size_t i) const { return Cell(kShopSigns + kTags + kNotes + i % kLandmarks); }
 
 private:
     SignUV Cell(size_t index) const;

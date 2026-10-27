@@ -1,4 +1,6 @@
 #include "Simulation.hpp"
+#include "Viaduct.hpp"
+#include "Station.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <array>
@@ -464,14 +466,14 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
     const std::array<std::array<int, 4>, 3> parkBounds{{
         {{26, 33, 24, 35}},
         {{44, 50, 24, 35}},
-        {{70, 81, 46, 57}}
+        {{69, 81, 80, 91}}
     }};
     for (int z = 1; z < CityLayout::HEIGHT - 1; ++z) {
         for (int x = 1; x < CityLayout::WIDTH - 1; ++x) {
             if (m_City.GetTileAt(x, z) != TileType::Grass) continue;
             const glm::vec3 point((x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
                                   0.0f,
-                                  (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT);
+                                  (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
             m_GrassPositions.push_back(point);
             const bool treeTile = (x * 7 + z * 13) % 11 == 0;
             const bool treeHasRoom = std::all_of(m_TreePositions.begin(), m_TreePositions.end(),
@@ -499,7 +501,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
             if (!besideRoad) continue;
             m_RatWalkPoints.emplace_back((x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
                                          0.15f,
-                                         (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT);
+                                         (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
         }
     }
     std::vector<glm::vec3> selectedRatPoints;
@@ -529,7 +531,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
                 if (!adjacentToRoad) continue;
                 const glm::vec3 candidate(
                     (tx + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH, 0.0f,
-                    (tz + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT);
+                    (tz + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
                 // Garantizar separación mínima real de 18 m entre postes
                 const bool tooClose = std::any_of(m_StreetLamps.begin(), m_StreetLamps.end(),
                     [&](const StreetLamp& lamp) {
@@ -564,7 +566,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
                     if (!adjacentToRoad) continue;
                     const glm::vec3 position((tx + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
                                              0.0f,
-                                             (tz + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT);
+                                             (tz + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
                     // Descartar si hay obstáculo o poste muy cerca
                     if (m_City.IsBlocked(position.x, position.z, 0.55f)) continue;
                     const bool tooCloseToLamp = std::any_of(m_StreetLamps.begin(), m_StreetLamps.end(),
@@ -600,7 +602,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
             const glm::vec3 pos(
                 (x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
                 0.0f,
-                (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT);
+                (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
             // Descartar si bloqueado por edificio, pared u objeto
             if (m_City.IsBlocked(pos.x, pos.z, 0.55f)) continue;
             // Descartar si es un tile de parque o hierba (solo andenes urbanos)
@@ -652,7 +654,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
         return worldTile((first + last) * 0.5f + side * (last - first + 1) * 0.25f, CityLayout::WIDTH);
     };
     const auto laneZ = [&](int first, int last, int side) {
-        return worldTile((first + last) * 0.5f + side * (last - first + 1) * 0.25f, CityLayout::HEIGHT);
+        return worldTile((first + last) * 0.5f + side * (last - first + 1) * 0.25f, CityLayout::ORIGIN_Z);
     };
     const std::array<std::pair<int, int>, 4> carreras{{
         {18, 23}, {36, 41}, {84, 89}, {106, 111}
@@ -698,13 +700,13 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
             const int centerTileX = static_cast<int>(std::floor(
                 (intersection.x + CityLayout::WIDTH * CityLayout::TILE_SIZE * 0.5f) / CityLayout::TILE_SIZE));
             const int centerTileZ = static_cast<int>(std::floor(
-                (intersection.z + CityLayout::HEIGHT * CityLayout::TILE_SIZE * 0.5f) / CityLayout::TILE_SIZE));
+                (intersection.z + CityLayout::ORIGIN_Z) / CityLayout::TILE_SIZE));
             for (int tileZ = centerTileZ - 6; tileZ <= centerTileZ + 6; ++tileZ) {
                 for (int tileX = centerTileX - 6; tileX <= centerTileX + 6; ++tileX) {
                     const glm::vec3 candidate(
                         (tileX + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH * CityLayout::TILE_SIZE * 0.5f,
                         0.0f,
-                        (tileZ + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT * CityLayout::TILE_SIZE * 0.5f);
+                        (tileZ + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
                     const glm::vec2 offset(candidate.x - intersection.x, candidate.z - intersection.z);
                     const float distanceSquared = glm::dot(offset, offset);
                     if (distanceSquared >= bestDistanceSquared
@@ -737,13 +739,27 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
     } else {
         LogInfo("Semaforos de trafico preparados: {}", m_TrafficSignals.size());
     }
-    m_BusStationX = worldTile((57.0f + 62.0f) * 0.5f, CityLayout::WIDTH);
-    m_BusPosition = {m_BusStationX + 3.5f, 0.02f,
-                     worldTile(static_cast<float>(CityLayout::HEIGHT - 2), CityLayout::HEIGHT) - 9.1f};
-    m_BusPreviousPosition = m_BusPosition;
-    m_BusStartZ = m_BusPosition.z;
-    m_BusEndZ = worldTile(1.0f, CityLayout::HEIGHT) + 9.1f;
-    m_BusStationZ = worldTile(21.5f, CityLayout::HEIGHT);
+    // Dos buses: el del norte sale del extremo sur del puente del lago, sube por el viaducto y para en la estacion;
+    // el del sur parte de la estacion, cruza el viaducto y el puente, y relevan en los extremos.
+    {
+        const float northEnd = worldTile(1.0f, CityLayout::ORIGIN_Z) + 9.1f;
+        const float southEnd = Viaduct::kEndZ - 10.0f;
+        BusState northbound;
+        northbound.direction = -1.0f;
+        northbound.startZ = southEnd;
+        northbound.endZ = northEnd;
+        northbound.stationZ = Station::kCenterZ;
+        northbound.position = {Station::kCenterX + 3.5f, Viaduct::Height(southEnd), southEnd};
+        BusState southbound;
+        southbound.direction = 1.0f;
+        southbound.startZ = northEnd;
+        southbound.endZ = southEnd;
+        southbound.stationZ = Station::kCenterZ;
+        southbound.position = {Station::kCenterX - 3.5f, Viaduct::Height(40.0f), 40.0f};   // ya en marcha, para cruzarse con el otro
+        southbound.servedStation = true;
+        for (BusState* bus : {&northbound, &southbound}) bus->previousPosition = bus->position;
+        m_Buses = {northbound, southbound};
+    }
     for (const auto& bounds : routeBounds) {
         const float left = std::min(bounds[0], bounds[1]);
         const float right = std::max(bounds[0], bounds[1]);
@@ -805,7 +821,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
             parked.position = {
                 (x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
                 0.0f,
-                (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT
+                (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z
             };
             parked.previousPosition = parked.position;
             if (std::any_of(m_ParkedCars.begin(), m_ParkedCars.end(), [&](const TrafficVehicle& other) {
@@ -857,7 +873,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
                 const glm::vec3 position(
                     (x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
                     0.15f,
-                    (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT);
+                    (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
                 if (m_City.IsBlocked(position.x, position.z, 0.55f)) continue;
                 const bool tooClose = std::any_of(m_StreetVendors.begin(), m_StreetVendors.end(),
                     [&](const StreetVendor& vendor) {
@@ -890,7 +906,7 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
                 const glm::vec3 candidate(
                     (x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH,
                     0.15f,
-                    (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT);
+                    (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
                 if (m_City.IsBlocked(candidate.x, candidate.z, 0.5f)) continue;
                 const float distanceSquared = glm::dot(glm::vec2(candidate.x - target.x, candidate.z - target.z),
                                                        glm::vec2(candidate.x - target.x, candidate.z - target.z));
@@ -930,9 +946,9 @@ bool Simulation::FindSidewalkPath(const glm::vec3& start, const glm::vec3& targe
         return static_cast<int>(std::floor((coordinate + count * CityLayout::TILE_SIZE * 0.5f) / CityLayout::TILE_SIZE));
     };
     const int startX = toTile(start.x, CityLayout::WIDTH);
-    const int startZ = toTile(start.z, CityLayout::HEIGHT);
+    const int startZ = toTile(start.z, CityLayout::ORIGIN_Z);
     const int goalX = toTile(target.x, CityLayout::WIDTH);
-    const int goalZ = toTile(target.z, CityLayout::HEIGHT);
+    const int goalZ = toTile(target.z, CityLayout::ORIGIN_Z);
     if (startX < 0 || startX >= CityLayout::WIDTH || startZ < 0 || startZ >= CityLayout::HEIGHT ||
         goalX < 0 || goalX >= CityLayout::WIDTH || goalZ < 0 || goalZ >= CityLayout::HEIGHT) return false;
     const auto traversable = [&](int x, int z) {
@@ -973,7 +989,7 @@ bool Simulation::FindSidewalkPath(const glm::vec3& start, const glm::vec3& targe
         const int z = *it / CityLayout::WIDTH;
         path.emplace_back((x + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH * CityLayout::TILE_SIZE * 0.5f,
                           0.0f,
-                          (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT * CityLayout::TILE_SIZE * 0.5f);
+                          (z + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
     }
     return !path.empty();
 }
@@ -1070,7 +1086,7 @@ size_t Simulation::GetNearbyVendor(const glm::vec3& position, float radius) cons
 
 bool Simulation::IsNearShop(const glm::vec3& position, float radius) const {
     const float halfWidth = CityLayout::WIDTH * CityLayout::TILE_SIZE * 0.5f;
-    const float halfHeight = CityLayout::HEIGHT * CityLayout::TILE_SIZE * 0.5f;
+    const float halfHeight = CityLayout::ORIGIN_Z;
     const int tileX = static_cast<int>(std::floor((position.x + halfWidth) / CityLayout::TILE_SIZE));
     const int tileZ = static_cast<int>(std::floor((position.z + halfHeight) / CityLayout::TILE_SIZE));
     const int tileRange = static_cast<int>(std::ceil(radius / CityLayout::TILE_SIZE)) + 1;
@@ -1291,7 +1307,7 @@ void Simulation::BuildBirdSpots() {
             if (tile != TileType::Sidewalk && tile != TileType::Plaza) continue;
             if ((x * 5 + z * 3) % 4 != 0) continue;
             const glm::vec3 point((static_cast<float>(x) + 0.5f) * CityLayout::TILE_SIZE - CityLayout::WIDTH, 0.0f,
-                                  (static_cast<float>(z) + 0.5f) * CityLayout::TILE_SIZE - CityLayout::HEIGHT);
+                                  (static_cast<float>(z) + 0.5f) * CityLayout::TILE_SIZE - CityLayout::ORIGIN_Z);
             if (!m_City.IsWalkable(point.x, point.z)) continue;
             spots.push_back({point, BirdPerch::Ground});
         }
@@ -1826,11 +1842,15 @@ void Simulation::UpdateTraffic(float dt) {
             // por el bus, ambos quedarian esperandose. El bus frena para el (UpdateBus) y los demas ceden.
             bool committedInBusLane = false;
             if (std::abs(forward.y) < 0.7f) {
-                const float busLookAhead = std::max(5.0f, m_BusSpeed * m_BusSpeed / 8.0f + m_BusSpeed * 0.2f + 2.0f);
-                for (float busAhead = 0.0f; busAhead <= busLookAhead && !committedInBusLane; busAhead += probeStep) {
-                    committedInBusLane = OrientedBoxesOverlap(m_BusPosition + glm::vec3(0.0f, 0.0f, -busAhead), {0.0f, -1.0f},
-                                                              18.2f, 2.52f, vehicle.position, forward,
-                                                              vehicle.length, vehicle.width);
+                for (const BusState& bus : m_Buses) {
+                    if (bus.Elevated()) continue;
+                    const float busLookAhead = std::max(5.0f, bus.speed * bus.speed / 8.0f + bus.speed * 0.2f + 2.0f);
+                    for (float busAhead = 0.0f; busAhead <= busLookAhead && !committedInBusLane; busAhead += probeStep) {
+                        committedInBusLane = OrientedBoxesOverlap(bus.position + glm::vec3(0.0f, 0.0f, bus.direction * busAhead),
+                                                                  {0.0f, bus.direction}, 18.2f, 2.52f, vehicle.position, forward,
+                                                                  vehicle.length, vehicle.width);
+                    }
+                    if (committedInBusLane) break;
                 }
             }
             for (float ahead = 0.0f; ahead <= std::min(lookAhead, clearance); ahead += probeStep) {
@@ -1888,8 +1908,10 @@ void Simulation::UpdateTraffic(float dt) {
                 }
                 if (blockedByVehicle) break;
                 if (!committedInBusLane
-                    && OrientedBoxesOverlap(probePosition, probeForward, vehicle.length, vehicle.width,
-                                            m_BusPosition, {0.0f, -1.0f}, 18.2f, 2.52f)) {
+                    && std::any_of(m_Buses.begin(), m_Buses.end(), [&](const BusState& bus) {
+                        return !bus.Elevated() && OrientedBoxesOverlap(probePosition, probeForward, vehicle.length, vehicle.width,
+                                                                       bus.position, {0.0f, bus.direction}, 18.2f, 2.52f);
+                    })) {
                     clearance = std::min(clearance, std::max(0.0f, ahead - probeStep));
                     break;
                 }
@@ -1978,93 +2000,111 @@ void Simulation::UpdateTraffic(float dt) {
 }
 
 void Simulation::UpdateBus(float dt) {
-    m_BusPreviousPosition = m_BusPosition;
     constexpr float acceleration = 1.1f;
     constexpr float braking = 4.0f;
-    float remaining = std::min(std::max(dt, 0.0f), 0.5f);
-    while (remaining > 1e-8f) {
-        const float step = std::min(remaining, 0.05f);
-        remaining -= step;
-        if (m_BusDwellRemaining > 0.0f) {
-            m_BusDwellRemaining = std::max(0.0f, m_BusDwellRemaining - step);
-            continue;
-        }
-        float clearance = m_BusPosition.z - m_BusEndZ;
-        if (!m_BusServedStation) clearance = std::min(clearance, m_BusPosition.z - m_BusStationZ);
-        const float lookAhead = std::max(5.0f, m_BusSpeed * m_BusSpeed / (2.0f * braking) + m_BusSpeed * 0.2f + 2.0f);
-        for (float ahead = 0.0f; ahead <= std::min(lookAhead, clearance); ahead += 0.5f) {
-            const glm::vec3 probe = m_BusPosition + glm::vec3(0.0f, 0.0f, -ahead);
-            bool blockedByVehicle = false;
-            const auto checkVehicle = [&](const TrafficVehicle& vehicle) {
-                return OrientedBoxesOverlap(probe, {0.0f, -1.0f}, 18.2f, 2.52f,
-                                            vehicle.position, {vehicle.direction.x, vehicle.direction.z},
-                                            vehicle.length, vehicle.width);
-            };
-            for (const auto& vehicle : m_Traffic) {
-                if (!checkVehicle(vehicle)) continue;
-                blockedByVehicle = true;
-                break;
+    for (BusState& bus : m_Buses) {
+        bus.previousPosition = bus.position;
+        float remaining = std::min(std::max(dt, 0.0f), 0.5f);
+        while (remaining > 1e-8f) {
+            const float step = std::min(remaining, 0.05f);
+            remaining -= step;
+            if (bus.dwellRemaining > 0.0f) {
+                bus.dwellRemaining = std::max(0.0f, bus.dwellRemaining - step);
+                continue;
             }
-            if (!blockedByVehicle) {
-                for (const auto& vehicle : m_ParkedCars) {
+            // distancia que le queda hasta el extremo (y hasta la estacion, si aun no la sirvio) en su sentido
+            float clearance = bus.direction * (bus.endZ - bus.position.z);
+            if (!bus.servedStation) clearance = std::min(clearance, bus.direction * (bus.stationZ - bus.position.z));
+            const float lookAhead = std::max(5.0f, bus.speed * bus.speed / (2.0f * braking) + bus.speed * 0.2f + 2.0f);
+            for (float ahead = 0.0f; ahead <= std::min(lookAhead, clearance); ahead += 0.5f) {
+                const glm::vec3 probe = bus.position + glm::vec3(0.0f, 0.0f, bus.direction * ahead);
+                if (Viaduct::Height(probe.z) > Viaduct::kElevated && Viaduct::Height(bus.position.z) > Viaduct::kElevated) break;
+                bool blockedByVehicle = false;
+                const auto checkVehicle = [&](const TrafficVehicle& vehicle) {
+                    return OrientedBoxesOverlap(probe, {0.0f, bus.direction}, 18.2f, 2.52f,
+                                                vehicle.position, {vehicle.direction.x, vehicle.direction.z},
+                                                vehicle.length, vehicle.width);
+                };
+                for (const auto& vehicle : m_Traffic) {
                     if (!checkVehicle(vehicle)) continue;
                     blockedByVehicle = true;
                     break;
                 }
+                if (!blockedByVehicle) {
+                    for (const auto& vehicle : m_ParkedCars) {
+                        if (!checkVehicle(vehicle)) continue;
+                        blockedByVehicle = true;
+                        break;
+                    }
+                }
+                if (blockedByVehicle) {
+                    clearance = std::min(clearance, std::max(0.0f, ahead - 0.5f));
+                    break;
+                }
             }
-            if (blockedByVehicle) {
-                clearance = std::min(clearance, std::max(0.0f, ahead - 0.5f));
-                break;
+            const bool busOverStreet = Viaduct::Height(bus.position.z) > Viaduct::kElevated
+                && Viaduct::Height(bus.position.z + bus.direction * 9.1f) > Viaduct::kElevated;
+            const auto actorClearance = [&](const glm::vec3& actor) {
+                if (busOverStreet) return std::numeric_limits<float>::infinity();
+                if (std::abs(actor.x - bus.position.x) > 2.52f * 0.5f + 0.55f) return std::numeric_limits<float>::infinity();
+                const float aheadOfBus = bus.direction * (actor.z - bus.position.z);   // >0: delante del bus
+                if (aheadOfBus < -(18.2f * 0.5f + 0.55f)) return std::numeric_limits<float>::infinity();
+                return std::max(0.0f, aheadOfBus - 18.2f * 0.5f - 0.8f);
+            };
+            for (const auto& pedestrian : m_Pedestrians) clearance = std::min(clearance, actorClearance(pedestrian.position));
+            const float desiredSpeed = std::min(5.0f, std::sqrt(2.0f * braking * std::max(0.0f, clearance)));
+            const float rate = desiredSpeed < bus.speed ? braking : acceleration;
+            bus.speed = std::clamp(desiredSpeed, bus.speed - rate * step, bus.speed + rate * step);
+            const float travel = std::min(bus.speed * step, std::max(0.0f, clearance));
+            bus.position.z += bus.direction * travel;
+            bus.position.y = Viaduct::Height(bus.position.z);
+            bus.speed = travel / step;
+            bus.wheelRotation += travel / 0.5f;
+            if (!bus.servedStation && bus.direction * (bus.stationZ - bus.position.z) <= 1e-8f) {
+                bus.position.z = bus.stationZ;
+                bus.servedStation = true;
+                bus.speed = 0.0f;
+                bus.dwellRemaining = 4.0f;
             }
-        }
-        const auto actorClearance = [&](const glm::vec3& actor) {
-            if (std::abs(actor.x - m_BusPosition.x) > 2.52f * 0.5f + 0.55f) return std::numeric_limits<float>::infinity();
-            if (actor.z > m_BusPosition.z + 18.2f * 0.5f + 0.55f) return std::numeric_limits<float>::infinity();
-            return std::max(0.0f, m_BusPosition.z - actor.z - 18.2f * 0.5f - 0.8f);
-        };
-        for (const auto& pedestrian : m_Pedestrians) clearance = std::min(clearance, actorClearance(pedestrian.position));
-        const float desiredSpeed = std::min(5.0f, std::sqrt(2.0f * braking * std::max(0.0f, clearance)));
-        const float rate = desiredSpeed < m_BusSpeed ? braking : acceleration;
-        m_BusSpeed = std::clamp(desiredSpeed, m_BusSpeed - rate * step, m_BusSpeed + rate * step);
-        const float travel = std::min(m_BusSpeed * step, std::max(0.0f, clearance));
-        m_BusPosition.z -= travel;
-        m_BusSpeed = travel / step;
-        m_BusWheelRotation += travel / 0.5f;
-        if (!m_BusServedStation && m_BusPosition.z <= m_BusStationZ + 1e-8f) {
-            m_BusPosition.z = m_BusStationZ;
-            m_BusServedStation = true;
-            m_BusSpeed = 0.0f;
-            m_BusDwellRemaining = 4.0f;
-        }
-        if (m_BusPosition.z <= m_BusEndZ + 1e-8f) {
-            m_BusPosition.z = m_BusStartZ;
-            m_BusServedStation = false;
-            m_BusSpeed = 0.0f;
+            if (bus.direction * (bus.endZ - bus.position.z) <= 1e-8f) {
+                bus.position.z = bus.startZ;
+                bus.position.y = Viaduct::Height(bus.startZ);
+                bus.servedStation = false;
+                bus.speed = 0.0f;
+            }
         }
     }
 }
 
 bool Simulation::IsBlocked(const glm::vec3& position, float radius) const {
+    // Quien esta sobre el tablero (y > 1) solo choca con el bus elevado; en la calle, los carros y el bus a nivel
+    const bool onDeck = position.y > 1.0f;
     const auto collidesWithVehicle = [&](const TrafficVehicle& vehicle) {
         return PointInVehicleBox(position, vehicle.position,
                                  {vehicle.direction.x, vehicle.direction.z},
                                  vehicle.length * 0.5f, vehicle.width * 0.5f, radius);
     };
-    for (const auto& vehicle : m_Traffic) {
-        if (collidesWithVehicle(vehicle)) return true;
+    if (!onDeck) {
+        for (const auto& vehicle : m_Traffic) {
+            if (collidesWithVehicle(vehicle)) return true;
+        }
+        for (const auto& vehicle : m_ParkedCars) {
+            if (collidesWithVehicle(vehicle)) return true;
+        }
     }
-    for (const auto& vehicle : m_ParkedCars) {
-        if (collidesWithVehicle(vehicle)) return true;
-    }
-    if (PointInVehicleBox(position, m_BusPosition, {0.0f, -1.0f},
-                          9.1f, 1.26f, radius)) {
-        return true;
+    for (const BusState& bus : m_Buses) {
+        if (std::abs(position.y - bus.position.y) < 2.5f
+            && PointInVehicleBox(position, bus.position, {0.0f, bus.direction}, 9.1f, 1.26f, radius)) {
+            return true;
+        }
     }
     return false;
 }
 
 bool Simulation::GetVehicleImpact(const glm::vec3& position, float& speed, glm::vec3& direction) const {
+    const bool onDeck = position.y > 1.0f;
     for (const auto& vehicle : m_Traffic) {
+        if (onDeck) break;   // los carros circulan por la calle inferior
         if (vehicle.speed < 1.5f) continue;
         const glm::vec2 forward = glm::normalize(glm::vec2(vehicle.direction.x, vehicle.direction.z));
         bool frontContact = PointAtVehicleFront(position, vehicle.position, forward,
@@ -2081,18 +2121,19 @@ bool Simulation::GetVehicleImpact(const glm::vec3& position, float& speed, glm::
             return true;
         }
     }
-    if (m_BusSpeed >= 1.5f) {
-        bool frontContact = PointAtVehicleFront(position, m_BusPosition, {0.0f, -1.0f},
+    for (const BusState& bus : m_Buses) {
+        if (bus.speed < 1.5f || std::abs(position.y - bus.position.y) >= 2.5f) continue;
+        bool frontContact = PointAtVehicleFront(position, bus.position, {0.0f, bus.direction},
                                                 9.1f, 1.26f, 0.4f);
         for (int sample = 0; !frontContact && sample <= 8; ++sample) {
             const float fraction = static_cast<float>(sample) / 8.0f;
-            const glm::vec3 sweptPosition = glm::mix(m_BusPreviousPosition, m_BusPosition, fraction);
-            frontContact = PointAtVehicleFront(position, sweptPosition, {0.0f, -1.0f},
+            const glm::vec3 sweptPosition = glm::mix(bus.previousPosition, bus.position, fraction);
+            frontContact = PointAtVehicleFront(position, sweptPosition, {0.0f, bus.direction},
                                                9.1f, 1.26f, 0.4f);
         }
         if (frontContact) {
-            speed = m_BusSpeed;
-            direction = {0.0f, 0.0f, -1.0f};
+            speed = bus.speed;
+            direction = {0.0f, 0.0f, bus.direction};
             return true;
         }
     }
@@ -2100,19 +2141,6 @@ bool Simulation::GetVehicleImpact(const glm::vec3& position, float& speed, glm::
 }
 
 void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPosition) const {
-    const glm::mat4 stationRoot = glm::translate(glm::mat4(1.0f), {m_BusStationX, 0.0f, m_BusStationZ});
-    renderer.Submit(*m_BusPlatform, glm::translate(stationRoot, {0.0f, 0.45f, 0.0f}));
-    renderer.Submit(*m_BusCanopy, glm::translate(stationRoot, {0.0f, 3.3f, 0.0f}));
-    renderer.Submit(*m_BusStationGlass, glm::translate(stationRoot, {-1.25f, 1.7f, 0.0f}), {0.66f, 0.78f, 0.84f, 0.35f}, false, false, nullptr, 2);
-    renderer.Submit(*m_BusStationGlass, glm::translate(stationRoot, {1.25f, 1.7f, 0.0f}), {0.66f, 0.78f, 0.84f, 0.35f}, false, false, nullptr, 2);
-    renderer.Submit(*m_BusStationSign, glm::translate(stationRoot, {0.0f, 3.8f, 7.0f}));
-    for (float z = -8.0f; z <= 8.0f; z += 4.0f) {
-        for (float x : {-1.2f, 1.2f}) {
-            glm::mat4 post = glm::translate(stationRoot, {x, 2.1f, z});
-            post = glm::rotate(post, -glm::half_pi<float>(), {1.0f, 0.0f, 0.0f});
-            renderer.Submit(*m_BusStationPost, post);
-        }
-    }
     const float distToCambuche = glm::distance(glm::vec2(focusPosition.x, focusPosition.z),
                                                glm::vec2(m_CambuchePosition.x, m_CambuchePosition.z));
     if (distToCambuche < 80.0f) {
@@ -2440,13 +2468,17 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
     };
     for (const auto& vehicle : m_Traffic) drawCar(vehicle);
     for (const auto& vehicle : m_ParkedCars) drawCar(vehicle);
-    const float busOpacity = std::clamp(std::min((m_BusStartZ - m_BusPosition.z) / 6.0f,
-                                                  (m_BusPosition.z - m_BusEndZ) / 6.0f), 0.0f, 1.0f);
+    for (const BusState& bus : m_Buses) {
+    const float busOpacity = std::clamp(std::min(bus.direction * (bus.position.z - bus.startZ) / 6.0f,
+                                                  bus.direction * (bus.endZ - bus.position.z) / 6.0f), 0.0f, 1.0f);
     if (busOpacity > 0.0f) {
         const int alphaMode = busOpacity < 1.0f ? 2 : 0;
         const glm::vec4 busRed(0.70f, 0.15f, 0.12f, busOpacity);
         const glm::vec4 busWindow(0.08f, 0.12f, 0.16f, busOpacity);
-        glm::mat4 busRoot = glm::translate(glm::mat4(1.0f), m_BusPosition);
+        glm::mat4 busRoot = glm::translate(glm::mat4(1.0f), bus.position);
+        if (bus.direction > 0.0f) busRoot = glm::rotate(busRoot, glm::pi<float>(), glm::vec3(0.0f, 1.0f, 0.0f));
+        // el frente (-Z local) sube cuando la cota crece en el sentido de la marcha
+        busRoot = glm::rotate(busRoot, std::atan(bus.direction * Viaduct::Slope(bus.position.z)), glm::vec3(1.0f, 0.0f, 0.0f));
         if (m_BusModel) {
             m_BusModel->Draw(renderer, busRoot * m_BusModelFit,
                              glm::vec4(1.0f, 1.0f, 1.0f, busOpacity), 0.0f, false, 0,
@@ -2461,7 +2493,7 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
                 for (float side : {-1.15f, 1.15f}) {
                     glm::mat4 wheel = glm::translate(busRoot, {side, 0.5f, wheelZ});
                     wheel = glm::rotate(wheel, glm::half_pi<float>(), {0.0f, 1.0f, 0.0f});
-                    wheel = glm::rotate(wheel, m_BusWheelRotation, {0.0f, 0.0f, 1.0f});
+                    wheel = glm::rotate(wheel, bus.wheelRotation, {0.0f, 0.0f, 1.0f});
                     renderer.Submit(*m_BusWheel, wheel, glm::vec4(1.0f, 1.0f, 1.0f, busOpacity), false, false, nullptr, alphaMode);
                     renderer.Submit(*m_BusRim, wheel, glm::vec4(1.0f, 1.0f, 1.0f, busOpacity), false, false, nullptr, alphaMode);
                 }
@@ -2471,6 +2503,7 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
         glm::mat4 windshield = glm::translate(busRoot, {0.0f, 2.0f, -9.1f});
         renderer.Submit(*m_BusWindshield, windshield, busWindow, false, false, nullptr, alphaMode);
         }
+    }
     }
     for (size_t index = 0; index < m_StreetVendors.size(); ++index) {
         const StreetVendor& vendor = m_StreetVendors[index];

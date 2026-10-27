@@ -106,6 +106,7 @@ struct AudioManager::Impl {
     };
 
     static constexpr size_t MaxTrafficAudio = 8;
+    static constexpr size_t BusChannels = 2;   // una voz propia por bus
     static constexpr float VehicleHearingDistance = 55.0f;
     ma_engine engine{};
     bool ready = false;
@@ -115,7 +116,7 @@ struct AudioManager::Impl {
     bool raining = false;
     std::array<Sound, static_cast<size_t>(SoundSlot::Count)> sounds{};
     std::array<std::vector<float>, 4> vehicleAudioSamples{};
-    std::array<VehicleChannel, MaxTrafficAudio + 1> vehicleChannels{};
+    std::array<VehicleChannel, MaxTrafficAudio + BusChannels> vehicleChannels{};
     std::array<Sound, 3> horns{};
     Sound carAlarm;
     Sound heartbeat;
@@ -240,7 +241,7 @@ struct AudioManager::Impl {
             LoadOptionalSound(theftVoices[i], filename.c_str());
         }
         for (size_t i = 0; i < vehicleChannels.size(); ++i) {
-            const bool bus = i == MaxTrafficAudio;
+            const bool bus = i >= MaxTrafficAudio;
             const char* idleFile = bus ? "car_idling_at_a_traf_bus.opus" : "car_idling_at_a_traf.opus";
             const char* driveFile = bus ? "bus_vehicle_drivin.opus" : "small_vehicle_drivin.opus";
             const size_t idleCache = bus ? 2 : 0;
@@ -597,12 +598,15 @@ void AudioManager::UpdateVehicleAudio(float dt, const glm::vec3& listenerPositio
     });
     if (sources.size() > Impl::MaxTrafficAudio) sources.resize(Impl::MaxTrafficAudio);
     for (size_t i = 0; i < sources.size(); ++i) sources[i].channel = i;
-    const float busDistance = glm::distance(listenerPosition, simulation.GetBusPosition());
-    if (busDistance < Impl::VehicleHearingDistance) {
-        sources.push_back({Impl::MaxTrafficAudio, simulation.GetBusPosition(), simulation.GetBusSpeed(), true, false,
-                           busDistance});
+    const auto& buses = simulation.GetBuses();
+    for (size_t busIndex = 0; busIndex < buses.size() && busIndex < Impl::BusChannels; ++busIndex) {
+        const float busDistance = glm::distance(listenerPosition, buses[busIndex].position);
+        if (busDistance < Impl::VehicleHearingDistance) {
+            sources.push_back({Impl::MaxTrafficAudio + busIndex, buses[busIndex].position, buses[busIndex].speed, true, false,
+                               busDistance});
+        }
     }
-    std::array<bool, Impl::MaxTrafficAudio + 1> audible{};
+    std::array<bool, Impl::MaxTrafficAudio + Impl::BusChannels> audible{};
     for (const auto& source : sources) {
         if (source.distance >= Impl::VehicleHearingDistance) continue;
         audible[source.channel] = true;

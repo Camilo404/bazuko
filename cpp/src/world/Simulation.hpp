@@ -82,6 +82,23 @@ struct RobberyOutcome {
     float money = 0.0f;
 };
 
+// Servicio de bus articulado por el carril exclusivo: recorre la troncal de extremo a extremo, para unos segundos en
+// la estacion y reaparece en el extremo opuesto. `direction` -1 va hacia el norte (-Z) y +1 hacia el sur (+Z).
+struct BusState {
+    glm::vec3 position{0.0f};
+    glm::vec3 previousPosition{0.0f};
+    float speed = 0.0f;
+    float dwellRemaining = 0.0f;
+    float wheelRotation = 0.0f;
+    float startZ = 0.0f;
+    float endZ = 0.0f;
+    float stationZ = 0.0f;
+    float direction = -1.0f;
+    bool servedStation = false;
+    // Sobre el viaducto: a esa altura no interactua con lo que pasa por la calle inferior
+    bool Elevated() const { return position.y > 1.6f; }
+};
+
 struct StreetVendor {
     glm::vec3 position{0.0f};
     glm::vec3 serverPosition{0.0f};
@@ -155,8 +172,10 @@ public:
     const std::vector<TrafficVehicle>& GetTrafficVehicles() const { return m_Traffic; }
     size_t GetParkedCarCount() const { return m_ParkedCars.size(); }
     const std::vector<TrafficVehicle>& GetParkedCars() const { return m_ParkedCars; }
-    const glm::vec3& GetBusPosition() const { return m_BusPosition; }
-    float GetBusSpeed() const { return m_BusSpeed; }
+    // Los dos buses de la troncal: uno hacia el norte (carril este) y otro hacia el sur (carril oeste)
+    const std::vector<BusState>& GetBuses() const { return m_Buses; }
+    const glm::vec3& GetBusPosition() const { return m_Buses.front().position; }
+    float GetBusSpeed() const { return m_Buses.front().speed; }
     void Render(Renderer& renderer, float time, const glm::vec3& focusPosition) const;
     std::vector<PickupItem> CollectPickups(const glm::vec3& position, float radius);
     bool CollectPickup(size_t index, PickupItem& pickup);
@@ -443,16 +462,7 @@ private:
     std::shared_ptr<Mesh> m_DogCap;
     std::shared_ptr<Mesh> m_DogVisor;
     bool m_DogIsFriend = false;
-    glm::vec3 m_BusPosition{0.0f};
-    glm::vec3 m_BusPreviousPosition{0.0f};
-    float m_BusStartZ = 0.0f;
-    float m_BusEndZ = 0.0f;
-    float m_BusStationZ = 0.0f;
-    float m_BusSpeed = 0.0f;
-    float m_BusDwellRemaining = 0.0f;
-    float m_BusWheelRotation = 0.0f;
-    float m_BusStationX = 0.0f;
-    bool m_BusServedStation = false;
+    std::vector<BusState> m_Buses;
     std::shared_ptr<Mesh> m_MissionMarker;
     glm::vec3 m_MissionNpcPosition{3.0f, 0.0f, 0.0f};
     float m_PickupSpawnTimer = 0.0f;

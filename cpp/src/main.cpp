@@ -17,6 +17,8 @@
 #include "game/GameData.hpp"
 #include "world/SafeSpawn.hpp"
 #include "world/Atmosphere.hpp"
+#include "world/Viaduct.hpp"
+#include "core/ScreenshotPng.hpp"
 #include "core/AdaptiveResolution.hpp"
 #include "game/Harvest.hpp"
 #include "audio/AudioManager.hpp"
@@ -113,15 +115,22 @@ int main(int argc, char** argv) {
                            "💡 Consejo: Puedes personalizar tu aspecto, sexo, corte y ropa con la tecla [P].");
     glm::vec3 playerPos = city.GetSpawnPoint();
     playerPos.y = 0.0f;
+    bool playerOnDeck = false;   // sobre el tablero del viaducto (capa elevada); en la calle pasa por debajo
     // Regla estricta: el jugador nunca aparece ni se carga dentro de un edificio, un modelo o un recinto sin salida.
     // Toda posicion que se le asigna (inicio, partida guardada, partida nueva, recuperacion, fin de una caida)
     // pasa por aqui: si esta bloqueada o encerrada se mueve al lugar libre con salida mas cercano.
     const auto isFreeForPlayer = [&](float x, float z) {
         return city.IsWalkable(x, z) && !simulation.IsBlocked({x, 0.0f, z}, 0.5f);
     };
+    // Donde se puede pisar segun la capa: sobre el tablero solo entre las barandas (y el bus elevado); en la calle,
+    // el mapa, los vehiculos y el muro bajo de la rampa
+    const auto canStand = [&](float x, float z) {
+        if (playerOnDeck) return !Viaduct::BlockedOnDeck(x, z, 0.35f) && !simulation.IsBlocked({x, playerPos.y, z}, 0.35f);
+        return city.IsWalkable(x, z) && !Viaduct::BlockedOnGround(x, z) && !simulation.IsBlocked({x, 0.0f, z}, 0.35f);
+    };
     const auto placeSafely = [&](const glm::vec3& wanted) {
         glm::vec3 safe = FindSafePlayerPosition(wanted, isFreeForPlayer, city.GetSpawnPoint());
-        safe.y = 0.0f;
+        safe.y = city.GetGroundHeight(safe.x, safe.z);
         if (glm::distance(glm::vec2(safe.x, safe.z), glm::vec2(wanted.x, wanted.z)) > 0.05f)
             LogWarn("Posicion del jugador bloqueada ({:.1f}, {:.1f}): se movio a ({:.1f}, {:.1f})", wanted.x, wanted.z, safe.x, safe.z);
         return safe;
@@ -181,6 +190,7 @@ int main(int argc, char** argv) {
         const glm::vec3 impactVelocity = impactDirection * std::max(2.0f, impactSpeed * 0.8f)
             + glm::vec3(0.0f, std::max(2.0f, impactSpeed * 0.55f), 0.0f);
         playerRagdoll.Begin(playerPos, playerYaw, impactVelocity, characterManager.GetLook());
+        playerOnDeck = false;
         playerPos.y = 0.0f;
         ui.SetPickupNotification("¡Atropellamiento! Recupera salud y espera a que termine la caída.");
     };
@@ -275,7 +285,14 @@ int main(int argc, char** argv) {
                 playerPos.z = state.value("playerZ", playerPos.z);
                 {
                     const glm::vec3 savedPosition = playerPos;
-                    playerPos = placeSafely(savedPosition);
+                    float deckY = 0.0f;
+                    if (state.value("playerOnDeck", false) && Viaduct::StepLayer(true, playerPos.x, playerPos.z, deckY)) {
+                        playerOnDeck = true;   // guardo sobre el tablero: se queda alli
+                        playerPos.y = deckY;
+                    } else {
+                        playerOnDeck = false;
+                        playerPos = placeSafely(savedPosition);
+                    }
                     if (glm::distance(glm::vec2(savedPosition.x, savedPosition.z), glm::vec2(playerPos.x, playerPos.z)) > 0.05f)
                         ui.Notify("Tu posición guardada estaba bloqueada: te movimos al lugar libre más cercano.", ToastType::Warn);
                 }
@@ -349,6 +366,7 @@ int main(int argc, char** argv) {
         }
         state["playerX"] = playerPos.x;
         state["playerZ"] = playerPos.z;
+        state["playerOnDeck"] = playerOnDeck;
         state["companionName"] = ui.GetCompanionName();
         state["companionCoat"] = ui.GetCompanionCoat();
         state["companionSize"] = ui.GetCompanionSize();
@@ -386,6 +404,7 @@ int main(int argc, char** argv) {
         fs::remove(savePath, ec);
 
         playerPos = placeSafely(city.GetSpawnPoint());
+        playerOnDeck = false;
         playerYaw = 0.0f;
         needs = {100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 100.0f, 80.0f};
         money = 0.0f;
@@ -614,7 +633,17 @@ int main(int argc, char** argv) {
 
     ui.RenderLoadingScreen(window, 0.99f, "Sincronizando semáforos, rutas de tráfico y entorno...", "");
     ui.RenderLoadingScreen(window, 1.0f, "¡Todo listo! Entrando a Bogotá...", "");
-    ui.OpenDeveloperNote();
+    // Verificacion visual: BAZUKO_SHOT=ruta.png guarda una captura tras BAZUKO_SHOT_DELAY s (por defecto 6) y cierra
+    const char* shotPath = std::getenv("BAZUKO_SHOT");
+    float shotDelay = 6.0f;
+    if (const char* delay = std::getenv("BAZUKO_SHOT_DELAY")) shotDelay = static_cast<float>(std::atof(delay));
+    if (shotPath) {
+        const auto envFloat = [](const char* name, float fallback) { const char* v = std::getenv(name); return v ? static_cast<float>(std::atof(v)) : fallback; };
+        camera.SetOrbit(envFloat("BAZUKO_YAW", camera.GetYaw()), envFloat("BAZUKO_PITCH", 0.22f), envFloat("BAZUKO_DIST", 5.5f));
+    } else {
+        ui.OpenDeveloperNote();
+    }
+    const double shotStart = glfwGetTime();
     std::this_thread::sleep_for(std::chrono::milliseconds(350));
 
     // Si es partida nueva o no tiene personaje configurado, abrir creador inmediatamente
@@ -759,6 +788,7 @@ int main(int argc, char** argv) {
             playerVelocity = glm::vec3(0.0f);
             if (knockdownRemaining <= 0.0f) {
                 playerKnockedDown = false;
+                playerOnDeck = false;
                 playerPos = placeSafely(playerPos);   // la caida no puede dejarlo dentro de un modelo
             }
         } else if (const bool moving = glm::length(moveDir) > 0.001f; moving || glm::dot(playerVelocity, playerVelocity) > 0.0005f) {
@@ -775,13 +805,17 @@ int main(int argc, char** argv) {
             if (vehicleImpactCooldown <= 0.0f && needs[3] > 0.0f
                 && simulation.GetVehicleImpact(nextPos, impactSpeed, impactDirection)) {
                 knockDownPlayer(impactSpeed, impactDirection);
-            } else if (city.IsWalkable(nextPos.x, nextPos.z) && !simulation.IsBlocked(nextPos, 0.35f)) {
-                playerPos = nextPos;
-            } else if (city.IsWalkable(nextPos.x, playerPos.z) && !simulation.IsBlocked({nextPos.x, 0.0f, playerPos.z}, 0.35f)) {
+            } else if (canStand(nextPos.x, nextPos.z)) {
                 playerPos.x = nextPos.x;
-            } else if (city.IsWalkable(playerPos.x, nextPos.z) && !simulation.IsBlocked({playerPos.x, 0.0f, nextPos.z}, 0.35f)) {
+                playerPos.z = nextPos.z;
+            } else if (canStand(nextPos.x, playerPos.z)) {
+                playerPos.x = nextPos.x;
+            } else if (canStand(playerPos.x, nextPos.z)) {
                 playerPos.z = nextPos.z;
             }
+            // capa: se sube al tablero solo por la rampa y se baja al salir por un extremo; la altura sigue al tablero
+            playerOnDeck = Viaduct::StepLayer(playerOnDeck, playerPos.x, playerPos.z, playerPos.y);
+            if (!playerOnDeck) playerPos.y = city.GetGroundHeight(playerPos.x, playerPos.z);   // la isla de la estacion se sube por sus rampas
 
             if (moving) playerYaw = std::atan2(moveDir.x, moveDir.z);
         }
@@ -1376,6 +1410,7 @@ int main(int argc, char** argv) {
                 }
             }
             simulation.SetLampGlow(atmosphere.lampPower);
+            city.SetNightGlow(atmosphere.lampPower);
         }
         renderer.BeginScaledTarget();
         renderer.BeginScene(camera, clock.GetElapsedTime());
@@ -1739,6 +1774,19 @@ int main(int argc, char** argv) {
         ui.EndFrame();
 
 
+        if (shotPath && glfwGetTime() - shotStart > shotDelay) {
+            int shotWidth = 0, shotHeight = 0;
+            glfwGetFramebufferSize(glfwGetCurrentContext(), &shotWidth, &shotHeight);
+            std::vector<uint8_t> pixels(static_cast<size_t>(shotWidth) * shotHeight * 3), flipped(pixels.size());
+            glReadBuffer(GL_BACK);
+            glPixelStorei(GL_PACK_ALIGNMENT, 1);
+            glReadPixels(0, 0, shotWidth, shotHeight, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+            for (int y = 0; y < shotHeight; ++y)
+                std::copy_n(&pixels[static_cast<size_t>(shotHeight - 1 - y) * shotWidth * 3], static_cast<size_t>(shotWidth) * 3, &flipped[static_cast<size_t>(y) * shotWidth * 3]);
+            WritePngRgb(shotPath, shotWidth, shotHeight, flipped);
+            LogInfo("Captura guardada en {}", shotPath);
+            glfwSetWindowShouldClose(glfwGetCurrentContext(), GLFW_TRUE);
+        }
         window.SwapBuffers();
 
         if (ui.ConsumeRespawnRequest()) {
@@ -1753,7 +1801,7 @@ int main(int argc, char** argv) {
                             - CityLayout::WIDTH * CityLayout::TILE_SIZE * 0.5f
                             + CityLayout::TILE_SIZE * 0.5f,
                         static_cast<float>(tileZ) * CityLayout::TILE_SIZE
-                            - CityLayout::HEIGHT * CityLayout::TILE_SIZE * 0.5f
+                            - CityLayout::ORIGIN_Z
                             + CityLayout::TILE_SIZE * 0.5f);
                     if (!city.IsSidewalk(candidate.x, candidate.y)
                         || city.IsBlocked(candidate.x, candidate.y, 0.4f)
@@ -1778,6 +1826,7 @@ int main(int argc, char** argv) {
             for (float& need : needs) need = std::max(60.0f, need);
             diseases.clear();
             playerPos = placeSafely({respawnPosition.x, 0.0f, respawnPosition.y});
+            playerOnDeck = false;
             playerYaw = 0.0f;
             playerKnockedDown = false;
             knockdownRemaining = 0.0f;

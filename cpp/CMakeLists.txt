@@ -220,6 +220,12 @@ target_include_directories(bazuko_atmosphere_test PRIVATE src)
 target_link_libraries(bazuko_atmosphere_test PRIVATE glm::glm)
 add_test(NAME bazuko_atmosphere COMMAND bazuko_atmosphere_test)
 
+# Viaducto elevado: alturas, rampas y capas de movimiento
+add_executable(bazuko_viaduct_test tests/ViaductTest.cpp)
+target_include_directories(bazuko_viaduct_test PRIVATE src)
+target_link_libraries(bazuko_viaduct_test PRIVATE glm::glm)
+add_test(NAME bazuko_viaduct COMMAND bazuko_viaduct_test)
+
 # Resolucion adaptativa (calidad efectiva bajo carga)
 add_executable(bazuko_adaptive_test tests/AdaptiveResolutionTest.cpp)
 target_include_directories(bazuko_adaptive_test PRIVATE src)

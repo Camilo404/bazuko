@@ -12,7 +12,7 @@ namespace {
 
 constexpr int kCellW = 512;
 constexpr int kCellH = 128;
-constexpr int kCells = SignAtlas::kShopSigns + SignAtlas::kTags + SignAtlas::kNotes;
+constexpr int kCells = SignAtlas::kShopSigns + SignAtlas::kTags + SignAtlas::kNotes + SignAtlas::kLandmarks;
 
 // Nombres de local de src/world/districts/Bogota.js (SHOP_NAMES)
 const std::array<std::pair<const char*, const char*>, SignAtlas::kShopSigns> kShops{{
@@ -32,6 +32,22 @@ constexpr std::array<uint32_t, 6> kTagColors{0xff3b6b, 0x2ee6a6, 0xffe14d, 0x59b
 const std::array<const char*, SignAtlas::kNotes> kNoteTexts{"SE ARRIENDA", "SE VENDE", "MINUTOS", "RECARGAS",
                                                          "CERRAJERÍA", "MODISTERÍA", "SE HACEN UÑAS", "FOTOCOPIAS"};
 constexpr std::array<uint32_t, 4> kNoteBackgrounds{0xffffff, 0xffe600, 0xff7a1a, 0x7dff5a};
+
+// Rotulos de la gasolinera y de la tienda D69 (GasStation.js y D69Store.js): titulo, subtitulo y fondo
+struct LandmarkSign {
+    const char* title;
+    const char* sub;
+    uint32_t background;
+};
+const std::array<LandmarkSign, SignAtlas::kLandmarks> kLandmarkSigns{{
+    {"TEXACO", "SERVICIO · COMBUSTIBLES", 0xbc1726}, {"TIENDA", "CAFÉ · AGUA · VÍVERES", 0xbc1726},
+    {"TEXACO", "ABIERTO 24 H", 0xbc1726},           {"CORRIENTE", "EXTRA · DIÉSEL", 0x252c32},
+    {"D69", "TIENDA · AHORRO DIARIO", 0xb50c32},
+    {"PORTAL DEL CENTRO", "TRANSMILENIO · ACCESO PEATONAL", 0xb32c35},
+    {"NORTE · SUR", "ANDENES A AMBOS LADOS", 0xb32c35},
+    {"TORRE COLPATRIA", "ACCESO PRINCIPAL", 0xa9aaa5},
+    {"TORRE COLPATRIA", "EDIFICIO ANEXO", 0xa9aaa5},
+    {"LOCALES", "CAFÉ · SERVICIOS", 0xa9aaa5}}};
 
 bool IsLight(uint32_t rgb) {
     const int r = static_cast<int>((rgb >> 16) & 0xFF), g = static_cast<int>((rgb >> 8) & 0xFF), b = static_cast<int>(rgb & 0xFF);
@@ -78,6 +94,14 @@ bool SignAtlas::Build(const std::string& fontPath) {
         Image cell(kCellW, kCellH, HexColor(kNoteBackgrounds[i % kNoteBackgrounds.size()]));
         cell.StrokeRect(0, 0, kCellW, kCellH, 4, HexColor(0x2b2b2b));
         font.DrawCentered(cell, kNoteTexts[i], kCellW * 0.5f, 64.0f, 62.0f, 460.0f, HexColor(0xc4161c));
+        place(index, cell);
+    }
+
+    for (size_t i = 0; i < kLandmarkSigns.size(); ++i, ++index) {
+        Image cell(kCellW, kCellH, HexColor(kLandmarkSigns[i].background));
+        const Rgba ink = IsLight(kLandmarkSigns[i].background) ? HexColor(0x273137) : HexColor(0xffffff);   // los rotulos grises de Colpatria llevan tinta oscura
+        font.DrawCentered(cell, kLandmarkSigns[i].title, kCellW * 0.5f, 52.0f, 62.0f, 470.0f, ink);
+        font.DrawCentered(cell, kLandmarkSigns[i].sub, kCellW * 0.5f, 100.0f, 28.0f, 470.0f, ink);
         place(index, cell);
     }
 

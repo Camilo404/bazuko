@@ -34,7 +34,7 @@ int main() {
     const glm::vec3 spawn = city.GetSpawnPoint();
 
     const float halfWidth = CityLayout::WIDTH * CityLayout::TILE_SIZE * 0.5f;
-    const float halfHeight = CityLayout::HEIGHT * CityLayout::TILE_SIZE * 0.5f;
+    const float halfHeight = CityLayout::ORIGIN_Z;
     int checked = 0, moved = 0, failures = 0;
     double worstMs = 0.0, worstDistance = 0.0;
     const auto verify = [&](const glm::vec3& wanted, const char* what) {
@@ -70,6 +70,28 @@ int main() {
     std::printf("%d posiciones revisadas, %d movidas (maximo %.1f m), peor tiempo %.1f ms, fallos %d\n", checked, moved, worstDistance, worstMs, failures);
     const bool spawnSafe = isFree(spawn.x, spawn.z) && CanEscapeFrom({spawn.x, spawn.z}, isFree);
     if (!spawnSafe) std::printf("FALLO: el punto de inicio de la ciudad no es seguro\n");
+    // Ampliacion sur y hitos (ola 1): el origen del mundo no se mueve y los hitos tienen el comportamiento esperado
+    int layoutFailures = 0;
+    const auto expect = [&](bool condition, const char* what) {
+        if (!condition) { ++layoutFailures; std::printf("FALLO (mapa): %s\n", what); }
+    };
+    expect(CityLayout::HEIGHT == 161 && CityLayout::ORIGIN_Z == 111.0f, "el mapa mide 161 filas y el origen sigue anclado al centro original");
+    expect(city.IsWalkable(0.0f, 0.0f) && city.IsRoad(0.0f, 0.0f) == city.IsRoad(0.0f, 0.0f), "el punto de inicio sigue siendo transitable");
+    expect(!city.IsWalkable(30.0f, 152.0f) && city.GetTileAt(-1, 0) == TileType::Wall, "el lago no es transitable");
+    expect(!city.IsWalkable(0.0f, 150.0f), "bajo el puente el lago sigue sin ser transitable (el puente es otra capa)");
+    expect(city.IsWalkable(0.0f, 0.0f) && !city.IsRoad(0.0f, 0.0f), "la troncal bajo el viaducto es prado, no calzada");
+    expect(city.IsWalkable(35.0f, -12.0f), "el lote de la gasolinera es transitable");
+    expect(city.IsBlocked(35.0f, 4.0f, 0.3f), "la tienda de la gasolinera bloquea el paso");
+    expect(city.IsBlocked(-57.0f, 56.0f, 0.3f), "la tienda D69 es solida");
+    expect(city.GetLandmarks().size() == 6, "hay seis hitos para el radar (gasolinera, D69, pasarela, estacion, Colpatria y lago)");
+    expect(city.IsBlocked(72.0f, 150.0f, 0.3f) && city.IsBlocked(89.0f, 150.0f, 0.3f), "la torre Colpatria y su anexo son solidos");
+    expect(city.IsBlocked(-20.0f, 119.0f, 0.3f), "el edificio de ladrillo es solido");
+    expect(std::fabs(city.GetGroundHeight(0.0f, -90.0f) - 0.92f) < 0.001f && city.GetGroundHeight(0.0f, -108.5f) == 0.0f
+           && city.GetGroundHeight(0.0f, -105.0f) > 0.0f && city.GetGroundHeight(5.0f, -90.0f) == 0.0f,
+           "la isla de la estacion sube por rampas y solo existe entre los carriles");
+    expect(!city.IsWalkable(0.0f, 2.0f * 160.0f - CityLayout::ORIGIN_Z + 1.0f), "el borde sur es un muro");
+    std::printf("Ampliacion del mapa: %d fallos\n", layoutFailures);
+    failures += layoutFailures;
     glfwDestroyWindow(window);
     glfwTerminate();
     return failures == 0 && spawnSafe ? 0 : 1;

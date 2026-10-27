@@ -48,7 +48,10 @@ int main(int argc, char** argv) {
         simulation.Update(dt, farPlayer);
         const auto& cars = simulation.GetTrafficVehicles();
         // el bus se detiene 4 s en la estacion y por semaforos/peatones no; mas de 45 s seguidos es un atasco
-        busStopped = simulation.GetBusSpeed() < 0.05f ? busStopped + dt : 0.0f;
+        // los dos buses: se cuenta el tiempo seguido en que alguno esta detenido fuera de su parada de 4 s
+        const bool anyBusStopped = std::any_of(simulation.GetBuses().begin(), simulation.GetBuses().end(),
+                                               [](const BusState& bus) { return bus.speed < 0.05f; });
+        busStopped = anyBusStopped ? busStopped + dt : 0.0f;
         busWorst = std::max(busWorst, busStopped);
         // carros cuyos centros estan a menos de 2 m (la longitud es 4.3 m) estan atravesados entre si
         ++frames;
