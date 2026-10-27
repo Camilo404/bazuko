@@ -44,6 +44,24 @@ struct InventoryOption {
     bool usable = false;
 };
 
+// Producto de una tienda (La Esquinita o un vendedor ambulante)
+struct ShopOption {
+    std::string key;             // id del objeto, o "costal"
+    std::string name;
+    std::string description;
+    int price = 0;
+    bool enabled = false;
+    bool owned = false;
+};
+
+// Fila del menu de la recicladora
+struct RecyclerRow {
+    std::string name;
+    int quantity = 0;
+    int unitPrice = 0;
+    int totalPrice = 0;
+};
+
 struct DealerOption {
     std::string id;
     std::string name;
@@ -85,6 +103,18 @@ public:
     void OpenRadioMenu(bool returnToPause = true);
     void OpenPauseSection(int section);
     void OpenDealerMenu();
+    // Tiendas y recicladora: se abren como secciones de la pausa (la partida se detiene mientras se compra).
+    // `itemKeys` limita los productos (vendedores ambulantes); vacio = toda la tienda.
+    void OpenShopMenu(const std::string& title, const std::string& subtitle, const std::vector<std::string>& itemKeys = {});
+    void OpenRecyclerMenu();
+    bool IsShopMenuOpen() const { return m_Paused && m_PauseSection == 5; }
+    bool IsRecyclerMenuOpen() const { return m_Paused && m_PauseSection == 6; }
+    const std::vector<std::string>& ShopFilter() const { return m_ShopFilter; }
+    // Datos vivos de los menus de lugares; main los actualiza cada cuadro antes de RenderHUD.
+    void SetPlaceMenuData(const std::vector<ShopOption>& shop, const std::vector<RecyclerRow>& recycler,
+                          float money, float weight, float capacity);
+    std::string ConsumeShopPurchaseRequest();
+    bool ConsumeRecyclerSellRequest();
     void ToggleCraftMenu();
     bool IsPaused() const { return m_Paused; }
     bool IsDeathScreenOpen() const { return m_DeathScreenOpen; }
@@ -171,6 +201,16 @@ private:
     bool m_InventorySortRequest = false;
     std::string m_TalentUnlockRequest;
     std::string m_DealerPurchaseRequest;
+    std::string m_ShopTitle;
+    std::string m_ShopSubtitle;
+    std::vector<std::string> m_ShopFilter;
+    std::string m_ShopPurchaseRequest;
+    bool m_RecyclerSellRequest = false;
+    std::vector<ShopOption> m_ShopOptions;
+    std::vector<RecyclerRow> m_RecyclerRows;
+    float m_PlaceMoney = 0.0f;
+    float m_PlaceWeight = 0.0f;
+    float m_PlaceCapacity = 0.0f;
     bool m_PetRequest = false;
     std::array<char, 32> m_CompanionName{{'E', 'l', ' ', 'C', 'h', 'a', 't', 'o', '\0'}};
     int m_CompanionCoat = 0;

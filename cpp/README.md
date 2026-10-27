@@ -79,6 +79,15 @@ cmake --build build --config Release --parallel
 En Windows, el ejecutable se inicia como aplicación gráfica (sin ventana de consola). La pantalla de carga
 actualiza el progreso al completar la carga de los modelos de peatones y del personaje.
 
+### Datos compartidos con el juego web
+
+Los objetos (precios, pesos, efectos, qué compra la recicladora), la tienda La Esquinita, las tablas de botín y los talentos
+se leen de `assets/data/game-data.json`. Ese archivo no se edita a mano: lo genera `node tools/export-game-data.mjs`
+a partir de `src/data/items.js` y `src/data/talents.js`, así el port y el juego web usan los mismos números.
+El orden de los objetos es fijo porque las partidas guardadas referencian su índice; los siete objetos que solo existen
+en el port (tela, alambre, plástico, mochila, arma casera, curita y cartón de rifa) se definen en el propio exportador.
+`ctest` ejecuta `bazuko_gamedata`, que comprueba el orden, la tienda y los efectos de los talentos.
+
 ### Emisoras de radio
 
 Las emisoras disponibles se configuran en `assets/radio_stations.json`. Para añadir una, agrega un objeto a

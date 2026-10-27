@@ -221,6 +221,52 @@ void UIManager::OpenDealerMenu() {
     Input::SetCursorLocked(false);
 }
 
+void UIManager::OpenShopMenu(const std::string& title, const std::string& subtitle, const std::vector<std::string>& itemKeys) {
+    if (m_DeathScreenOpen) return;
+    m_Paused = true;
+    m_PauseSection = 5;
+    m_ShopTitle = title;
+    m_ShopSubtitle = subtitle;
+    m_ShopFilter = itemKeys;
+    m_ShopPurchaseRequest.clear();
+    m_RadioMenuOpen = false;
+    m_RadioReturnsToPause = false;
+    m_CraftMenuOpen = false;
+    Input::SetCursorLocked(false);
+}
+
+void UIManager::OpenRecyclerMenu() {
+    if (m_DeathScreenOpen) return;
+    m_Paused = true;
+    m_PauseSection = 6;
+    m_RecyclerSellRequest = false;
+    m_RadioMenuOpen = false;
+    m_RadioReturnsToPause = false;
+    m_CraftMenuOpen = false;
+    Input::SetCursorLocked(false);
+}
+
+void UIManager::SetPlaceMenuData(const std::vector<ShopOption>& shop, const std::vector<RecyclerRow>& recycler,
+                                 float money, float weight, float capacity) {
+    m_ShopOptions = shop;
+    m_RecyclerRows = recycler;
+    m_PlaceMoney = money;
+    m_PlaceWeight = weight;
+    m_PlaceCapacity = capacity;
+}
+
+std::string UIManager::ConsumeShopPurchaseRequest() {
+    std::string request = std::move(m_ShopPurchaseRequest);
+    m_ShopPurchaseRequest.clear();
+    return request;
+}
+
+bool UIManager::ConsumeRecyclerSellRequest() {
+    const bool requested = m_RecyclerSellRequest;
+    m_RecyclerSellRequest = false;
+    return requested;
+}
+
 void UIManager::ShowDeathScreen(const std::string& causes, bool vehicleImpact) {
     if (m_DeathScreenOpen) return;
     m_DeathScreenOpen = true;
@@ -660,7 +706,36 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
             pauseTitle = "Dealer · El Cartucho";
             pauseSubtitle = "Sustancias disponibles";
             pauseIcon = Icon::Pill;
+        } else if (m_PauseSection == 5) {
+            pauseTitle = m_ShopTitle;
+            pauseSubtitle = m_ShopSubtitle;
+            pauseIcon = Icon::Bag;
+        } else if (m_PauseSection == 6) {
+            pauseTitle = "Recicladora El Progreso";
+            pauseSubtitle = "Pagan de contado. Comida, remedios y sustancias no se reciben.";
+            pauseIcon = Icon::Gear;
         }
+        // Dinero (y carga) a la derecha del boton principal del pie
+        const auto footerMoney = [&](bool showWeight) {
+            ImDrawList* draw = ImGui::GetWindowDrawList();
+            const ImVec2 min = ImGui::GetItemRectMin();
+            const ImVec2 max = ImGui::GetItemRectMax();
+            float x = max.x + 16.0f;
+            const float y = (min.y + max.y) * 0.5f - 7.0f;
+            const auto put = [&](const char* text, ImU32 color) {
+                draw->AddText(fonts.monoBold13, 13.0f, ImVec2(x, y), color, text);
+                x += fonts.monoBold13->CalcTextSizeA(13.0f, FLT_MAX, 0.0f, text).x;
+            };
+            char buffer[64];
+            put("Tienes ", IM_COL32(255, 255, 255, 255));
+            std::snprintf(buffer, sizeof(buffer), "$ %.0f", m_PlaceMoney);
+            put(buffer, IM_COL32(246, 196, 0, 255));
+            if (showWeight) {
+                x += 14.0f;
+                std::snprintf(buffer, sizeof(buffer), "Carga %.1f / %.0f kg", m_PlaceWeight, m_PlaceCapacity);
+                put(buffer, IM_COL32(214, 228, 255, 255));
+            }
+        };
         // ancho de la columna derecha de una fila: cantidad + botones
         const auto rowRight = [](float contentWidth) { return ImGui::GetWindowWidth() - 10.0f - contentWidth; };
         bool closeRequested = false;
@@ -837,6 +912,71 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                 }
                 SignUI::BeginFooter();
                 if (SignUI::PrimaryButton("Cerrar")) TogglePause();
+            } else if (m_PauseSection == 5) {
+                int rowIndex = 0;
+                for (const ShopOption& option : m_ShopOptions) {
+                    ImGui::PushID(option.key.c_str());
+                    if (SignUI::BeginRow("producto", rowIndex++)) {
+                        const char* buttonLabel = option.owned ? "Listo" : "Comprar";
+                        const float buttonWidth = SignUI::RowButtonWidth("Comprar");
+                        const float rowTop = SignUI::RowBegin();
+                        ImGui::PushFont(fonts.monoBold14);
+                        ImGui::Text("%s", option.name.c_str());
+                        ImGui::PopFont();
+                        ImGui::SameLine(rowRight(buttonWidth + 92.0f));
+                        ImGui::SetCursorPosY(rowTop + 7.0f);
+                        ImGui::TextColored(ImVec4(0.96f, 0.77f, 0.0f, 1.0f), "$ %d", option.price);
+                        SignUI::RowCluster(rowTop, rowRight(buttonWidth));
+                        if (SignUI::RowButton(buttonLabel, option.enabled, true)) m_ShopPurchaseRequest = option.key;
+                        SignUI::RowBelow(rowTop);
+                        ImGui::PushStyleColor(ImGuiCol_Text, blueText);
+                        ImGui::PushTextWrapPos(rowRight(buttonWidth + 8.0f));
+                        ImGui::TextWrapped("%s", option.description.c_str());
+                        ImGui::PopTextWrapPos();
+                        ImGui::PopStyleColor();
+                    }
+                    SignUI::EndRow();
+                    ImGui::PopID();
+                }
+                SignUI::BeginFooter();
+                if (SignUI::PrimaryButton("Cerrar")) TogglePause();
+                footerMoney(true);
+            } else if (m_PauseSection == 6) {
+                int total = 0;
+                for (const RecyclerRow& row : m_RecyclerRows) total += row.totalPrice;
+                if (m_RecyclerRows.empty()) {
+                    ImGui::PushStyleColor(ImGuiCol_Text, blueText);
+                    ImGui::TextWrapped("No traes nada para vender. Busca en las bolsas de basura: latas, botellas, cartón, chatarra y, con suerte, objetos de valor.");
+                    ImGui::PopStyleColor();
+                }
+                int rowIndex = 0;
+                for (const RecyclerRow& row : m_RecyclerRows) {
+                    ImGui::PushID(rowIndex);
+                    if (SignUI::BeginRow("venta", rowIndex++)) {
+                        const float rowTop = SignUI::RowBegin();
+                        ImGui::PushFont(fonts.monoBold14);
+                        ImGui::Text("%s", row.name.c_str());
+                        ImGui::PopFont();
+                        ImGui::SameLine(rowRight(150.0f));
+                        ImGui::SetCursorPosY(rowTop + 7.0f);
+                        ImGui::TextColored(ImVec4(1, 1, 1, 1), "× %d", row.quantity);
+                        ImGui::SameLine(rowRight(90.0f));
+                        ImGui::SetCursorPosY(rowTop + 7.0f);
+                        ImGui::TextColored(ImVec4(0.96f, 0.77f, 0.0f, 1.0f), "$ %d", row.totalPrice);
+                        SignUI::RowBelow(rowTop - 8.0f);
+                        ImGui::PushStyleColor(ImGuiCol_Text, blueText);
+                        ImGui::Text("$ %d c/u", row.unitPrice);
+                        ImGui::PopStyleColor();
+                    }
+                    SignUI::EndRow();
+                    ImGui::PopID();
+                }
+                SignUI::BeginFooter();
+                char sellLabel[64];
+                if (total > 0) std::snprintf(sellLabel, sizeof(sellLabel), "Vender todo · $ %d", total);
+                else std::snprintf(sellLabel, sizeof(sellLabel), "Vender todo");
+                if (SignUI::PrimaryButton(sellLabel, false, total > 0)) m_RecyclerSellRequest = true;
+                footerMoney(false);
             } else {
                 // ---- Sonido y volumen ----
                 if (SignUI::BeginSection("Sonido y Volumen", Icon::Sound)) {

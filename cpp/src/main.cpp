@@ -14,6 +14,7 @@
 #include "renderer/Mesh.hpp"
 #include "renderer/Model.hpp"
 #include "ui/UIManager.hpp"
+#include "game/GameData.hpp"
 #include "audio/AudioManager.hpp"
 #include "world/CityLayout.hpp"
 #include "world/Simulation.hpp"
@@ -117,68 +118,11 @@ int main(int argc, char** argv) {
     float poopAnimationRemaining = 0.0f;
     bool boostActive = false;
     float boostTimer = 0.0f;
-    struct Item {
-        std::string id;
-        std::string name;
-        float weight;
-        int value;
-        int consumableNeed = -1;
-        float amount = 0.0f;
-        float healthDelta = 0.0f;
-        bool substance = false;
-        std::string cure;
-        float moodDelta = 0.0f;
-        float energyDelta = 0.0f;
-    };
-    const std::array<Item, 42> lootTable{{
-        {"lata", "Lata vacía", 0.2f, 250}, {"botella", "Botella PET", 0.3f, 150},
-        {"carton", "Cartón", 0.5f, 200}, {"chatarra", "Chatarra", 1.0f, 900},
-        {"cable", "Cable cobre", 0.4f, 2400}, {"pan", "Pan duro", 0.3f, 1000, 0, 25.0f, 0.0f, false, "", 5.0f},
-        {"agua", "Botella agua", 0.5f, 1500, 1, 35.0f}, {"reloj", "Reloj oxidado", 0.1f, 8000},
-        {"vendaje", "Vendaje", 0.1f, 3000, 3, 30.0f}, {"antibiotico", "Antibiótico", 0.1f, 18000, -1, 0.0f, 0.0f, false, "infeccion"},
-        {"madera", "Tablas", 2.0f, 1500}, {"pilas", "Pilas AA", 0.1f, 2000}, {"radioTransistor", "Radio transistor", 0.6f, 18000},
-        {"retrovisor", "Retrovisor", 0.8f, 15000}, {"radio", "Radio de auto", 1.5f, 35000},
-        {"tela", "Retazo de tela", 0.2f, 300}, {"pastilla", "Pastilla", 0.05f, 8000, 6, 60.0f, -5.0f, true, "", 40.0f},
-        {"lona", "Lona azul", 2.0f, 4000}, {"colchon", "Colchón viejo", 6.0f, 5000}, {"vela", "Vela", 0.05f, 500},
-        {"popo", "Mojón de popó", 0.3f, 50}, {"alambre", "Alambre", 0.1f, 500},
-        {"plastico", "Plástico", 0.1f, 200}, {"mochila", "Mochila", 0.8f, 12000},
-        {"arma", "Arma casera", 1.2f, 0}, {"curita", "Curita", 0.05f, 500},
-        {"rifa", "Cartón de rifa", 0.05f, 1000},
-        {"cafe", "Tinto", 0.25f, 2000, 2, 40.0f, 0.0f, false, "", 15.0f},
-        {"lataComida", "Comida enlatada", 0.6f, 6000, 0, 40.0f, 0.0f, false, "", 8.0f},
-        {"refresco", "Refresco", 0.4f, 3500, 1, 30.0f, 0.0f, false, "", 10.0f, 10.0f},
-        {"tintico", "Tintico", 0.1f, 1000, 6, 20.0f, 0.0f, true, "", 15.0f, 20.0f},
-        {"pegante", "Pegante", 0.2f, 3000, 6, 40.0f, -3.0f, true, "", 25.0f},
-        {"cigarrillo", "Cigarrillo suelto", 0.01f, 500, 6, 35.0f, -1.0f},
-        {"jabon", "Jabón", 0.2f, 3500, 4, 40.0f},
-        {"cepillo", "Cepillo", 0.1f, 3000, 4, 20.0f},
-        {"vacuna", "Vacuna", 0.1f, 20000, -1, 0.0f, 0.0f, false, "tetanos"},
-        {"carbon", "Carbón activo", 0.1f, 9000, -1, 0.0f, 0.0f, false, "intoxicacion"},
-        {"jarabe", "Jarabe", 0.2f, 11000, -1, 0.0f, 0.0f, false, "gripe"},
-        {"pomada", "Pomada", 0.15f, 9500, -1, 0.0f, 0.0f, false, "sarna"},
-        {"antiparasitario", "Antiparasitario", 0.1f, 13000, -1, 0.0f, 0.0f, false, "parasitos"},
-        {"moneda", "Moneda Antigua", 0.02f, 5000},
-        {"anillo", "Anillo", 0.05f, 20000}
-    }};
-    const std::array<Item, 20> shopCatalog{{
-        {"pan", "Pan duro", 0.3f, 1000, 0, 25.0f, 0.0f, false, "", 5.0f}, {"agua", "Botella agua", 0.5f, 1500, 1, 35.0f},
-        {"vendaje", "Vendaje", 0.1f, 3000, 3, 30.0f}, {"madera", "Tablas", 2.0f, 1500},
-        {"tela", "Retazo de tela", 0.2f, 300}, {"pilas", "Pilas AA", 0.1f, 2000},
-        {"cafe", "Tinto", 0.25f, 2000, 2, 40.0f, 0.0f, false, "", 15.0f},
-        {"lataComida", "Comida enlatada", 0.6f, 6000, 0, 40.0f, 0.0f, false, "", 8.0f},
-        {"refresco", "Refresco", 0.4f, 3500, 1, 30.0f, 0.0f, false, "", 10.0f, 10.0f},
-        {"tintico", "Tintico", 0.1f, 1000, 6, 20.0f, 0.0f, true, "", 15.0f, 20.0f},
-        {"pegante", "Pegante", 0.2f, 3000, 6, 40.0f, -3.0f, true, "", 25.0f},
-        {"cigarrillo", "Cigarrillo suelto", 0.01f, 500, 6, 35.0f, -1.0f},
-        {"jabon", "Jabón", 0.2f, 3500, 4, 40.0f},
-        {"cepillo", "Cepillo", 0.1f, 3000, 4, 20.0f},
-        {"vacuna", "Vacuna", 0.1f, 20000, -1, 0.0f, 0.0f, false, "tetanos"},
-        {"carbon", "Carbón activo", 0.1f, 9000, -1, 0.0f, 0.0f, false, "intoxicacion"},
-        {"jarabe", "Jarabe", 0.2f, 11000, -1, 0.0f, 0.0f, false, "gripe"},
-        {"pomada", "Pomada", 0.15f, 9500, -1, 0.0f, 0.0f, false, "sarna"},
-        {"antiparasitario", "Antiparasitario", 0.1f, 13000, -1, 0.0f, 0.0f, false, "parasitos"},
-        {"antibiotico", "Antibiótico", 0.1f, 25000, -1, 0.0f, 0.0f, false, "infeccion"}
-    }};
+    // Objetos, tienda, botin y talentos vienen de assets/data/game-data.json (generado desde src/data del juego web).
+    // El orden de los objetos es fijo: las partidas guardadas guardan su indice.
+    const GameData& gameData = GameData::Get();
+    using Item = ItemDef;
+    const std::vector<Item>& lootTable = gameData.items;
     struct InventoryEntry { size_t itemIndex; int quantity; };
     std::vector<InventoryEntry> inventory;
     float inventoryWeight = 0.0f;
@@ -186,6 +130,7 @@ int main(int argc, char** argv) {
     int xp = 0;
     int level = 1;
     int talentPoints = 0;
+    bool bigSack = false;   // Costal grande comprado en la tienda
     std::unordered_set<std::string> unlockedTalents;
     std::string companionName = "El Chato";
     int companionCoat = 0;
@@ -249,12 +194,9 @@ int main(int argc, char** argv) {
                 level = std::max(1, state.value("level", 1));
                 talentPoints = std::max(0, state.value("talentPoints", level - 1));
                 for (const auto& id : state.value("talents", std::vector<std::string>{})) {
-                    if (id == "collector1" || id == "collector2" || id == "collector3" ||
-                        id == "surv1" || id == "surv2" || id == "surv3" ||
-                        id == "crime1" || id == "crime2" || id == "crime3") {
-                        unlockedTalents.insert(id);
-                    }
+                    if (gameData.FindTalent(id)) unlockedTalents.insert(id);
                 }
+                bigSack = state.value("bigSack", false);
                 companionName = state.value("companionName", companionName);
                 companionCoat = std::clamp(state.value("companionCoat", 0), 0, 3);
                 companionIsFriend = state.value("companionIsFriend", false);
@@ -310,9 +252,14 @@ int main(int argc, char** argv) {
     float survivalSaveTimer = 0.0f;
     float begCooldownRemaining = 0.0f;
     const auto hasTalent = [&](const std::string& id) { return unlockedTalents.contains(id); };
-    const auto inventoryCapacity = [&]() { return 20.0f + (hasTalent("collector2") ? 10.0f : 0.0f); };
+    const auto talentEffect = [&](const std::string& key, float base = 1.0f) {
+        return gameData.TalentEffect(unlockedTalents, key, base);
+    };
+    const auto inventoryCapacity = [&]() {
+        return 20.0f + talentEffect("maxWeightBonus", 0.0f) + (bigSack ? gameData.costalBonus : 0.0f);
+    };
     const auto awardXp = [&](int amount, float activityMultiplier = 1.0f) {
-        const float talentMultiplier = hasTalent("crime3") ? 1.5f : 1.0f;
+        const float talentMultiplier = talentEffect("xpMult");
         xp += static_cast<int>(std::round(static_cast<float>(amount) * activityMultiplier * talentMultiplier));
         while (xp >= 100 * level) {
             xp -= 100 * level;
@@ -328,6 +275,7 @@ int main(int argc, char** argv) {
         state["xp"] = xp;
         state["level"] = level;
         state["talentPoints"] = talentPoints;
+        state["bigSack"] = bigSack;
         state["talents"] = std::vector<std::string>(unlockedTalents.begin(), unlockedTalents.end());
         state["itemsCollected"] = itemsCollected;
         state["itemsSold"] = itemsSold;
@@ -384,6 +332,7 @@ int main(int argc, char** argv) {
         xp = 0;
         level = 1;
         talentPoints = 0;
+        bigSack = false;
         unlockedTalents.clear();
         companionName = "El Chato";
         companionCoat = 0;
@@ -411,7 +360,7 @@ int main(int argc, char** argv) {
     };
     const auto tryInfectFromPickup = [&]() -> std::string {
         float chance = 0.12f * (needs[4] < 30.0f ? 1.5f : 1.0f)
-            * (hasTalent("surv2") ? 0.6f : 1.0f);
+            * talentEffect("diseaseResist") * characterManager.GetDiseaseResistance();
         if (std::uniform_real_distribution<float>(0.0f, 1.0f)(lootRandom) >= chance) return {};
 
         const std::array<DiseaseState, 3> types{{
@@ -426,6 +375,19 @@ int main(int argc, char** argv) {
             return type.id;
         }
         return {};
+    };
+    const auto addLootById = [&](const std::string& id) {
+        const auto item = std::find_if(lootTable.begin(), lootTable.end(),
+            [&](const Item& entry) { return entry.id == id; });
+        if (item == lootTable.end()) return false;
+        const size_t itemIndex = static_cast<size_t>(item - lootTable.begin());
+        if (inventoryWeight + item->weight > inventoryCapacity()) return false;
+        auto entry = std::find_if(inventory.begin(), inventory.end(),
+            [&](const InventoryEntry& value) { return value.itemIndex == itemIndex; });
+        if (entry == inventory.end()) inventory.push_back({itemIndex, 1});
+        else ++entry->quantity;
+        inventoryWeight += item->weight;
+        return true;
     };
     auto collectNearbyPickup = [&](float radius) {
         size_t nearest = simulation.GetPickups().size();
@@ -447,30 +409,32 @@ int main(int argc, char** argv) {
         if (entry == inventory.end()) inventory.push_back({pickup.itemIndex, 1}); else ++entry->quantity;
         inventoryWeight += item.weight;
         ++itemsCollected;
-        awardXp(3, hasTalent("collector1") ? 1.1f : 1.0f);
+        awardXp(3);
         if (item.id == "reloj") needs[5] = std::min(100.0f, needs[5] + 8.0f);
+        // Origen Reciclador: un objeto comun mas por cada bolsa (tabla de botin comun del original)
+        std::string extraItemName;
+        for (int extra = 0; extra < characterManager.GetExtraLoot(); ++extra) {
+            float totalWeight = 0.0f;
+            for (const LootEntry& entry : gameData.lootCommon) totalWeight += entry.weight;
+            float roll = std::uniform_real_distribution<float>(0.0f, totalWeight)(lootRandom);
+            for (const LootEntry& entry : gameData.lootCommon) {
+                roll -= entry.weight;
+                if (roll > 0.0f) continue;
+                if (const ItemDef* bonus = gameData.FindItem(entry.item); bonus && addLootById(bonus->id)) extraItemName = bonus->name;
+                break;
+            }
+        }
         const std::string contractedDisease = tryInfectFromPickup();
         audio.Play(AudioCue::Pickup);
         if (!contractedDisease.empty()) {
             ui.SetPickupNotification("Te enfermaste de " + contractedDisease + " al rebuscar. Busca el tratamiento adecuado.");
         } else if (item.id == "reloj") {
             ui.SetPickupNotification("+ " + item.name + " · +8 de ánimo.");
+        } else if (!extraItemName.empty()) {
+            ui.SetPickupNotification("+ " + item.name + " · +" + extraItemName + " (origen Reciclador)");
         } else {
             ui.SetPickupNotification("+ " + item.name);
         }
-        return true;
-    };
-    const auto addLootById = [&](const std::string& id) {
-        const auto item = std::find_if(lootTable.begin(), lootTable.end(),
-            [&](const Item& entry) { return entry.id == id; });
-        if (item == lootTable.end()) return false;
-        const size_t itemIndex = static_cast<size_t>(item - lootTable.begin());
-        if (inventoryWeight + item->weight > inventoryCapacity()) return false;
-        auto entry = std::find_if(inventory.begin(), inventory.end(),
-            [&](const InventoryEntry& value) { return value.itemIndex == itemIndex; });
-        if (entry == inventory.end()) inventory.push_back({itemIndex, 1});
-        else ++entry->quantity;
-        inventoryWeight += item->weight;
         return true;
     };
     const auto inventoryCount = [&](const std::string& id) {
@@ -485,21 +449,13 @@ int main(int argc, char** argv) {
         return std::max(0, static_cast<int>(std::floor(
             (inventoryCapacity() - inventoryWeight + 0.0001f) / item->weight)));
     };
-    const auto isRecyclable = [](const Item& item) {
-        static const std::unordered_set<std::string> nonRecyclable{
-            "radioTransistor", "pilas", "tela", "madera", "lona", "colchon", "vela",
-            "popo", "alambre", "plastico", "mochila", "arma"
-        };
-        return item.consumableNeed < 0 && !item.substance && item.cure.empty()
-            && !nonRecyclable.contains(item.id);
-    };
+    const auto isRecyclable = [](const Item& item) { return item.recyclable; };
     const auto applyItemEffect = [&](const Item& item) {
         if (item.consumableNeed >= 0) {
             const size_t needIndex = static_cast<size_t>(item.consumableNeed);
             needs[needIndex] = std::clamp(needs[needIndex] + item.amount, 0.0f, 100.0f);
-            needs[3] = std::clamp(needs[3] + item.healthDelta, 0.0f, 100.0f);
-            needs[5] = std::clamp(needs[5] + item.moodDelta, 0.0f, 100.0f);
-            needs[2] = std::clamp(needs[2] + item.energyDelta, 0.0f, 100.0f);
+            for (size_t need = 0; need < needs.size(); ++need)
+                needs[need] = std::clamp(needs[need] + item.deltas[need], 0.0f, 100.0f);
             return true;
         }
         if (item.id == "vendaje" || item.id == "curita") {
@@ -518,10 +474,14 @@ int main(int argc, char** argv) {
         }
         return false;
     };
+    // Precio de la recicladora: adrenalina x1.2 y mejora de origen (Gota a gota +15 %)
+    const auto recyclerMultiplier = [&]() {
+        return (boostActive ? 1.2f : 1.0f) * characterManager.GetSellMultiplier();
+    };
     const auto sellRecyclables = [&]() {
         int soldCount = 0;
         float earned = 0.0f;
-        const float saleMultiplier = hasTalent("collector3") ? 1.2f : 1.0f;
+        const float saleMultiplier = recyclerMultiplier();
         for (auto entry = inventory.begin(); entry != inventory.end();) {
             const Item& item = lootTable[entry->itemIndex];
             if (!isRecyclable(item)) {
@@ -718,7 +678,7 @@ int main(int argc, char** argv) {
 
         const float dtClamped = std::max(0.0f, dt);
         begCooldownRemaining = std::max(0.0f, begCooldownRemaining - dtClamped);
-        const float hungerAndThirstDecay = hasTalent("surv1") ? 0.7f : 1.0f;
+        const float hungerAndThirstDecay = talentEffect("decayMult");
         needs[0] = std::max(0.0f, needs[0] - (100.0f / 7200.0f) * dtClamped * hungerAndThirstDecay);
         needs[1] = std::max(0.0f, needs[1] - (100.0f / 5400.0f) * dtClamped * hungerAndThirstDecay);
         needs[2] = std::max(0.0f, needs[2] - (100.0f / 5400.0f) * dtClamped - (isRunning && currentSpeed > 0.0f ? 0.01f * dtClamped : 0.0f));
@@ -742,7 +702,7 @@ int main(int argc, char** argv) {
             if (criticalWithdrawal) moodDecay *= 2.2f;
             else if (highWithdrawal) moodDecay *= 1.6f;
         }
-        needs[5] = std::max(0.0f, needs[5] - moodDecay * dtClamped * (hasTalent("surv3") ? 0.5f : 1.0f));
+        needs[5] = std::max(0.0f, needs[5] - moodDecay * dtClamped * talentEffect("mentalDecayMult"));
 
         if (needs[0] <= 0.0f) healthDrain += 100.0f / 1800.0f;
         if (needs[1] <= 0.0f) healthDrain += 100.0f / 1200.0f;
@@ -891,9 +851,9 @@ int main(int argc, char** argv) {
                         const bool rare = chance(0.08f);
                         const int amount = rare
                             ? (std::uniform_int_distribution<int>(0, 1)(lootRandom) == 0 ? 5000 : 10000)
-                            : static_cast<int>(std::round((2.0f + std::uniform_real_distribution<float>(0.0f, 13.0f)(lootRandom)) * 100.0f));
-                        const int earned = static_cast<int>(std::round(
-                            static_cast<float>(amount) * (hasTalent("crime2") ? 1.3f : 1.0f)));
+                            : static_cast<int>(std::round((2.0f + std::uniform_real_distribution<float>(0.0f, 13.0f)(lootRandom))
+                                                          * characterManager.GetBegMultiplier())) * 100;
+                        const int earned = amount;
                         money += static_cast<float>(earned);
                         needs[5] = std::min(100.0f, needs[5] + (rare ? 6.0f : 2.0f));
                         awardXp(rare ? 8 : 4);
@@ -936,7 +896,7 @@ int main(int argc, char** argv) {
                             continue;
                         }
                         soldQuantity += entry->quantity;
-                        earned += std::round(static_cast<float>(item.value * entry->quantity) * 1.8f * 1.3f);
+                        earned += std::round(static_cast<float>(item.value * entry->quantity) * 1.8f * 1.3f * talentEffect("substancePriceMult"));
                         inventoryWeight = std::max(0.0f, inventoryWeight - item.weight * entry->quantity);
                         entry = inventory.erase(entry);
                     }
@@ -948,22 +908,13 @@ int main(int argc, char** argv) {
                     ui.OpenDealerMenu();
                 }
             } else if (simulation.IsNearRecycler(playerPos, 2.5f)) {
-                sellRecyclables();
+                ui.OpenRecyclerMenu();
             } else if (vendorIndex < simulation.GetStreetVendorCount()) {
                 const StreetVendor& vendor = simulation.GetVendor(vendorIndex);
-                const std::array<size_t, 3> chazaCatalog{{6, 0, 1}};
-                const std::array<size_t, 3> fritangaCatalog{{7, 0, 8}};
-                const auto& catalog = vendor.fritanga ? fritangaCatalog : chazaCatalog;
-                const Item& product = shopCatalog[catalog[std::uniform_int_distribution<size_t>(0, catalog.size() - 1)(lootRandom)]];
-                if (money < product.value) {
-                    ui.SetPickupNotification("No te alcanza para comprar en " + vendor.name + ".");
-                } else if (!addLootById(product.id)) {
-                    ui.SetPickupNotification("El costal está lleno; no puedes cargar " + product.name + ".");
-                } else {
-                    money -= product.value;
-                    audio.Play(AudioCue::Pickup);
-                    ui.SetPickupNotification(vendor.name + ": compraste " + product.name + ".");
-                }
+                // Productos de cada tipo de puesto (ids del catalogo de la tienda)
+                const std::vector<std::string> chazaCatalog{"cafe", "pan", "agua"};
+                const std::vector<std::string> fritangaCatalog{"lataComida", "pan", "refresco"};
+                ui.OpenShopMenu(vendor.name, "Venta ambulante: lo justo para el día.", vendor.fritanga ? fritangaCatalog : chazaCatalog);
             } else if (pedestrianIndex < simulation.GetPedestrianCount()) {
                 const RobberyOutcome outcome = simulation.RobPedestrian(pedestrianIndex, false, playerPos);
                 if (outcome.attempted && outcome.successful) {
@@ -986,7 +937,7 @@ int main(int argc, char** argv) {
                 } else if (simulation.StealParkedCar(parkedCarIndex)) {
                     audio.PlayTheftRemark(2.0f);
                     const bool caught = std::uniform_real_distribution<float>(0.0f, 1.0f)(lootRandom)
-                        < (hasTalent("crime1") ? 0.20f : 0.25f);
+                        < 0.25f * talentEffect("stealCaughtMult");
                     if (caught) {
                         needs[3] = std::max(0.0f, needs[3] - 25.0f);
                         money = std::max(0.0f, money - 5000.0f);
@@ -1004,7 +955,7 @@ int main(int argc, char** argv) {
                 ui.SetPickupNotification("El costal está lleno; deja espacio para guardar los retrovisores.");
             } else if (simulation.StealCar(carIndex)) {
                 audio.PlayTheftRemark(2.0f);
-                const float caughtChance = hasTalent("crime1") ? 0.20f : 0.25f;
+                const float caughtChance = 0.25f * talentEffect("stealCaughtMult");
                 const bool caught = std::uniform_real_distribution<float>(0.0f, 1.0f)(lootRandom) < caughtChance;
                 if (caught) {
                     needs[3] = std::max(0.0f, needs[3] - 25.0f);
@@ -1021,15 +972,7 @@ int main(int argc, char** argv) {
                     audio.Play(AudioCue::Treasure);
                 }
             } else if (nearShop) {
-                const Item& product = shopCatalog[std::uniform_int_distribution<size_t>(0, shopCatalog.size() - 1)(lootRandom)];
-                size_t itemIndex = static_cast<size_t>(std::find_if(lootTable.begin(), lootTable.end(), [&](const Item& item) { return item.id == product.id; }) - lootTable.begin());
-                if (itemIndex < lootTable.size() && money >= product.value && inventoryWeight + product.weight <= inventoryCapacity()) {
-                    money -= product.value;
-                    auto entry = std::find_if(inventory.begin(), inventory.end(), [&](const InventoryEntry& item) { return item.itemIndex == itemIndex; });
-                    if (entry == inventory.end()) inventory.push_back({itemIndex, 1}); else ++entry->quantity;
-                    inventoryWeight += product.weight;
-                    audio.Play(AudioCue::Pickup);
-                }
+                ui.OpenShopMenu("Tienda La Esquinita", "Doña Rosa fía, pero solo a los conocidos.");
             } else if (collectNearbyPickup(1.8f)) {
             } else {
                 auto usable = std::find_if(inventory.begin(), inventory.end(), [&](const InventoryEntry& entry) {
@@ -1270,24 +1213,57 @@ int main(int argc, char** argv) {
             dealerOptions.push_back({item->id, item->name, item->value, money >= item->value,
                                      inventoryWeight + item->weight <= inventoryCapacity()});
         }
-        const std::array<TalentOption, 9> talentDefinitions{{
-            {"collector1", "Ojo de águila", "+10 % de XP al recoger objetos.", "", 1},
-            {"collector2", "Bolsas llenas", "+10 kg de capacidad en el costal.", "collector1", 1},
-            {"collector3", "Selección experta", "+20 % de valor al vender reciclables.", "collector2", 2},
-            {"surv1", "Estómago de hierro", "-30 % de desgaste de hambre y sed.", "", 1},
-            {"surv2", "Piel dura", "-40 % de riesgo de enfermedad.", "surv1", 1},
-            {"surv3", "Mente de acero", "-50 % de desgaste del ánimo.", "surv2", 2},
-            {"crime1", "Manos ligeras", "-20 % de probabilidad de ser atrapado robando.", "", 1},
-            {"crime2", "Contactos", "+30 % de dinero al pedir limosna.", "crime1", 1},
-            {"crime3", "Rey de la calle", "+50 % de XP en todas las actividades.", "crime2", 2}
-        }};
-        std::vector<TalentOption> talentOptions(talentDefinitions.begin(), talentDefinitions.end());
+        std::vector<TalentOption> talentOptions;
+        for (const TalentDef& definition : gameData.talents) {
+            talentOptions.push_back({definition.id, definition.name, definition.desc,
+                                     definition.prerequisites.empty() ? std::string{} : definition.prerequisites.front(), definition.cost});
+        }
         for (auto& talent : talentOptions) {
             talent.unlocked = hasTalent(talent.id);
             talent.available = !talent.unlocked && talentPoints >= talent.cost
                 && (talent.requirement.empty() || hasTalent(talent.requirement));
         }
         simulation.SetDogCoat(ui.GetCompanionCoat());
+        {
+            std::vector<ShopOption> shopOptions;
+            if (ui.IsShopMenuOpen()) {
+                const auto allowed = [&](const std::string& key) {
+                    return ui.ShopFilter().empty() || std::find(ui.ShopFilter().begin(), ui.ShopFilter().end(), key) != ui.ShopFilter().end();
+                };
+                for (const ShopEntry& entry : gameData.shop) {
+                    ShopOption option;
+                    option.price = entry.price;
+                    if (!entry.upgrade.empty()) {
+                        option.key = entry.upgrade;
+                        option.name = entry.label.empty() ? entry.upgrade : entry.label;
+                        option.owned = bigSack;
+                        option.description = bigSack ? "Ya lo tienes." : entry.desc;
+                        option.enabled = !bigSack && money >= static_cast<float>(entry.price);
+                    } else {
+                        const ItemDef* product = gameData.FindItem(entry.item);
+                        if (!product) continue;
+                        option.key = entry.item;
+                        option.name = entry.label.empty() ? product->name : entry.label;
+                        const bool heavy = inventoryWeight + product->weight * static_cast<float>(entry.qty) > inventoryCapacity();
+                        option.description = heavy ? "No te cabe en el costal."
+                            : !entry.desc.empty() ? entry.desc : DescribeItemEffects(*product);
+                        option.enabled = !heavy && money >= static_cast<float>(entry.price);
+                    }
+                    if (allowed(option.key)) shopOptions.push_back(std::move(option));
+                }
+            }
+            std::vector<RecyclerRow> recyclerRows;
+            if (ui.IsRecyclerMenuOpen()) {
+                const float multiplier = recyclerMultiplier();
+                for (const auto& entry : inventory) {
+                    const Item& item = lootTable[entry.itemIndex];
+                    if (!isRecyclable(item)) continue;
+                    recyclerRows.push_back({item.name, entry.quantity, static_cast<int>(std::round(item.value * multiplier)),
+                                            static_cast<int>(std::round(item.value * entry.quantity * multiplier))});
+                }
+            }
+            ui.SetPlaceMenuData(shopOptions, recyclerRows, money, inventoryWeight, inventoryCapacity());
+        }
         ui.RenderHUD(dt, playerPos, camera, renderer, window, city, simulation, audio,
                      characterManager.GetLook().nombre, characterManager.GetOriginInfo().name,
                      needs, money, inventoryWeight, inventoryCapacity(),
@@ -1295,6 +1271,36 @@ int main(int argc, char** argv) {
                      simulation.GetMissionProgress(), simulation.GetMissionTarget(), craftingOptions,
                      inventoryOptions, talentPoints, talentOptions, simulation.IsDogFriend(), dealerOptions,
                      boostActive, boostTimer, psychosisSeverity);
+
+        const std::string shopPurchase = ui.ConsumeShopPurchaseRequest();
+        if (!shopPurchase.empty()) {
+            const auto entry = std::find_if(gameData.shop.begin(), gameData.shop.end(), [&](const ShopEntry& candidate) {
+                return candidate.item == shopPurchase || (!candidate.upgrade.empty() && candidate.upgrade == shopPurchase);
+            });
+            if (entry == gameData.shop.end()) {
+                LogWarn("El menu de la tienda solicito un producto desconocido: {}", shopPurchase);
+            } else if (money < static_cast<float>(entry->price)) {
+                ui.SetPickupNotification("No te alcanza para comprar eso.");
+            } else if (!entry->upgrade.empty()) {
+                if (!bigSack) {
+                    bigSack = true;
+                    money -= static_cast<float>(entry->price);
+                    audio.Play(AudioCue::Pickup);
+                    ui.SetPickupNotification("Compraste el " + entry->label + ": ahora cargas " + std::to_string(static_cast<int>(gameData.costalBonus)) + " kg más.");
+                }
+            } else if (const ItemDef* product = gameData.FindItem(entry->item); product == nullptr) {
+                LogWarn("Producto sin objeto: {}", entry->item);
+            } else if (inventoryWeight + product->weight * static_cast<float>(entry->qty) > inventoryCapacity()) {
+                audio.Play(AudioCue::Full);
+                ui.SetPickupNotification("No te cabe en el costal: " + product->name + ".");
+            } else {
+                for (int unit = 0; unit < entry->qty; ++unit) addLootById(product->id);
+                money -= static_cast<float>(entry->price);
+                audio.Play(AudioCue::Pickup);
+                ui.SetPickupNotification("Compraste " + (entry->label.empty() ? product->name : entry->label) + ".");
+            }
+        }
+        if (ui.ConsumeRecyclerSellRequest()) sellRecyclables();
 
         const std::string dealerPurchase = ui.ConsumeDealerPurchaseRequest();
         if (!dealerPurchase.empty()) {

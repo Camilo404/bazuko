@@ -571,7 +571,7 @@ bool RowButton(const char* label, bool enabled, bool primary) {
     return pressed;
 }
 
-bool PrimaryButton(const char* label, bool fullWidth) {
+bool PrimaryButton(const char* label, bool fullWidth, bool enabled) {
     ImDrawList* draw = ImGui::GetWindowDrawList();
     const std::string upper = Upper(label);
     const float spacing = 1.3f;
@@ -579,13 +579,13 @@ bool PrimaryButton(const char* label, bool fullWidth) {
     const float textWidth = SpacedTextWidth(g_fonts.primary, primarySize, upper.c_str(), spacing);
     const float width = fullWidth ? ImGui::GetContentRegionAvail().x : textWidth + 36.0f;
     ImGui::PushID(label);
-    const bool pressed = ImGui::InvisibleButton("##principal", ImVec2(width, 38.0f));
+    const bool pressed = ImGui::InvisibleButton("##principal", ImVec2(width, 38.0f)) && enabled;
     ImGui::PopID();
-    const bool hovered = ImGui::IsItemHovered();
+    const bool hovered = enabled && ImGui::IsItemHovered();
     const ImVec2 min = ImGui::GetItemRectMin();
     const ImVec2 max = ImGui::GetItemRectMax();
     draw->AddRectFilled(min + ImVec2(0, 3), max + ImVec2(0, 3), IM_COL32(0, 0, 0, 90), 8.0f);
-    draw->AddRectFilled(min, max, hovered ? IM_COL32(255, 210, 26, 255) : kYellow, 8.0f);
+    draw->AddRectFilled(min, max, !enabled ? IM_COL32(120, 112, 70, 255) : hovered ? IM_COL32(255, 210, 26, 255) : kYellow, 8.0f);
     // rayas diagonales sutiles (repeating-linear-gradient de 60 grados)
     draw->PushClipRect(min + ImVec2(2, 2), max - ImVec2(2, 2), true);
     for (float x = min.x - 40.0f; x < max.x + 40.0f; x += 8.0f)

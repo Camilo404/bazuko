@@ -148,6 +148,7 @@ add_executable(bazuko
     src/character/CharacterManager.cpp src/character/CharacterPreview.cpp src/character/Ragdoll.cpp
     src/world/CityLayout.cpp src/world/Simulation.cpp src/world/BirdFlock.cpp
     src/world/TextRaster.cpp src/world/SignAtlas.cpp
+    src/game/GameData.cpp
 )
 if(WIN32)
     set_target_properties(bazuko PROPERTIES WIN32_EXECUTABLE TRUE)
@@ -181,6 +182,14 @@ add_executable(bazuko_birds_test tests/BirdFlockTest.cpp src/world/BirdFlock.cpp
 target_include_directories(bazuko_birds_test PRIVATE src)
 target_link_libraries(bazuko_birds_test PRIVATE glm::glm)
 add_test(NAME bazuko_birds COMMAND bazuko_birds_test)
+
+# Datos compartidos con el juego web (objetos, tienda, talentos): se regeneran con tools/export-game-data.mjs
+add_executable(bazuko_gamedata_test tests/GameDataTest.cpp src/game/GameData.cpp src/core/Paths.cpp)
+target_include_directories(bazuko_gamedata_test PRIVATE src third_party/include)
+target_compile_definitions(bazuko_gamedata_test PRIVATE BAZUKO_GAME_DATA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/data/game-data.json"
+                           BAZUKO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(bazuko_gamedata_test PRIVATE glm::glm)
+add_test(NAME bazuko_gamedata COMMAND bazuko_gamedata_test)
 
 # Prueba de trafico con la simulacion real (ventana oculta para el contexto GL). No esta en CTest por defecto:
 #   build\Release\bazuko_traffic_test.exe [segundos] [semilla]
