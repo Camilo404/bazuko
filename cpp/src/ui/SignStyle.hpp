@@ -68,7 +68,7 @@ float RowButtonWidth(const char* label);
 void FlexReset();
 bool Button(const char* label, Icon icon = Icon::None, bool selected = false, bool danger = false);
 // Boton amarillo de la senal; `fullWidth` lo estira.
-bool PrimaryButton(const char* label, bool fullWidth = false, bool enabled = true);
+bool PrimaryButton(const char* label, bool fullWidth = false, bool enabled = true, float height = 38.0f, float minWidth = 0.0f);
 // Deslizador de volumen (verde). Devuelve true si cambia.
 bool Slider(const char* id, float* value01, float width);
 // Nota tenue que se ajusta al ancho (reemplaza a TextDisabled en los menus).

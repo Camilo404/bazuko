@@ -571,15 +571,15 @@ bool RowButton(const char* label, bool enabled, bool primary) {
     return pressed;
 }
 
-bool PrimaryButton(const char* label, bool fullWidth, bool enabled) {
+bool PrimaryButton(const char* label, bool fullWidth, bool enabled, float height, float minWidth) {
     ImDrawList* draw = ImGui::GetWindowDrawList();
     const std::string upper = Upper(label);
     const float spacing = 1.3f;
     const float primarySize = g_fonts.primary->FontSize;
     const float textWidth = SpacedTextWidth(g_fonts.primary, primarySize, upper.c_str(), spacing);
-    const float width = fullWidth ? ImGui::GetContentRegionAvail().x : textWidth + 36.0f;
+    const float width = fullWidth ? ImGui::GetContentRegionAvail().x : std::max(textWidth + 36.0f, minWidth);
     ImGui::PushID(label);
-    const bool pressed = ImGui::InvisibleButton("##principal", ImVec2(width, 38.0f)) && enabled;
+    const bool pressed = ImGui::InvisibleButton("##principal", ImVec2(width, height)) && enabled;
     ImGui::PopID();
     const bool hovered = enabled && ImGui::IsItemHovered();
     const ImVec2 min = ImGui::GetItemRectMin();

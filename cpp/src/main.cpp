@@ -403,6 +403,9 @@ int main(int argc, char** argv) {
         companionPosition = {4.0f, 0.0f, 4.0f};
         simulation.SetDogState(false, companionPosition, companionCoat);
         ui.SetCompanionCustomization(companionName, companionCoat);
+        simulation.SetCambucheState({});
+        playerWetness = 0.0f;
+        coldCheckTimer = 0.0f;
         itemsCollected = 0;
         itemsSold = 0;
         missionProgress = 0;

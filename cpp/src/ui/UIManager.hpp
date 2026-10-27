@@ -241,6 +241,7 @@ private:
     bool m_RadarVisible = true;
     bool m_SaveRequest = false;
     bool m_NewGameRequest = false;
+    bool m_NewGameConfirmOpen = false;   // confirmacion de partida nueva: reemplaza al menu de pausa mientras esta abierta
     bool m_QuitRequest = false;
     bool m_CharacterCreatorRequest = false;
     std::string m_SaveNotification;

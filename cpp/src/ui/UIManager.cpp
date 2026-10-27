@@ -143,11 +143,16 @@ void UIManager::TogglePause() {
     m_RadioReturnsToPause = false;
     m_CraftMenuOpen = false;
     m_PauseSection = 0;
+    m_NewGameConfirmOpen = false;
     Input::SetCursorLocked(!m_Paused);
 }
 
 void UIManager::HandleEscape() {
     if (m_DeathScreenOpen) return;
+    if (m_NewGameConfirmOpen) {
+        m_NewGameConfirmOpen = false;   // Esc cancela la confirmacion y vuelve a la pausa
+        return;
+    }
     if (m_RadioMenuOpen) {
         CloseRadioMenu();
         return;
@@ -739,7 +744,37 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
         if (closeRequested) m_CraftMenuOpen = false;
     }
 
-    if (m_Paused) {
+    if (m_Paused && m_NewGameConfirmOpen) {
+        // Confirmacion: solo se ve este mensaje, centrado y fijo, sobre el juego oscurecido (el menu de pausa se oculta)
+        using SignUI::Icon;
+        SignUI::DrawBackdrop(0.7f);
+        bool closeRequested = false;
+        if (SignUI::BeginMenu("##ConfirmarPartidaNueva", "Partida nueva", "Se reiniciará todo el progreso", Icon::Home, &closeRequested, 520.0f, 330.0f)) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.84f, 0.89f, 1.0f, 1.0f));
+            ImGui::TextWrapped("¿Deseas empezar una partida completamente nueva?");
+            ImGui::PopStyleColor();
+            ImGui::Spacing();
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.93f, 0.84f, 0.53f, 1.0f));
+            ImGui::TextWrapped("Se reiniciará todo el progreso y se abrirá el Creador de Personaje.");
+            ImGui::PopStyleColor();
+            SignUI::BeginFooter();
+            {   // los dos botones, centrados respecto al mensaje
+                const auto buttonWidth = [](const char* label) {
+                    return 28.0f + SignUI::SpacedTextWidth(SignUI::GetFonts().monoBold12, 12.0f, SignUI::Upper(label).c_str(), 1.0f);
+                };
+                const float total = buttonWidth("Sí, iniciar nueva partida") + 8.0f + buttonWidth("Cancelar");
+                ImGui::SetCursorScreenPos(ImVec2(ImGui::GetWindowPos().x + ImGui::GetWindowWidth() * 0.5f - total * 0.5f, ImGui::GetCursorScreenPos().y));
+                SignUI::FlexReset();
+            }
+            if (SignUI::Button("Sí, iniciar nueva partida", Icon::None, false, true)) {
+                m_NewGameRequest = true;
+                TogglePause();   // cierra la pausa y reinicia m_NewGameConfirmOpen
+            }
+            if (SignUI::Button("Cancelar")) closeRequested = true;
+        }
+        SignUI::EndMenu();
+        if (closeRequested) m_NewGameConfirmOpen = false;   // vuelve al menu de pausa
+    } else if (m_Paused) {
         using SignUI::Icon;
         SignUI::DrawBackdrop(0.45f);
         const SignUI::Fonts& fonts = SignUI::GetFonts();
@@ -1258,25 +1293,11 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                     if (SignUI::Button("Inventario (I)", Icon::Bag)) OpenPauseSection(1);
                     if (SignUI::Button("Talentos (T)", Icon::Star)) OpenPauseSection(2);
                     if (SignUI::Button("El Chato (O)", Icon::Paw)) OpenPauseSection(3);
-                    if (SignUI::Button("Empezar partida nueva", Icon::Home, false, true)) ImGui::OpenPopup("ConfirmNewGameModal");
+                    if (SignUI::Button("Empezar partida nueva", Icon::Home, false, true)) m_NewGameConfirmOpen = true;
                     if (!m_SaveNotification.empty() && m_SaveNotificationTimer > 0.0f)
                         ImGui::TextColored(ImVec4(0.45f, 0.92f, 0.55f, 1.0f), "%s", m_SaveNotification.c_str());
                 }
                 SignUI::EndSection();
-
-                if (ImGui::BeginPopupModal("ConfirmNewGameModal", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-                    ImGui::Text("¿Deseas empezar una partida completamente nueva?");
-                    ImGui::TextColored(ImVec4(0.95f, 0.70f, 0.20f, 1.0f), "Se reiniciará todo el progreso y se abrirá el Creador de Personaje.");
-                    ImGui::Spacing();
-                    SignUI::FlexReset();
-                    if (SignUI::Button("Sí, iniciar nueva partida", Icon::None, false, true)) {
-                        m_NewGameRequest = true;
-                        TogglePause();
-                        ImGui::CloseCurrentPopup();
-                    }
-                    if (SignUI::Button("Cancelar")) ImGui::CloseCurrentPopup();
-                    ImGui::EndPopup();
-                }
 
                 // ---- Guía de controles ----
                 ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));

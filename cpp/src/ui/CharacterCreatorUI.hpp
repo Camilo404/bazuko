@@ -22,6 +22,7 @@ public:
 private:
     bool m_IsOpen = false;
     bool m_AllowCancel = true;
+    bool m_BringToFront = false;   // al abrir: el fondo y el menu pasan por encima del HUD (una sola vez)
     CharacterLook m_TempLook;
     char m_NameBuffer[32] = {0};
     int m_ActiveTab = 0; // 0: Identidad, 1: Cuerpo, 2: Pelo, 3: Barba, 4: Ropa
