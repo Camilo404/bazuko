@@ -13,7 +13,7 @@ export class PlayerSilhouette {
     });
   }
 
-  render(renderer, scene, camera, playerRoot) {
+  render(renderer, scene, camera, playerRoot, lights = scene.children) {
     // También recoge modelos que terminan de cargarse o se cambian durante la partida.
     playerRoot.traverse(o => { if (o.isMesh) o.layers.enable(1); });
     const mask = camera.layers.mask;
@@ -28,13 +28,13 @@ export class PlayerSilhouette {
     overlayObjects.push(playerRoot);
     const lightLayers = this._lightLayers;
     lightLayers.length = 0;
-    scene.traverseVisible(o => {
-      if (o.isLight && o.layers.test(camera.layers)) {
+    for (const o of lights) {
+      if (o.isLight && o.visible && o.layers.test(camera.layers)) {
         lightLayers.push(o, o.layers.mask);
         overlayObjects.push(o);
         o.layers.enable(1);
       }
-    });
+    }
     try {
       camera.layers.set(1);
       scene.overrideMaterial = this.material;

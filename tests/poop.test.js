@@ -24,7 +24,7 @@ test('el jugador puede hacer pop처 presionando la tecla/acci처n y recibe un moj�
   };
 
   const poopSys = new PoopSystem(scene, null, inventory, stats, { active: { getGroundHeight: () => 0 } });
-  
+
   assert.equal(inventory.count('popo'), 0);
   const ok = poopSys.poop(player);
 
@@ -51,7 +51,7 @@ test('lanzar pop처 consume un moj처n, activa la animaci처n de lanzar y genera el
   };
 
   const poopSys = new PoopSystem(scene, null, inventory, null, { active: { npcs: [], getGroundHeight: () => 0 } });
-  
+
   const ok = poopSys.throwPoop(player, null);
   assert.equal(ok, true);
   assert.equal(actionPlayed, 'lanzar');

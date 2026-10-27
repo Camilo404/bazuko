@@ -17,6 +17,7 @@ export class Minimap {
     this.canvas = document.getElementById('minimap-canvas');
     this.ctx = this.canvas?.getContext('2d');
     this.infoEl = document.getElementById('minimap-info');
+    this.container?.classList.toggle('hidden', !this.visible);
 
     this.radarRadius = 54; // radio del radar en píxeles
     this.radarRange = 85;  // metros representados en el radio
@@ -63,13 +64,6 @@ export class Minimap {
   }
 
   /**
-   * Actualiza el radar
-   * @param {Object} playerPos Vector { x, z }
-   * @param {number} playerYaw Ángulo de rotación del personaje o cámara
-   * @param {Array} pois Lista de { name, icon, x, z, color }
-   * @param {number} now Timestamp de performance.now()
-   */
-/**
    * Actualiza el radar
    * @param {Object} playerPos Vector { x, z }
    * @param {number} cameraYaw Ángulo yaw de la cámara (arriba en radar = al frente en pantalla)
@@ -218,12 +212,10 @@ export class Minimap {
     // Actualiza la caja de información inferior con distancia y dirección relativa
     if (this.infoEl) {
       if (nearestPoi) {
-        let dirHint = '⬆️ Al frente';
-        if (nearestForward < -Math.abs(nearestRight) * 0.45) dirHint = '⬇️ Atrás';
-        else if (nearestRight > Math.abs(nearestForward) * 0.45) dirHint = '➡️ Derecha';
-        else if (nearestRight < -Math.abs(nearestForward) * 0.45) dirHint = '⬅️ Izquierda';
-        else if (nearestForward > 0 && nearestRight > 2) dirHint = '↗️ Diagonal der.';
-        else if (nearestForward > 0 && nearestRight < -2) dirHint = '↖️ Diagonal izq.';
+        const sector = (Math.round(Math.atan2(nearestRight, nearestForward) / (Math.PI / 4)) + 8) % 8;
+        const directions = ['⬆️ Al frente', '↗️ Diagonal der.', '➡️ Derecha', '↘️ Atrás der.',
+          '⬇️ Atrás', '↙️ Atrás izq.', '⬅️ Izquierda', '↖️ Diagonal izq.'];
+        const dirHint = nearestDist < 2 ? '📍 Aquí' : directions[sector];
 
         this._cachedNearest = `${nearestPoi.icon} ${nearestPoi.name}: ${Math.round(nearestDist)}m (${dirHint})`;
       } else {

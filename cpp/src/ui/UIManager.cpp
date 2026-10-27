@@ -1,0 +1,383 @@
+﻿#include "UIManager.hpp"
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+#include <GLFW/glfw3.h>
+#include "../core/Input.hpp"
+#include <array>
+#include <algorithm>
+#include <cmath>
+#include <sstream>
+
+namespace Bazuko {
+
+UIManager::UIManager(GLFWwindow* window) {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    // Evitar que ImGui fuerce el cursor visible cada cuadro
+    io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+
+    SetupDarkUrbanBogotaTheme();
+
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 450");
+}
+
+UIManager::~UIManager() {
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+}
+
+void UIManager::SetupDarkUrbanBogotaTheme() {
+    ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4* colors = style.Colors;
+
+    style.WindowRounding = 6.0f;
+    style.FrameRounding = 4.0f;
+    style.GrabRounding = 4.0f;
+    style.PopupRounding = 4.0f;
+    style.ScrollbarRounding = 4.0f;
+    style.FrameBorderSize = 1.0f;
+    style.WindowBorderSize = 1.0f;
+
+    colors[ImGuiCol_Text]                  = ImVec4(0.92f, 0.92f, 0.92f, 1.00f);
+    colors[ImGuiCol_TextDisabled]          = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
+    colors[ImGuiCol_WindowBg]              = ImVec4(0.10f, 0.11f, 0.12f, 0.88f);
+    colors[ImGuiCol_ChildBg]               = ImVec4(0.12f, 0.13f, 0.14f, 0.60f);
+    colors[ImGuiCol_PopupBg]               = ImVec4(0.10f, 0.11f, 0.13f, 0.94f);
+    colors[ImGuiCol_Border]                = ImVec4(0.24f, 0.26f, 0.28f, 0.65f);
+    colors[ImGuiCol_BorderShadow]          = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    colors[ImGuiCol_FrameBg]               = ImVec4(0.16f, 0.18f, 0.20f, 0.70f);
+    colors[ImGuiCol_FrameBgHovered]        = ImVec4(0.22f, 0.24f, 0.28f, 0.80f);
+    colors[ImGuiCol_FrameBgActive]         = ImVec4(0.28f, 0.30f, 0.35f, 0.90f);
+    colors[ImGuiCol_TitleBg]               = ImVec4(0.14f, 0.15f, 0.17f, 1.00f);
+    colors[ImGuiCol_TitleBgActive]         = ImVec4(0.18f, 0.20f, 0.23f, 1.00f);
+    colors[ImGuiCol_TitleBgCollapsed]      = ImVec4(0.10f, 0.11f, 0.12f, 0.75f);
+    colors[ImGuiCol_MenuBarBg]             = ImVec4(0.12f, 0.13f, 0.14f, 1.00f);
+    colors[ImGuiCol_ScrollbarBg]           = ImVec4(0.08f, 0.09f, 0.10f, 0.60f);
+    colors[ImGuiCol_ScrollbarGrab]         = ImVec4(0.28f, 0.30f, 0.33f, 0.80f);
+    colors[ImGuiCol_ScrollbarGrabHovered]  = ImVec4(0.38f, 0.40f, 0.44f, 0.90f);
+    colors[ImGuiCol_ScrollbarGrabActive]   = ImVec4(0.48f, 0.50f, 0.55f, 1.00f);
+    colors[ImGuiCol_CheckMark]             = ImVec4(0.95f, 0.65f, 0.20f, 1.00f);
+    colors[ImGuiCol_SliderGrab]            = ImVec4(0.85f, 0.55f, 0.15f, 0.90f);
+    colors[ImGuiCol_SliderGrabActive]      = ImVec4(0.95f, 0.65f, 0.20f, 1.00f);
+    colors[ImGuiCol_Button]                = ImVec4(0.20f, 0.22f, 0.25f, 0.85f);
+    colors[ImGuiCol_ButtonHovered]         = ImVec4(0.85f, 0.55f, 0.15f, 0.80f);
+    colors[ImGuiCol_ButtonActive]          = ImVec4(0.95f, 0.65f, 0.20f, 1.00f);
+    colors[ImGuiCol_Header]                = ImVec4(0.22f, 0.25f, 0.28f, 0.75f);
+    colors[ImGuiCol_HeaderHovered]         = ImVec4(0.85f, 0.55f, 0.15f, 0.80f);
+    colors[ImGuiCol_HeaderActive]          = ImVec4(0.95f, 0.65f, 0.20f, 1.00f);
+    colors[ImGuiCol_Separator]             = ImVec4(0.24f, 0.26f, 0.28f, 0.70f);
+}
+
+void UIManager::BeginFrame() {
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+}
+
+void UIManager::EndFrame() {
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+void UIManager::TogglePause() {
+    m_Paused = !m_Paused;
+    m_CraftMenuOpen = false;
+    Input::SetCursorLocked(!m_Paused);
+}
+
+void UIManager::HandleEscape() {
+    if (m_CraftMenuOpen) {
+        m_CraftMenuOpen = false;
+        return;
+    }
+    TogglePause();
+}
+
+void UIManager::ToggleCraftMenu() {
+    if (!m_Paused) m_CraftMenuOpen = !m_CraftMenuOpen;
+}
+
+std::string UIManager::ConsumeCraftRequest() {
+    std::string request = std::move(m_CraftRequest);
+    m_CraftRequest.clear();
+    return request;
+}
+
+bool UIManager::ConsumeSaveRequest() {
+    const bool requested = m_SaveRequest;
+    m_SaveRequest = false;
+    return requested;
+}
+
+void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, Renderer& renderer, Window& window,
+                          const CityLayout& city, const Simulation& simulation,
+                          AudioManager& audio,
+                          const std::array<float, 7>& needs, float money, float inventoryWeight, float inventoryCapacity,
+                          float dayProgress, size_t pedestrians, size_t traffic, const std::string& inventorySummary,
+                          const std::string& diseaseSummary, int level, int xp, const std::string& objective,
+                          size_t missionProgress, size_t missionTarget,
+                          const std::vector<CraftingOption>& craftingOptions) {
+    static const char* needNames[] = {"Hambre", "Sed", "Energia", "Salud", "Higiene", "Animo", "Vicio"};
+    static const ImVec4 needColors[] = {
+        {0.82f, 0.62f, 0.12f, 1.0f}, {0.20f, 0.48f, 0.88f, 1.0f},
+        {0.63f, 0.38f, 0.80f, 1.0f}, {0.77f, 0.20f, 0.18f, 1.0f},
+        {0.20f, 0.65f, 0.82f, 1.0f}, {0.61f, 0.31f, 0.75f, 1.0f},
+        {0.90f, 0.48f, 0.12f, 1.0f}
+    };
+    const ImGuiWindowFlags hudFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav |
+        ImGuiWindowFlags_NoMove;
+    const int totalMinutes = static_cast<int>(dayProgress * 1440.0f) % 1440;
+    const int hour = totalMinutes / 60;
+    const int minute = totalMinutes % 60;
+    const float fps = dt > 0.0f ? 1.0f / dt : 0.0f;
+
+    if (m_CraftMenuOpen && !m_Paused) {
+        ImGui::SetNextWindowSize(ImVec2(520, 520), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f,
+                                      ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_FirstUseEver, ImVec2(0.5f, 0.5f));
+        if (ImGui::Begin("Mesa de crafteo [C]", &m_CraftMenuOpen)) {
+            ImGui::TextWrapped("Selecciona una receta. Los ingredientes se descuentan solo cuando se puede fabricar.");
+            ImGui::Separator();
+            for (const auto& option : craftingOptions) {
+                ImGui::Text("%s", option.name.c_str());
+                ImGui::TextDisabled("Ingredientes: %s", option.ingredients.c_str());
+                ImGui::BeginDisabled(!option.craftable);
+                ImGui::PushID(option.id.c_str());
+                if (ImGui::Button("Craftear")) m_CraftRequest = option.id;
+                ImGui::PopID();
+                ImGui::EndDisabled();
+                ImGui::Separator();
+            }
+            ImGui::TextWrapped("Hierba seca aparece en las recetas originales, pero no tiene resultado definido en items.js.");
+            ImGui::TextDisabled("C o Esc: cerrar");
+        }
+        ImGui::End();
+    }
+
+    if (m_Paused) {
+        ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0, 0), ImGui::GetIO().DisplaySize, IM_COL32(0, 0, 0, 115));
+        ImGui::SetNextWindowSize(ImVec2(430, 0), ImGuiCond_Always);
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f,
+                                      ImGui::GetIO().DisplaySize.y * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        if (ImGui::Begin("Partida en pausa", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings)) {
+            ImGui::Text("Bogota · Nivel %d · $ %.0f COP", level, money);
+            ImGui::Text("Salud %.0f%% · Hambre %.0f%% · Sed %.0f%%", needs[3], needs[0], needs[1]);
+            ImGui::Separator();
+            ImGui::Text("Sonido y volumen");
+            float volume = audio.GetVolume();
+            if (ImGui::SliderFloat("Volumen maestro", &volume, 0.0f, 1.0f, "%.0f%%")) audio.SetVolume(volume);
+            bool muted = audio.IsMuted();
+            if (ImGui::Button(muted ? "Activar audio" : "Silenciar audio")) audio.SetMuted(!muted);
+            ImGui::SameLine();
+            if (ImGui::Button(window.IsFullscreen() ? "Modo ventana [F11]" : "Pantalla completa [F11]")) window.ToggleFullscreen();
+            ImGui::Separator();
+            ImGui::Text("Estado actual · Dia %d — %02d:%02d", static_cast<int>(dayProgress) + 1, hour, minute);
+            ImGui::Text("Nivel %d · XP %d · Salud %.0f%% · Hambre %.0f%% · Sed %.0f%%", level, xp, needs[3], needs[0], needs[1]);
+            ImGui::Text("Costal %.1f / %.0f kg · Peatones %llu · Trafico %llu", inventoryWeight, inventoryCapacity,
+                        static_cast<unsigned long long>(pedestrians), static_cast<unsigned long long>(traffic));
+            ImGui::Separator();
+            if (ImGui::Button("Guardar partida ahora")) m_SaveRequest = true;
+            ImGui::SameLine();
+            if (ImGui::Button(m_RadarVisible ? "Ocultar radar [N]" : "Mostrar radar [N]")) m_RadarVisible = !m_RadarVisible;
+            ImGui::Separator();
+            if (ImGui::CollapsingHeader("Guia completa de controles y supervivencia")) {
+                ImGui::BulletText("WASD: desplazarse · Raton: girar camara · Rueda: zoom");
+                ImGui::BulletText("Shift: correr · V: alternar tercera persona / isometrica");
+                ImGui::BulletText("E: interactuar · Q: recoger objetos · F: reciclar");
+                ImGui::BulletText("B / L: pedir limosna · C: mesa de crafteo · N: radar · Esc: pausa");
+            }
+            ImGui::Separator();
+            ImGui::TextWrapped("WASD mover · Shift correr · V cambiar camara · E interactuar · Q recoger · C crafteo · N radar");
+            if (ImGui::Button("Continuar jugando", ImVec2(-1, 38))) TogglePause();
+            ImGui::TextDisabled("Esc: continuar");
+        }
+        ImGui::End();
+    }
+
+    ImGui::SetNextWindowPos(ImVec2(12, 8), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.62f);
+    if (ImGui::Begin("Topbar", nullptr, hudFlags)) {
+        ImGui::TextColored(ImVec4(0.96f, 0.72f, 0.16f, 1.0f), "Parcero");
+        ImGui::SameLine(); ImGui::Text("Bogota - %02d:%02d", hour, minute);
+        ImGui::SameLine(); ImGui::Text("$ %.0f COP", money);
+        ImGui::SameLine(); ImGui::Text("Nv %d", level);
+        ImGui::SameLine(); ImGui::TextDisabled("FPS %.0f", fps);
+        ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.82f, 0.61f, 0.12f, 1.0f));
+        ImGui::ProgressBar(std::clamp(static_cast<float>(xp) / std::max(1, level * 100), 0.0f, 1.0f), ImVec2(200, 5), "");
+        ImGui::PopStyleColor();
+        ImGui::End();
+    }
+
+    ImGui::SetNextWindowPos(ImVec2(12, ImGui::GetIO().DisplaySize.y - 15), ImGuiCond_Always, ImVec2(0, 1));
+    ImGui::SetNextWindowBgAlpha(0.58f);
+    if (ImGui::Begin("Necesidades", nullptr, hudFlags)) {
+        for (size_t i = 0; i < needs.size(); ++i) {
+            ImGui::Text("%s", needNames[i]);
+            ImGui::SameLine(76.0f);
+            ImGui::PushStyleColor(ImGuiCol_PlotHistogram, needColors[i]);
+            ImGui::ProgressBar(std::clamp(needs[i] / 100.0f, 0.0f, 1.0f), ImVec2(150, 11), "");
+            ImGui::PopStyleColor();
+        }
+        ImGui::End();
+    }
+
+    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 12, 12), ImGuiCond_Always, ImVec2(1, 0));
+    ImGui::SetNextWindowBgAlpha(0.64f);
+    if (ImGui::Begin("Costal", nullptr, hudFlags)) {
+        ImGui::Text("Peso: %.1f / %.0f kg", inventoryWeight, inventoryCapacity);
+        ImGui::End();
+    }
+
+    ImGui::SetNextWindowPos(ImVec2(12, 47), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.48f);
+    if (ImGui::Begin("Vista y objetivo", nullptr, hudFlags)) {
+        if (ImGui::Button(camera.GetMode() == CameraMode::ThirdPerson ? "Tercera persona [V]" : "Isometrica [V]")) camera.ToggleMode();
+        ImGui::SameLine();
+        if (ImGui::Button(audio.IsMuted() ? "Activar audio" : "Silenciar audio")) audio.SetMuted(!audio.IsMuted());
+        ImGui::SameLine();
+        if (ImGui::Button("Pausa [Esc]")) TogglePause();
+        ImGui::TextWrapped("%s", objective.c_str());
+        if (simulation.IsMissionComplete()) ImGui::TextColored(ImVec4(0.35f, 0.85f, 0.48f, 1.0f), "Mision completada");
+        else if (simulation.IsMissionStarted()) ImGui::Text("Reciclables: %llu / %llu", static_cast<unsigned long long>(missionProgress), static_cast<unsigned long long>(missionTarget));
+        else ImGui::TextDisabled("Acercate al marcador para iniciar la mision");
+        ImGui::End();
+    }
+
+    if (!m_Paused && Input::IsKeyPressed(GLFW_KEY_N)) m_RadarVisible = !m_RadarVisible;
+    if (m_RadarVisible) {
+        const float radarSize = 156.0f;
+        const ImVec2 radarPos(ImGui::GetIO().DisplaySize.x - radarSize - 12.0f, 46.0f);
+        ImGui::SetNextWindowPos(radarPos, ImGuiCond_Always);
+        ImGui::SetNextWindowSize(ImVec2(radarSize, radarSize + 25.0f), ImGuiCond_Always);
+        ImGui::SetNextWindowBgAlpha(0.78f);
+        if (ImGui::Begin("Radar Bogota [N]", nullptr, hudFlags | ImGuiWindowFlags_NoScrollbar)) {
+            const ImVec2 origin = ImGui::GetCursorScreenPos();
+            const float mapSize = radarSize - 20.0f;
+            const float range = 42.0f;
+            const ImVec2 center(origin.x + mapSize * 0.5f, origin.y + mapSize * 0.5f);
+            ImDrawList* draw = ImGui::GetWindowDrawList();
+            draw->AddRectFilled(origin, ImVec2(origin.x + mapSize, origin.y + mapSize), IM_COL32(26, 29, 32, 245), 4.0f);
+            constexpr int samples = 30;
+            for (int z = 0; z < samples; ++z) for (int x = 0; x < samples; ++x) {
+                const float worldX = playerPos.x + ((x + 0.5f) / samples * 2.0f - 1.0f) * range;
+                const float worldZ = playerPos.z + ((z + 0.5f) / samples * 2.0f - 1.0f) * range;
+                const int tileX = static_cast<int>(std::floor((worldX + CityLayout::WIDTH) / CityLayout::TILE_SIZE));
+                const int tileZ = static_cast<int>(std::floor((worldZ + CityLayout::HEIGHT) / CityLayout::TILE_SIZE));
+                const TileType tile = city.GetTileAt(tileX, tileZ);
+                ImU32 color = IM_COL32(48, 50, 53, 255);
+                if (tile == TileType::Road) color = IM_COL32(104, 106, 108, 255);
+                else if (tile == TileType::Busway) color = IM_COL32(133, 87, 60, 255);
+                else if (tile == TileType::Sidewalk || tile == TileType::Plaza) color = IM_COL32(115, 112, 105, 255);
+                else if (tile == TileType::Grass) color = IM_COL32(62, 92, 58, 255);
+                const ImVec2 cell0(origin.x + x * mapSize / samples, origin.y + z * mapSize / samples);
+                const ImVec2 cell1(origin.x + (x + 1) * mapSize / samples + 0.5f, origin.y + (z + 1) * mapSize / samples + 0.5f);
+                draw->AddRectFilled(cell0, cell1, color);
+            }
+            const float markerX = origin.x + mapSize * 0.5f;
+            const float markerY = origin.y + mapSize * 0.5f;
+            const auto drawWorldMarker = [&](const glm::vec3& position, float radius, ImU32 color) {
+                const float dx = (position.x - playerPos.x) / range;
+                const float dz = (position.z - playerPos.z) / range;
+                if (std::abs(dx) <= 1.0f && std::abs(dz) <= 1.0f) {
+                    draw->AddCircleFilled(ImVec2(center.x + dx * mapSize * 0.5f, center.y + dz * mapSize * 0.5f), radius, color);
+                }
+            };
+            for (const auto& pickup : simulation.GetPickups()) drawWorldMarker(pickup.position, 2.0f, IM_COL32(248, 204, 78, 255));
+            if (!simulation.IsMissionComplete()) drawWorldMarker(simulation.GetMissionNpcPosition(), 3.0f, IM_COL32(237, 84, 72, 255));
+            draw->AddCircleFilled(ImVec2(markerX, markerY), 4.0f, IM_COL32(49, 220, 115, 255));
+            draw->AddCircle(ImVec2(markerX, markerY), 7.0f, IM_COL32(12, 38, 24, 255));
+            ImGui::Dummy(ImVec2(mapSize, mapSize));
+            ImGui::End();
+        }
+    }
+
+    const float displayHeight = ImGui::GetIO().DisplaySize.y;
+    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 12, 228), ImGuiCond_Always, ImVec2(1, 0));
+    ImGui::SetNextWindowSize(ImVec2(190, std::max(120.0f, displayHeight - 250.0f)), ImGuiCond_Always);
+    ImGui::SetNextWindowBgAlpha(0.76f);
+    if (ImGui::Begin("Inventario", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings)) {
+        ImGui::Text("Peso %.1f / %.0f kg", inventoryWeight, inventoryCapacity);
+        ImGui::Separator();
+        if (inventorySummary == "Vacio" || inventorySummary.empty()) ImGui::TextDisabled("Costal vacio");
+        else {
+            std::istringstream items(inventorySummary);
+            std::string itemLine;
+            while (std::getline(items, itemLine, '|')) {
+                const size_t first = itemLine.find_first_not_of(" \t");
+                const size_t last = itemLine.find_last_not_of(" \t");
+                if (first != std::string::npos) ImGui::TextWrapped("%s", itemLine.substr(first, last - first + 1).c_str());
+            }
+        }
+        if (ImGui::CollapsingHeader("Salud")) ImGui::TextWrapped("%s", diseaseSummary.c_str());
+        ImGui::Separator();
+        ImGui::TextDisabled("Peatones %llu | Trafico %llu", static_cast<unsigned long long>(pedestrians), static_cast<unsigned long long>(traffic));
+        ImGui::End();
+    }
+
+    std::string interactionPrompt;
+    const bool nearMissionNpc = simulation.IsNearMissionNpc(playerPos, 2.0f);
+    const size_t nearbyCar = simulation.GetNearbyCar(playerPos, 2.0f);
+    const bool nearPickup = std::any_of(simulation.GetPickups().begin(), simulation.GetPickups().end(), [&](const PickupItem& pickup) {
+        return glm::distance(playerPos, pickup.position) < 1.8f;
+    });
+    if (nearMissionNpc && !simulation.IsMissionStarted() && !simulation.IsMissionComplete()) interactionPrompt = "[E] Hablar con el vecino · iniciar mision";
+    else if (nearbyCar < simulation.GetTrafficCount()) interactionPrompt = "[E] Revisar auto · buscar objetos";
+    else if (simulation.IsNearShop(playerPos, 2.2f)) interactionPrompt = "[E] Tienda · comprar un articulo";
+    else if (nearPickup) interactionPrompt = "[E] Recoger objeto del suelo";
+    else if (simulation.IsNearRecycler(playerPos, 3.0f)) interactionPrompt = "[F] Reciclar objetos del costal";
+    else if (inventorySummary.find("Pan duro") != std::string::npos || inventorySummary.find("Botella agua") != std::string::npos || inventorySummary.find("Vendaje") != std::string::npos || inventorySummary.find("Curita") != std::string::npos) interactionPrompt = "[E] Usar el primer consumible del costal";
+    if (!interactionPrompt.empty()) {
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y - 42.0f), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+        ImGui::SetNextWindowBgAlpha(0.82f);
+        if (ImGui::Begin("Interaccion", nullptr, hudFlags)) {
+            ImGui::TextUnformatted(interactionPrompt.c_str());
+            ImGui::End();
+        }
+    }
+
+    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 330, 16), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(314, 0), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Ajustes de Render & Clima")) {
+        // Controles de ventana
+        if (ImGui::Button(window.IsFullscreen() ? "Modo Ventana [F11]" : "Pantalla Completa [F11]")) {
+            window.ToggleFullscreen();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Maximizar")) {
+            window.Maximize();
+        }
+
+        ImGui::Separator();
+        auto& lighting = renderer.GetLighting();
+        ImGui::SliderFloat("Densidad Niebla", &lighting.fogDensity, 0.001f, 0.06f, "%.3f");
+        ImGui::ColorEdit3("Color Niebla", &lighting.fogColor.r);
+        ImGui::ColorEdit3("Luz Ambiente", &lighting.ambientColor.r);
+        ImGui::ColorEdit3("Color Sol", &lighting.sunColor.r);
+
+        static bool wireframe = false;
+        if (ImGui::Checkbox("Modo Wireframe", &wireframe)) {
+            renderer.SetWireframe(wireframe);
+        }
+
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.95f, 0.70f, 0.20f, 1.0f), "Controles:");
+        ImGui::BulletText("Mouse: Giro 360 continuo (confinado)");
+        ImGui::BulletText("Tab / Esc: Mostrar/Ocultar cursor");
+        ImGui::BulletText("F11: Pantalla completa");
+        ImGui::BulletText("Flechas: Control de vista");
+        ImGui::BulletText("W, A, S, D: Moverse");
+        ImGui::BulletText("Shift: Correr");
+        ImGui::BulletText("V: Tercera Persona / Isometrica");
+        ImGui::BulletText("N: Mostrar / ocultar radar");
+    }
+    ImGui::End();
+}
+
+} // namespace Bazuko

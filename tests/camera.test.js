@@ -13,6 +13,29 @@ beforeEach(() => {
 const rig = () => new CameraRig(new THREE.Scene(), { addEventListener() {} });
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-6, `${a} != ${b}`);
 
+test('el ragdoll de un atropello respeta paredes y recupera el control al terminar', () => {
+  const player = new Player(new THREE.Scene(), { axis: { x: 0, z: 1 }, isRunning: false });
+  player.position.set(0, 0, 0);
+  const collisions = new CollisionSystem();
+  collisions.colliders.push({ box: new THREE.Box3(new THREE.Vector3(.7, -1, -10), new THREE.Vector3(2, 3, 10)) });
+  player.receiveVehicleImpact(new THREE.Vector3(1, 0, 0), 6, { collisions });
+  assert.ok(player.isStunned && player.isRagdollActive);
+  for (let frame = 0; frame < 5; frame++) player.update(.1, null, collisions);
+  assert.ok(player.position.x < .7, 'El cuerpo no atraviesa la pared');
+  assert.equal(player.state, 'ragdoll');
+  for (let frame = 0; frame < 60; frame++) player.update(.1, null, collisions);
+  assert.equal(player.isStunned, false);
+  assert.equal(player.root.rotation.z, 0);
+  const z = player.position.z; player.update(.1, null, collisions);
+  assert.ok(player.position.z > z);
+  assert.ok(player.root.position.equals(player.position));
+  player.receiveVehicleImpact(new THREE.Vector3(1, 0, 0), 6);
+  player.clearVehicleImpact();
+  assert.equal(player.isStunned, false);
+  assert.equal(player._impactVelocity.length(), 0);
+  player.dispose();
+});
+
 test('alterna, recuerda la vista y coloca la cámara detrás del personaje', () => {
   const camera = rig();
   const position = new THREE.Vector3(40, 0, 22);

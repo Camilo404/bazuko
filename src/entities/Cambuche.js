@@ -3,6 +3,7 @@
 // Geometría portada de rebusque; medidas en metros, escaladas al mundo.
 import * as THREE from 'three';
 import { CHARACTER_SCALE } from '../utils/constants.js';
+import { createImportedModel, disposeImportedInstance } from '../utils/ImportedModels.js';
 
 export class Cambuche {
   constructor(scene, position) {
@@ -146,11 +147,28 @@ export class Cambuche {
 
   get position() { return this.group.position; }
 
+  preloadModel() {
+    return this._modelPromise ??= createImportedModel('cambuche').then(model => {
+      if (this._disposed) { disposeImportedInstance(model); return; }
+      this.model = model;
+      // Ligera separación del suelo para evitar planos superpuestos.
+      model.position.y = 0.025;
+      this.group.add(model);
+      this.setBuilt(this.built);
+    });
+  }
+
   /** Muestra las piezas construidas: { base: true, techo: true, ... } */
   setBuilt(built) {
     this.built = { ...built };
     for (const [id, obj] of Object.entries(this.pieces)) obj.visible = !!built[id];
     this.markerPile.visible = !built.base;
+    if (this.model) {
+      const assembled = !!built.base && !!built.techo;
+      this.model.visible = assembled;
+      // Hasta reunir base y techo solo se ven las piezas ya construidas.
+      if (assembled) for (const id of ['base', 'techo', 'paredes', 'cama']) this.pieces[id].visible = false;
+    }
   }
 
   update(dt) {
@@ -166,6 +184,8 @@ export class Cambuche {
   setNight() {}
 
   dispose() {
+    this._disposed = true;
+    if (this.model) disposeImportedInstance(this.model);
     this.scene.remove(this.group);
     this.group.traverse((o) => {
       o.geometry?.dispose?.();

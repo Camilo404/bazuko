@@ -89,6 +89,7 @@ export class BuildingVisibility {
     this.buildings = [];
     this.enabled = false;
     this.closedView = null;
+    this.closedMaterials = new Map();
     this._closedMode = null;
     this._camera = new THREE.Vector3();
     this._right = new THREE.Vector3();
@@ -115,6 +116,11 @@ export class BuildingVisibility {
             const copy = material.clone();
             copy.side = side;
             copy.userData.staticBatchKey = key;
+            if (!this.closedMaterials.has(key)) {
+              const closed = material.clone();
+              closed.side = side;
+              this.closedMaterials.set(key, closed);
+            }
             clones.set(key, copy);
           }
           return clones.get(key);
@@ -164,7 +170,8 @@ export class BuildingVisibility {
       const geometry = mergeGeometries(geometries);
       for (const temporary of geometries) temporary.dispose();
       if (!geometry) throw new Error('Geometría incompatible en edificios agrupados');
-      const mesh = new THREE.Mesh(geometry, source.material);
+      // Los lotes nunca comparten un material que pueda atenuarse en isométrica.
+      const mesh = new THREE.Mesh(geometry, this.closedMaterials.get(source.material.userData.staticBatchKey) ?? source.material);
       mesh.castShadow = source.castShadow;
       mesh.receiveShadow = source.receiveShadow;
       geometry.computeBoundingSphere();
@@ -229,6 +236,8 @@ export class BuildingVisibility {
   }
 
   dispose() {
+    for (const material of this.closedMaterials.values()) material.dispose();
+    this.closedMaterials.clear();
     this.closedView = null;
     this._closedMode = null;
     this.buildings.length = 0;

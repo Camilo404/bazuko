@@ -3,6 +3,7 @@ import { TALENTS, BRANCHES } from '../data/talents.js';
 import { XP_PER_LEVEL, XP_CRAFT } from '../utils/constants.js';
 import { NEEDS } from '../systems/StatsSystem.js';
 import { cop } from '../utils/money.js';
+import { itemRarityLabel } from '../data/items.js';
 
 export class HUD {
   constructor() {
@@ -46,6 +47,7 @@ export class HUD {
       if (this.audioBtn) {
         this.audioBtn.textContent = e.detail?.muted ? '🔇' : '🔊';
         this.audioBtn.setAttribute('title', e.detail?.muted ? 'Activar sonido' : 'Silenciar sonido');
+        this.audioBtn.setAttribute('aria-label', e.detail?.muted ? 'Activar sonido' : 'Silenciar sonido');
       }
     });
     this.cameraButton?.addEventListener('click', () => {
@@ -71,12 +73,12 @@ export class HUD {
     // Controles de paneles
     window.addEventListener('keydown', (e) => {
       // No abrir paneles mientras se escribe (nombre) o hay un menú/creador abierto
-      if (e.target instanceof HTMLInputElement || window.__game?.paused) return;
+      if (e.target instanceof HTMLInputElement) return;
+      if (e.code !== 'Escape' && window.__game?.paused) return;
       if (e.code === 'KeyT') this.toggleTalentPanel();
       if (e.code === 'KeyC') this.toggleCraftPanel();
       if (e.code === 'Escape') {
-        const wasOpen = this._talentOpen || this._craftOpen || this._dealerOpen;
-        if (wasOpen) e._panelHandled = true;
+        if (this._talentOpen || this._craftOpen || this._dealerOpen) e._panelHandled = true;
         this.talentPanel?.classList.remove('open');
         this.craftPanel?.classList.remove('open');
         this.dealerPanel?.classList.remove('open');
@@ -100,12 +102,15 @@ export class HUD {
   setCameraMode(mode) {
     const thirdPerson = mode === 'third-person';
     if (this.cameraButton) {
-      this.cameraButton.textContent = `${thirdPerson ? 'Tercera persona' : 'Isométrica'} · V`;
+      const action = thirdPerson ? 'Cambiar a vista isométrica' : 'Cambiar a tercera persona';
+      this.cameraButton.textContent = `⇄ ${action} · V`;
+      this.cameraButton.dataset.targetView = thirdPerson ? 'isometric' : 'third-person';
+      this.cameraButton.title = `Vista actual: ${thirdPerson ? 'tercera persona' : 'isométrica'}. Haz clic o pulsa V para cambiar.`;
       this.cameraButton.setAttribute('aria-pressed', String(thirdPerson));
       this.cameraButton.setAttribute('aria-label', `Cambiar a vista ${thirdPerson ? 'isométrica' : 'en tercera persona'} (V)`);
     }
     if (this.cameraHint) this.cameraHint.textContent = thirdPerson
-      ? 'Mueve el ratón (o arrastra) para girar la cámara · Rueda: zoom'
+      ? 'Clic: fijar ratón · Arrastrar o flechas: girar · Rueda: distancia · Esc: liberar'
       : 'V: cambiar a tercera persona';
   }
 
@@ -165,32 +170,24 @@ export class HUD {
   }
 
   toggleTalentPanel() {
-    if (typeof document !== 'undefined' && document.pointerLockElement) {
-      try { document.exitPointerLock(); } catch {}
-    }
+    window.__game?.cameraRig?.releaseControls?.();
     this._talentOpen = !this._talentOpen;
     this.talentPanel?.classList.toggle('open', this._talentOpen);
     if (this._talentOpen) this.renderTalents();
   }
 
   toggleCraftPanel() {
-    if (typeof document !== 'undefined' && document.pointerLockElement) {
-      try { document.exitPointerLock(); } catch {}
-    }
+    window.__game?.cameraRig?.releaseControls?.();
     this._craftOpen = !this._craftOpen;
     this.craftPanel?.classList.toggle('open', this._craftOpen);
     if (this._craftOpen) {
       const game = window.__game;
-      if (game?.crafting && game.inventory) {
-        this.renderCrafting(game.crafting, game.inventory, game.talents);
-      }
+      if (game?.crafting && game.inventory) this.renderCrafting(game.crafting, game.inventory, game.talents);
     }
   }
 
   toggleDealerPanel(dealer = null) {
-    if (typeof document !== 'undefined' && document.pointerLockElement) {
-      try { document.exitPointerLock(); } catch {}
-    }
+    window.__game?.cameraRig?.releaseControls?.();
     this._dealerOpen = !this._dealerOpen;
     this.dealerPanel?.classList.toggle('open', this._dealerOpen);
     if (this._dealerOpen) {
@@ -251,17 +248,24 @@ export class HUD {
     if (this.promptEl) {
       if (window.__game?.paused) {
         this.promptEl.classList.remove('visible');
-      } else if (interaction?.currentTarget) {
+      } else if (interaction?.currentTarget || interaction?.stealPrompt) {
         const type = interaction.currentTargetType;
-        let text = '';
+        let text = interaction?.stealPrompt ?? '';
         if (type === 'pickup') text = '[E] Recoger basura · [Mantener Q] Seleccionar';
-        else if (type === 'car') text = '[E] Robar retrovisor de auto';
+        else if (type === 'car') text = interaction.currentTarget?.traffic ? '[E] Robar retrovisor del carro en circulación' : '[E] Robar retrovisor de auto';
         else if (type === 'sell') text = '[E] Recicladora El Progreso · Vender material';
         else if (type === 'shop') text = `[E] ${interaction.currentTarget.title ?? 'Tienda La Esquinita'} · Comprar`;
+        else if (type === 'dog') {
+          const hasFood = inventory?.items.some(item => item.qty > 0 && ['pan', 'lataComida', 'carne', 'hueso'].includes(item.id));
+          text = interaction.currentTarget?.isFriend
+            ? '🐕 El Chato ya te sigue · [E] Acariciar (+5 ánimo)'
+            : hasFood
+              ? '🐕 [E] Darle 1 pan o 1 lata de atún para que te siga (consume una unidad)'
+              : '🐕 Para que El Chato te siga, trae pan o una lata de atún y pulsa E · Ahora: [E] acariciar';
+        }
         else if (type === 'cambuche') text = '[E] Tu cambuche · Armar / Dormir';
         else if (type === 'dealer') text = '[Q / E] Tienda del Dealer · Comprar / Vender';
-        else if (type === 'cart') text = interaction.currentTarget?.isAttached ? '[E] Soltar carreta de balineras 🛒' : '[E] Agarrar carreta de balineras 🛒 (+120kg)';
-        else if (type === 'dog') text = interaction.currentTarget?.isFriend ? '[E] Acariciar a El Chato 🐕' : '[E] Dar comida o acariciar a El Chato 🐕';
+else if (type === 'cart') text = interaction.currentTarget?.isAttached ? '[E] Soltar carreta de balineras 🛒' : '[E] Agarrar carreta de balineras 🛒 (+120kg)';
 
         if (text) {
           this._setText(this.promptEl, text);
@@ -338,8 +342,9 @@ export class HUD {
 
   _renderInventory(inv) {
     const rows = inv.items.map((i) => {
-      const canUse = !!(i.consumable || i.cure || i.usable || i.id === 'radioTransistor' || i.id === 'pilas');
-      return `<div class="inv-row ${canUse ? 'usable' : ''}" data-id="${i.id}" title="${this._itemTooltip(i)}">
+      const canUse = !!(i.consumable || i.cure || i.usable);
+      const rarity = itemRarityLabel(i.id);
+      return `<div class="inv-row ${canUse ? 'usable' : ''}" data-id="${i.id}" title="${[rarity, this._itemTooltip(i)].filter(Boolean).join(' · ')}">
         ${i.name} <span>x${i.qty}</span>
       </div>`;
     }).join('');
@@ -360,8 +365,15 @@ export class HUD {
     const game = window.__game;
     if (!game) return;
 
-    
+
+    if (itemId === 'popo') {
+      if (game.player?.isStunned) return;
+      game.inventoryUI?.close();
+      game.poopSystem?.throwPoop(game.player, game.cameraRig);
+      return;
+    }
     if (itemId === 'radioTransistor') {
+      game.inventoryUI?.close();
       window.dispatchEvent(new CustomEvent('open-radio-modal'));
       return;
     }
@@ -381,8 +393,8 @@ export class HUD {
     }
 
     if (item.consumable) {
-      if (item.consumable === 'hambre' && game.stats?.canEat && !game.stats.canEat()) {
-        this._toast('🤢 Estás demasiado enfermo para comer. ¡Cúrate primero!', 'warn');
+      if (item.consumable === 'hambre' && game.stats.canEat?.() === false) {
+        this._toast('No puedes comer mientras tienes náuseas.', 'warning');
         return;
       }
       // Efecto principal (consumable + amount) y efectos extra por necesidad (p. ej. animo: 15, salud: -3)
@@ -393,8 +405,7 @@ export class HUD {
       inv.remove(itemId, 1);
       game.audio?.play('pickup');
       const isDrink = item.consumable === 'sed' || item.id === 'cafe' || item.id === 'refresco';
-      const isSubstance = item.substance || item.consumable === 'vicio';
-      const verb = isDrink ? '🥤 Bebiste' : (isSubstance ? '🚬 Consumiste' : (item.consumable === 'salud' ? '🩹 Te aplicaste' : '🍴 Comiste'));
+      const verb = isDrink ? '🥤 Bebiste' : item.substance ? '🚬 Consumiste' : item.consumable === 'salud' ? '🩹 Te aplicaste' : '🍴 Comiste';
       game.player?.playAction?.(isDrink ? 'beber' : 'comer', 1.2);
       this._toast(`${verb}: ${item.name}`, 'info');
       this._renderInventory(inv);

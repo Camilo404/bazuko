@@ -1,6 +1,7 @@
 // src/world/props/Farol.js
 import * as THREE from 'three';
 import { COLORS } from '../../utils/constants.js';
+import { createImportedModel, disposeImportedInstance } from '../../utils/ImportedModels.js';
 
 export class Farol {
   constructor(position, opts = {}) {
@@ -61,6 +62,25 @@ export class Farol {
   }
 
   /** Enciende/apaga la luz según hora */
+  preloadModel() {
+    return this._modelPromise ??= createImportedModel('lampara').then(model => {
+      this.model = model;
+      for (const child of [...this.group.children]) {
+        if (child === this.light) continue;
+        this.group.remove(child);
+        child.geometry?.dispose(); child.material?.dispose();
+      }
+      this.group.add(model);
+      this.group.matrixAutoUpdate = true;
+      if (this.light) {
+        this.light.matrixAutoUpdate = this.light.matrixWorldAutoUpdate = true;
+        this.light.position.set(1.65, 3.95, 0);
+      }
+    });
+  }
+
+  dispose() { if (this.model) disposeImportedInstance(this.model); }
+
   setNight(isNight) {
     if (this.light) {
       this.light.intensity = isNight ? 1.4 : 0;

@@ -4,6 +4,7 @@ export class TrafficRoute {
     if (radius <= 0 || right - left <= radius * 2 || bottom - top <= radius * 2) {
       throw new Error('El circuito de tráfico necesita espacio para sus giros.');
     }
+    this.key = [left, right, top, bottom, radius].join(':');
     const line = (x, z, dx, dz, length) => ({ x, z, dx, dz, length });
     const arc = (x, z, angle) => ({ x, z, angle, radius, length: Math.PI * radius / 2 });
     this.segments = [

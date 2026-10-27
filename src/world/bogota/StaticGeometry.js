@@ -34,7 +34,7 @@ export function mergeByChunk(geometries, material, { castShadow = false, receive
 export function freezeStaticTransforms(root, dynamicRoot = null) {
   root.updateMatrixWorld(true);
   const visit = object => {
-    if (object === dynamicRoot || object.userData.update) return;
+    if (object === dynamicRoot || dynamicRoot?.has?.(object) || object.userData.update) return;
     object.matrixAutoUpdate = false;
     object.matrixWorldAutoUpdate = false;
     for (const child of object.children) visit(child);

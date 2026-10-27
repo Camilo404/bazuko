@@ -5,12 +5,13 @@
   <title>Habitante de Calle</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="/src/ui/styles.css" />
+  <link rel="stylesheet" href="/src/ui/inventory.css" />
   <link rel="stylesheet" href="/src/ui/menus.css" />
 </head>
 <body class="is-loading">
 <section id="loading-screen" aria-label="Carga del juego">
   <div class="loading-card">
-    <h1>VAGABUNDO</h1>
+    <h1>BAZUKO</h1>
     <p id="loading-status" role="status" aria-live="polite">Preparando el juego…</p>
     <progress id="loading-progress" max="5" value="0" aria-label="Progreso de carga"></progress>
     <p class="loading-hint">La partida y el contador de FPS comenzarán cuando termine la carga.</p>
@@ -61,6 +62,7 @@
     <span id="talent-points">🌟 0</span>
   </div>
 
+  <div id="game-settings"><button type="button" id="radio-toggle" title="Radio transistor (R)" aria-label="Radio transistor">📻</button><button id="pause-toggle" type="button" aria-label="Pausar y abrir ajustes">⏸️ Pausa</button><button id="audio-toggle" type="button" aria-label="Silenciar sonido">🔊</button></div>
   <!-- XP bar -->
   <div id="xp-bar">
     <div id="xp-fill"></div>
@@ -107,16 +109,33 @@
 
   <!-- Controles -->
   <div id="camera-controls">
-    <div class="controls-top-row">
-      <button type="button" id="camera-toggle" aria-pressed="true">Tercera persona · V</button>
-      <button type="button" id="radio-toggle" class="icon-toggle-btn" title="Radio transistor (R)" aria-label="Radio transistor">📻</button>
-      <button type="button" id="audio-toggle" class="icon-toggle-btn" title="Silenciar / Activar sonido" aria-label="Silenciar sonido">🔊</button>
-      <button type="button" id="pause-toggle" class="icon-toggle-btn" title="Pausar juego (ESC)" aria-label="Menú de pausa">⏸️</button>
-    </div>
+    <button type="button" id="camera-toggle" data-target-view="isometric" aria-pressed="true" aria-label="Cambiar a vista isométrica (V)">⇄ Cambiar a vista isométrica · V</button>
     <span id="camera-hint">Botón derecho + arrastrar o flechas: girar · Rueda: distancia</span>
   </div>
-  <div id="controls-help">
-    WASD mover · Espacio saltar · Click/G puñetazo · Shift correr · V cámara · N radar · R radio · E interactuar · Q seleccionar/dealer · B limosna · X popó/lanzar · Z defecar · F boost · T talentos · C crafteo · P personaje · M modelo liviano · ESC pausa
+  <div id="controls-help" class="is-collapsed" role="note" aria-label="Guía de controles">
+    <div id="controls-help-content" aria-hidden="true">
+    <span><kbd>WASD</kbd> Mover</span>
+    <span><kbd>Espacio</kbd> Saltar</span>
+    <span><kbd>Click / G</kbd> Puñetazo</span>
+    <span><kbd>Shift</kbd> Correr</span>
+    <span><kbd>E</kbd> Interactuar</span>
+    <span><kbd>I / Tab</kbd> Inventario</span>
+    <span class="control-extra"><kbd>V</kbd> Cámara</span>
+    <span class="control-extra"><kbd>Q</kbd> Seleccionar / dealer</span>
+    <span class="control-extra"><kbd>B</kbd> Limosna</span>
+    <span class="control-extra"><kbd>F</kbd> Boost</span>
+    <span class="control-extra"><kbd>T</kbd> Talentos</span>
+    <span class="control-extra"><kbd>C</kbd> Fabricar</span>
+    <span class="control-extra"><kbd>P</kbd> Personaje</span>
+    <span class="control-extra"><kbd>M</kbd> Modelo liviano</span>
+    <span class="control-extra"><kbd>N</kbd> Radar</span>
+    <span class="control-extra"><kbd>R</kbd> Radio</span>
+    <span class="control-extra"><kbd>X</kbd> Lanzar / recoger</span>
+    <span class="control-extra"><kbd>Z</kbd> Defecar</span>
+    <span><kbd>Esc</kbd> Pausa y ayuda</span>
+    </div>
+    <button id="controls-help-toggle" type="button" aria-label="Mostrar controles" title="Mostrar controles" aria-controls="controls-help-content" aria-expanded="false">!</button>
+  </div>
   </div>
 </div>
 

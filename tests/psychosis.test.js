@@ -11,7 +11,7 @@ beforeEach(() => {
 
 test('cálculo progresivo de abstinencia y umbrales de severidad', () => {
   const stats = new StatsSystem();
-  
+
   // 1. Estado satisfecho inicial
   stats.vicio = 80;
   assert.equal(stats.abstinencia, 0);
@@ -71,7 +71,7 @@ test('PsychosisSystem se activa con abstinencia alta y se limpia al recuperar el
   const cameraRig = { camera: new THREE.PerspectiveCamera(55, 1, 0.1, 100), baseFov: 55 };
 
   const psychosis = new PsychosisSystem(scene, player, stats, null, { active: { getGroundHeight: () => 0 } });
-  
+
   // Con vicio normal, no está activo
   psychosis.update(0.1, cameraRig);
   assert.equal(psychosis.active, false);

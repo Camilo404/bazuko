@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { COLORS, CAR_COOLDOWN } from '../utils/constants.js';
 import { makeVehicle } from '../world/bogota/vehicles.js';
+import { createImportedModel, disposeImportedInstance } from '../utils/ImportedModels.js';
 
 export class Car {
   constructor(scene, position, rotation = 0, { traffic = false } = {}) {
@@ -17,6 +18,7 @@ export class Car {
 
     // Carro realista (portado de rebusque): particular o taxi amarillo, frente hacia +X local
     const kind = Math.random() < 0.3 ? 'taxi' : 'carro';
+    this.modelKind = kind === 'taxi' ? 'car2' : 'car1';
     const v = makeVehicle(kind, Math.floor(Math.random() * 8), { beams: true });
     this.vehicle = v;
     if (!traffic && v.beam) v.beam.visible = false;
@@ -58,18 +60,30 @@ export class Car {
 
   get position() { return this.group.position; }
 
+  preloadModel() {
+    return this._modelPromise ??= createImportedModel(this.modelKind).then(model => {
+      if (this._disposed) { disposeImportedInstance(model); return; }
+      this.group.remove(this.vehicle.group);
+      this.vehicle.dispose();
+      this.importedModel = model;
+      this.group.add(model);
+      // Las ruedas del GLB están integradas en una sola malla texturizada.
+      this.vehicle = { group: model, wheels: [], tailMat: null, dispose() { disposeImportedInstance(model); } };
+    });
+  }
+
   /**
    * Robar retrovisores.
    * @param {number} caughtMult - mult de probabilidad de atrapar (talentos)
    * @returns { items, caught }
    */
   steal(caughtMult = 1) {
-    if (this.traffic || this.used || this.cooldown > 0) return null;
+    if (this.used || this.cooldown > 0) return null;
 
     const items = [];
     const mirrorCount = Math.random() < 0.5 ? 2 : 1;
     for (let i = 0; i < mirrorCount; i++) items.push('retrovisor');
-    if (Math.random() < 0.2) items.push('radio');
+    if (!this.traffic && Math.random() < 0.2) items.push('radio');
 
     const caughtChance = 0.25 * caughtMult;
     const caught = Math.random() < caughtChance;
@@ -88,7 +102,7 @@ export class Car {
       if (this.cooldown <= 0) {
         this.used = false;
         this.mirrors.forEach((m) => (m.visible = true));
-        this.marker.visible = true;
+        this.marker.visible = !this.traffic;
       }
     }
     if (this.marker.visible) {
@@ -98,7 +112,7 @@ export class Car {
 
   animateDrive(distance, braking) {
     for (const wheel of this.vehicle.wheels) wheel.rotation.z -= distance / 0.33;
-    if (braking !== this._braking) {
+    if (this.vehicle.tailMat && braking !== this._braking) {
       this.vehicle.tailMat.color.set('#ff1a12').multiplyScalar(braking ? 3.5 : 1.4);
       this._braking = braking;
     }
@@ -116,6 +130,7 @@ export class Car {
   }
 
   dispose() {
+    this._disposed = true;
     this.scene.remove(this.group);
     this.group.remove(this.vehicle.group);
     this.vehicle.dispose();

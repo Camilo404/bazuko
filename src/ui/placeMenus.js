@@ -1,6 +1,6 @@
 // src/ui/placeMenus.js
 // Menús de los lugares: Recicladora El Progreso, Tienda La Esquinita y el cambuche.
-import { ITEMS, SHOP_ITEMS, isRecyclable, itemIcon } from '../data/items.js';
+import { ITEMS, SHOP_ITEMS, isRecyclable, itemIcon, itemRarityLabel } from '../data/items.js';
 import { CAMBUCHE } from '../data/cambuche.js';
 import { originEffect } from '../data/origins.js';
 import { XP_SELL } from '../utils/constants.js';
@@ -8,6 +8,7 @@ import { cop } from '../utils/money.js';
 import { el, button } from './dom.js';
 import { icon } from './icons.js';
 import { rowEl } from './Menu.js';
+import { shelterPreview } from './ShelterPreview.js';
 
 const toast = (text, type = 'info') => window.dispatchEvent(new CustomEvent('toast', { detail: { text, type } }));
 const moneyFoot = (game) => el('span', { class: 'menu__money' }, 'Tienes ', el('span', { text: cop(game.stats.dinero) }));
@@ -102,7 +103,7 @@ function describe(it) {
 export function openCambuche(game) {
   const { inventory } = game;
   const render = () => {
-    const body = el('ul', { class: 'rows' }, CAMBUCHE.map((p) => {
+    const rows = el('ul', { class: 'rows' }, CAMBUCHE.map((p) => {
       const done = !!game.built[p.id];
       const locked = p.needs && !game.built[p.needs];
       const ok = Object.entries(p.req).every(([id, q]) => inventory.count(id) >= q);
@@ -124,6 +125,7 @@ export function openCambuche(game) {
         })
       );
     }));
+    const body = el('div', { class: 'shelter-menu' }, shelterPreview(game), rows);
     const night = game.clock.isNight;
     const foot = [
       el('span', { class: 'menu__money', text: game.built.base ? 'Dormir guarda la partida.' : 'Sin base no se puede dormir.' }),
@@ -135,12 +137,12 @@ export function openCambuche(game) {
     ];
     return { body, foot };
   };
-  game.menu.open({ title: 'Tu cambuche', sub: 'Ármalo por partes con lo que encuentres o compres.', ic: 'tent', render });
+  game.menu.open({ title: 'Tu cambuche', sub: 'Busca materiales en la basura de toda la ciudad: hay suficientes para todas las mejoras.', ic: 'tent', render });
 }
 
 function reqLine(inventory, req) {
   return el('span', { class: 'req' }, Object.entries(req).map(([id, q]) => {
     const n = inventory.count(id);
-    return el('span', { class: n >= q ? 'req__ok' : 'req__no', text: `${nameOf(id)} ${Math.min(n, q)}/${q}` });
+    return el('span', { class: n >= q ? 'req__ok' : 'req__no', title: itemRarityLabel(id), text: `${nameOf(id)} ${Math.min(n, q)}/${q}` });
   }));
 }

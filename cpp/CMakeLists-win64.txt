@@ -1,0 +1,72 @@
+cmake_minimum_required(VERSION 3.22)
+project(bazuko_win64 VERSION 1.0.0 LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Banderas de compilación según compilador
+if(MSVC)
+    add_compile_options(/W4 /O2 /permissive-)
+else()
+    add_compile_options(-Wall -Wextra -Wno-unused-parameter -O2)
+endif()
+
+# Definiciones globales de Windows
+add_compile_definitions(
+    BAZUKO_WINDOWS
+    _WIN32_WINNT=0x0601
+    UNICODE
+    _UNICODE
+    IMGUI_IMPL_OPENGL_LOADER_GLAD2
+)
+
+# Directorios de dependencias locales para Win64
+set(WIN64_DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/win64-deps")
+set(IMGUI_DIR "${WIN64_DEPS_DIR}/imgui")
+
+# Inclusiones globales
+include_directories(
+    src
+    third_party/include
+    third_party/glad/include
+    ${WIN64_DEPS_DIR}/include
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+)
+
+# GLAD (Librería estática local)
+add_library(glad STATIC third_party/glad/src/gl.c)
+
+# ImGui (Librería estática local)
+add_library(imgui STATIC
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+)
+target_link_libraries(imgui PUBLIC glad)
+
+# Fuentes del ejecutable (auto-detecta todos los .cpp dentro de src/)
+file(GLOB_RECURSE BAZUKO_SOURCES CONFIGURE_DEPENDS "src/*.cpp")
+
+add_executable(bazuko_win64 ${BAZUKO_SOURCES})
+
+# Enlazado de librerías del sistema Windows y GLAD/ImGui
+target_link_libraries(bazuko_win64 PRIVATE
+    glad
+    imgui
+    opengl32
+    gdi32
+    user32
+    shell32
+    dwmapi
+)
+
+# Post-Build: Copiar recursos multimedia al directorio binario
+add_custom_command(TARGET bazuko_win64 POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:bazuko_win64>/assets"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:bazuko_win64>/assets"
+    COMMENT "Copiando recursos al directorio binario de Windows..."
+)

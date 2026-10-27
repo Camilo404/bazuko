@@ -1,74 +1,68 @@
 import { test, expect } from '@playwright/test';
 
+// Flujos del PR #4 original, adaptados a carga inicial, pausa e interfaz actuales.
 test.beforeEach(async ({ page }) => {
-  // Cada prueba empieza como una partida nueva y no depende de localStorage.
-  await page.addInitScript(() => {
-    localStorage.clear();
-  });
+  await page.addInitScript(() => localStorage.clear());
 });
 
 async function startNewGame(page) {
-  // La construcción procedural del distrito puede tardar en Chromium con
-  // WebGL software. `commit` permite observar el DOM mientras termina.
   await page.goto('/', { waitUntil: 'commit' });
-
-  const creator = page.locator('#creator-modal');
-  await expect(creator).toBeVisible({ timeout: 120_000 });
-  await expect(page.locator('#cr-name')).toBeVisible();
-
+  await expect(page.locator('#creator-modal')).toBeVisible({ timeout: 120_000 });
   await page.locator('#cr-name').fill('Parcero QA');
-  // El canvas 3D puede cambiar el layout mientras carga el personaje; el
-  // botón sigue siendo visible y esta interacción se hace de forma explícita.
-  await page.locator('#creator-done').evaluate((button) => button.click());
-  await expect(creator).toBeHidden();
-  await expect(page.locator('#game-canvas')).toBeVisible({ timeout: 60_000 });
+  await page.locator('#creator-done').click();
+  await expect(page.locator('#loading-screen')).toBeHidden({ timeout: 120_000 });
+  await expect(page.locator('#menu-title')).toHaveText('Nota del desarrollador');
+  // La nota actual oculta temporalmente los créditos; conserva el enlace de colaboración.
+  await expect(page.getByRole('link', { name: 'Ver issues del proyecto original' })).toHaveAttribute('href', 'https://github.com/juanagogo/bazuko/issues');
+  await expect(page.locator('#menu')).toContainText('issues abiertos al público');
+  await page.getByRole('button', { name: 'Continuar jugando', exact: true }).click();
+  await expect(page.locator('#creator-modal')).toBeHidden();
+  await expect(page.locator('#game-canvas')).toBeVisible();
+  await expect(page.locator('#player-name')).toHaveText('Parcero QA');
 }
 
-test('flujo básico de una partida', async ({ page }) => {
+test('partida nueva, talentos, recetas y edición del personaje', async ({ page }) => {
   await startNewGame(page);
-
   await expect(page.locator('#clock')).toHaveText(/Día 1 — \d{2}:\d{2}/);
-  await expect(page.locator('#controls-help')).toContainText('WASD mover');
-  // El primer frame puede llegar con retraso mientras Three.js carga el modelo.
-  await expect(page.locator('#player-name')).toHaveText('Parcero QA', { timeout: 15_000 });
-
   await page.keyboard.press('T');
   await expect(page.locator('#talent-panel')).toHaveClass(/open/);
   await expect(page.locator('#talent-panel')).toContainText('Árbol de Talentos');
-
-  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', key: 'Escape', bubbles: true })));
+  await page.keyboard.press('Escape');
   await expect(page.locator('#talent-panel')).not.toHaveClass(/open/);
+  await expect(page.locator('#menu')).toBeHidden();
 
   await page.keyboard.press('C');
   await expect(page.locator('#craft-panel')).toHaveClass(/open/);
   await expect(page.locator('#craft-panel')).toContainText('Mesa de Crafteo');
-  await page.keyboard.press('C');
-  await expect(page.locator('#craft-panel')).not.toHaveClass(/open/);
-
+  await expect(page.locator('#craft-panel .craft-recipe').first()).toBeVisible();
+  // Un panel abierto pausa el juego: cerrarlo antes de editar la apariencia.
+  await page.keyboard.press('Escape');
   await page.keyboard.press('P');
   await expect(page.locator('#creator-modal')).toBeVisible();
   await expect(page.locator('#creator-title')).toHaveText('Crea tu personaje');
-  await page.locator('#creator-close').evaluate((button) => button.click());
+  await page.locator('#creator-close').click();
   await expect(page.locator('#creator-modal')).toBeHidden();
+});
 
-  // Verifica el radar / minimapa urbano
-  await expect(page.locator('#minimap-container')).toBeVisible();
-  await page.keyboard.press('N');
-  await expect(page.locator('#minimap-container')).toHaveClass(/hidden/);
-  await page.keyboard.press('N');
-  await expect(page.locator('#minimap-container')).not.toHaveClass(/hidden/);
+test('ayuda bajo demanda, inventario y pausa sin abrir dos paneles al pulsar Escape', async ({ page }) => {
+  await startNewGame(page);
+  const help = page.locator('#controls-help-toggle');
+  await expect(help).toHaveText('!');
+  await expect(help).toHaveAttribute('aria-expanded', 'false');
+  await help.click();
+  await expect(page.locator('#controls-help-content')).toBeVisible();
+  await expect(page.locator('#controls-help-content')).toContainText('Inventario');
+  await help.click();
+  await expect(help).toHaveAttribute('aria-expanded', 'false');
 
-  // Menú de pausa con botón ⏸️
-  await page.locator('#pause-toggle').click();
-  await expect(page.locator('#menu')).toBeVisible();
-  await expect(page.locator('#menu-title')).toHaveText('Partida en Pausa');
-  await page.locator('#menu-close').click();
+  await page.keyboard.press('I');
+  await expect(page.locator('#inv-overlay')).toHaveClass(/open/);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#inv-overlay')).not.toHaveClass(/open/);
   await expect(page.locator('#menu')).toBeHidden();
-
-  // Menú de pausa con ESC
-  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Escape', key: 'Escape', bubbles: true })));
+  await page.keyboard.press('Escape');
   await expect(page.locator('#menu')).toBeVisible();
   await expect(page.locator('#menu-title')).toHaveText('Partida en Pausa');
-  await page.locator('#menu-close').click();
+  await page.keyboard.press('Escape');
   await expect(page.locator('#menu')).toBeHidden();
 });

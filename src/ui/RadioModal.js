@@ -4,7 +4,7 @@ import { el, button } from './dom.js';
 import { STATIONS } from '../systems/RadioSystem.js';
 
 export function openRadioModal(game) {
-  if (!game || game._deathPending || game.creator?.isOpen) return;
+  if (!game || game._deathPending || game._loading || game.isSleeping || game.player?.isStunned || game.creator?.isOpen) return;
   if (typeof document !== 'undefined' && document.pointerLockElement) {
     try { document.exitPointerLock(); } catch { /* sin pointer lock */ }
   }
@@ -213,10 +213,12 @@ export function openRadioModal(game) {
     return { body, foot };
   };
 
+  game._radioModalOpen = true;
   game.menu.open({
     title: 'Radio Transistor a Pilas',
     sub: 'Sintonizador AM / FM Lo-Fi Bogotano',
     ic: 'radio',
-    render
+    render,
+    onClose: () => { game._radioModalOpen = false; }
   });
 }

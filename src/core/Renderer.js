@@ -4,6 +4,7 @@ import { PlayerSilhouette } from './PlayerSilhouette.js';
 import { AdaptiveResolution } from './AdaptiveResolution.js';
 import { FrustumCulling } from './FrustumCulling.js';
 import { paintLoadingFrame } from '../ui/LoadingScreen.js';
+import { GRAPHICS_PROFILES, effectiveQuality } from './GraphicsQuality.js';
 
 /** Entorno exterior urbano de Bogotá para reflejos PBR realistas en carros, asfalto y vidrios */
 export class OutdoorUrbanEnvironment extends THREE.Scene {
@@ -69,7 +70,7 @@ export class Renderer {
 
     // Look realista: tone mapping fílmico
     this.instance.toneMapping = THREE.ACESFilmicToneMapping;
-    this.instance.toneMappingExposure = 1.15;
+    this.instance.toneMappingExposure = 1.05;
     this.instance.outputColorSpace = THREE.SRGBColorSpace;
     this.silhouette = new PlayerSilhouette();
     this.culling = new FrustumCulling();
@@ -83,24 +84,17 @@ export class Renderer {
   }
 
   setQuality(level = 'alta') {
-    this.quality = level;
-    try { localStorage.setItem('bazuko.graphics_quality', level); } catch { /* sin almacenamiento */ }
-    if (level === 'baja') {
-      this.instance.shadowMap.enabled = false;
-      this.instance.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.0));
-      if (this.bloomPass) this.bloomPass.enabled = false;
-    } else if (level === 'media') {
-      this.instance.shadowMap.enabled = true;
-      this.instance.shadowMap.type = THREE.PCFShadowMap;
-      this.instance.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
-      if (this.bloomPass) this.bloomPass.enabled = true;
-    } else {
-      this.instance.shadowMap.enabled = true;
-      this.instance.shadowMap.type = THREE.PCFShadowMap;
-      this.instance.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-      if (this.bloomPass) this.bloomPass.enabled = true;
-    }
+    this.quality = ['baja', 'media', 'alta'].includes(level) ? level : 'alta';
+    const limit = GRAPHICS_PROFILES[this.quality].pixelRatio;
+    this.resolution.setLimit(Math.min(globalThis.window?.devicePixelRatio || 1, limit));
+    this.instance.setPixelRatio(this.resolution.ratio);
+    this.instance.shadowMap.enabled = this.effectiveQuality !== 'baja';
+    this.instance.shadowMap.type = THREE.PCFShadowMap;
+    this.instance.shadowMap.needsUpdate = true;
+    try { localStorage.setItem('bazuko.graphics_quality', this.quality); } catch { /* sin almacenamiento */ }
   }
+
+  get effectiveQuality() { return effectiveQuality(this.quality ?? 'alta', this.resolution?.pressure ?? 0); }
 
   setupPostprocessing(scene, camera) {
     // Postprocesado seguro sin romper buffer de profundidad de siluetas
@@ -162,18 +156,27 @@ export class Renderer {
     } finally { gl.deleteSync(fence); }
   }
 
-  render(scene, camera, playerRoot = null, shadowLights = []) {
+  render(scene, camera, playerRoot = null, shadowLights = [], showSilhouette = true) {
     this.instance.info.reset();
     this.culling.apply(camera, this.instance.shadowMap.enabled ? shadowLights : []);
     try {
       this.instance.render(scene, camera);
-      if (playerRoot) this.silhouette.render(this.instance, scene, camera, playerRoot);
+      if (playerRoot && showSilhouette && GRAPHICS_PROFILES[this.effectiveQuality].silhouette) {
+        this.silhouette.render(this.instance, scene, camera, playerRoot, this.overlayLights);
+      }
     } finally {
       this.culling.restore();
     }
   }
 
   adaptResolution(frameMs) {
-    if (this.resolution.sample(frameMs)) this.instance.setPixelRatio(this.resolution.ratio);
+    if (this.resolution.sample(frameMs)) {
+      if (this.instance.getPixelRatio() !== this.resolution.ratio) this.instance.setPixelRatio(this.resolution.ratio);
+      const shadows = this.effectiveQuality !== 'baja';
+      if (this.instance.shadowMap.enabled !== shadows) {
+        this.instance.shadowMap.enabled = shadows;
+        this.instance.shadowMap.needsUpdate = true;
+      }
+    }
   }
 }

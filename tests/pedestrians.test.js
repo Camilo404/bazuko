@@ -46,11 +46,11 @@ test('las rutas rodean edificios sin diagonales y no atraviesan componentes aisl
   assert.deepEqual(nav.createRoute(new THREE.Vector3(-100, 0, 0)), []);
 });
 
-test('en Bogotá los recorridos usan andenes y cruces, evitan tienda y estación', () => {
+test('en Bogotá los recorridos usan andenes y cruces, evitan la tienda y pasan bajo la estación elevada', () => {
   const city = district();
   const nav = city._createPedestrianNavigation();
   assert.equal(nav.isWalkableAt(...point(68, 58)), false);
-  assert.equal(nav.isWalkableAt(...point(48, 42)), false);
+  assert.equal(nav.isWalkableAt(...point(48, 42)), true); // El bus y la estación quedan arriba.
   assert.equal(nav.isWalkableAt(...point(12, 40)), false); // Carril fuera de un cruce.
   assert.equal(nav.isWalkableAt(...point(12, 22)), true); // Cruce de Carrera 15.
   let crossingCount = 0;
@@ -118,4 +118,21 @@ test('la población incluye peatones junto al inicio y mantiene quietos a los ve
   assert.deepEqual(vendor.position.toArray(), [5, 0.12, 5]);
   vendor.dispose();
   city.dispose(city.scene);
+});
+
+test('un peatón lejano sigue caminando sin animar y recupera la animación al acercarse', async () => {
+  const nav = new PedestrianNavigation([Array(80).fill('sidewalk')], 2);
+  const npc = new Npc(new THREE.Scene(), new THREE.Vector3(80, 0, 0), {
+    look: {}, navigation: nav, speed: 1, isWalkable: (x, z) => nav.isWalkableAt(x, z)
+  });
+  await npc.ready;
+  let animated = 0;
+  npc.character.update = () => { animated++; };
+  npc.target = new THREE.Vector3(90, 0, 0);
+  for (let i = 0; i < 60; i++) npc.update(1 / 60, { player: new THREE.Vector3(), frustum: { intersectsSphere: () => true } });
+  assert.ok(npc.position.x > 80.5);
+  assert.equal(animated, 0);
+  npc.update(1 / 60, { player: npc.position.clone().add(new THREE.Vector3(15, 0, 0)) });
+  assert.equal(animated, 1);
+  npc.dispose();
 });

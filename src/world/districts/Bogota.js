@@ -1,7 +1,9 @@
+import { planUrbanBuildings, buildUrbanBuilding, URBAN_DESIGNS } from '../bogota/UrbanBuildings.js';
+import { buildSmallBuilding, SMALL_BUILDING } from '../bogota/SmallBuilding.js';
 // src/world/districts/Bogota.js
 // Centro de Bogotá (inspirado en Santa Inés / El Cartucho y la Av. Caracas).
 //
-// Ciudad de 120 × 111 tiles de 2 m; conserva el centro de 74 × 60 y añade barrios al oriente y al sur.
+// Ciudad de 120 × 161 tiles de 2 m; conserva el centro de 74 × 60 y añade barrios al oriente y al sur.
 // Ejes: x = oriente↔occidente (los cerros quedan hacia −x,
 // que es donde mira la cámara), z = norte↔sur. Carreras corren a lo largo de z, calles a lo largo de x.
 //
@@ -15,8 +17,9 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { TILE_SIZE } from '../../utils/constants.js';
 import { Farol } from '../props/Farol.js';
-import { Banca } from '../props/Banca.js';
+import { TrafficSignals } from '../bogota/TrafficSignals.js';
 import { signTexture } from '../../utils/signs.js';
+import { Banca } from '../props/Banca.js';
 import * as TX from '../bogota/textures.js';
 import * as P from '../bogota/props.js';
 import { Npc } from '../../entities/Npc.js';
@@ -24,6 +27,14 @@ import { BuildingVisibility, createBuildingShell } from '../bogota/BuildingVisib
 import { PedestrianNavigation } from '../bogota/PedestrianNavigation.js';
 import { TrafficRoute } from '../bogota/TrafficRoute.js';
 import { BusService } from '../bogota/BusService.js';
+import { skylineFloors, buildAvenueOverpass, AVENUE_OVERPASS } from '../bogota/AvenueLandmarks.js';
+import { GAS_STATION, GAS_OBSTACLES, inGasStation, buildGasStation } from '../bogota/GasStation.js';
+import { buildD69Store } from '../bogota/D69Store.js';
+import { buildColpatria, COLPATRIA, COLPATRIA_ANNEX, BUS_DETOUR, busPathX, southBusPathX } from '../bogota/Colpatria.js';
+import { VIADUCT, buildColpatriaViaduct, viaductHeight, viaductSurface } from '../bogota/ColpatriaViaduct.js';
+import { TERMINAL, inTerminal, terminalGroundHeight, buildTransitTerminal } from '../bogota/TransitTerminal.js';
+import { LAKE_PARK, onLakeBridge, bridgeHeight, buildLakeWater } from '../bogota/LakePark.js';
+import { PigeonFlock } from '../../entities/PigeonFlock.js';
 import { geometryChunk, mergeByChunk, freezeStaticTransforms, createRenderSectors } from '../bogota/StaticGeometry.js';
 import { CITY_WIDTH, CITY_HEIGHT, CITY_AREA_MULTIPLIER, CITY_CARRERAS as CARRERAS,
   CITY_CALLES as CALLES, ORIGINAL_CITY_WIDTH, ORIGINAL_CITY_HEIGHT, EXTENSION_PARKS,
@@ -34,15 +45,17 @@ import { ORIGINAL_SIZE as S, ORIGINAL_CARRERAS, ORIGINAL_CARACAS, ORIGINAL_CALLE
   migrateStreetPosition, WORLD_LAYOUT_VERSION, SIDEWALK_TILES } from '../bogota/StreetLayout.js';
 const T = TILE_SIZE;
 const WALKABLE = new Set(['road', 'busway', 'sidewalk', 'dirt', 'grass', 'plaza', 'floor']);
-const SOLID = new Set(['building', 'ruin', 'wall']);
+const SOLID = new Set(['building', 'ruin', 'wall', 'water', 'storeD69', 'colpatria', 'colpatriaAnnex', 'smallBuilding']);
 const SIDEWALK_Y = 0.12;
 // La colocación de objetos debe usar las mismas cotas que la malla del terreno.
 const GROUND_HEIGHTS = Object.freeze({
   road: 0, busway: 0.02, sidewalk: SIDEWALK_Y, floor: SIDEWALK_Y,
-  dirt: 0.04, grass: 0.06, plaza: SIDEWALK_Y
+  dirt: 0.04, grass: 0.06, plaza: SIDEWALK_Y, water: -.18
 });
 
 const WX = STREET_X.world, WZ = STREET_Z.world;
+export const SHELTER_LOCATION = Object.freeze({ x: 112.98, z: 94.64 });
+export const SHELTER_RESPAWN = Object.freeze({ x: 112.98, z: 97.84 });
 
 const CARTUCHO = { x0: 8, x1: 21, z0: 14, z1: 29 };
 const SHOP_NAMES = [
@@ -79,15 +92,19 @@ const W = (t) => t * T; // tile → metros (centro del tile)
 export class Bogota {
   constructor() {
     this.group = new THREE.Group();
+    this.lakePark = LAKE_PARK;
+    this.gasStation = GAS_STATION;
+    this.colpatria = COLPATRIA;
     this.width = CITY_WIDTH;
     this.height = CITY_HEIGHT;
-    this.populationScale = CITY_AREA_MULTIPLIER;
+    this.populationScale = Math.min(3, CITY_AREA_MULTIPLIER);
     this.size = Math.max(this.width, this.height);
     this.layoutVersion = WORLD_LAYOUT_VERSION;
     this.props = [];          // { instance } con setNight/update (faroles de bazuko)
     this.animated = [];       // grupos con userData.update
     this.facadeMats = [];
     this._facadeTextures = new Map();
+    this._facadeMaterials = new Map();
     this.npcs = [];
     this.buildingVisibility = new BuildingVisibility();
     this.t = 0;
@@ -149,10 +166,33 @@ export class Bogota {
     this._buildMarkings();
     this._buildBlocks(map);
     this._buildCollisions(map, collisions);
+    const viaduct = buildColpatriaViaduct(map, { pavement: this.groundMaterials.road });
+    this.group.add(viaduct);
+    for (const box of viaduct.userData.colliders) collisions?.colliders.push({ box, mesh: new THREE.Object3D(), layered: true });
+    this.stationGroup = buildTransitTerminal({ createSign: signTexture, asphalt: this.groundMaterials.road });
+    this.group.add(this.stationGroup);
+    for (const entry of this.stationGroup.userData.colliders) collisions?.colliders.push(entry);
     this._buildStreetProps(map);
     this._buildCartucho();
     this._buildPark();
     this._buildExtensions();
+    this._buildLakePark();
+    this.group.add(buildAvenueOverpass());
+    this.group.add(buildGasStation({ createSign: signTexture }));
+    this.group.add(buildD69Store({ createSign: signTexture }));
+    this.group.add(buildSmallBuilding({ brickTextures: TX.brick(53) }));
+    const tower = buildColpatria({ createSign: signTexture });
+    this.towerLights = tower.userData.lightMaterials;
+    this.group.add(tower);
+    const parks = [
+      { x0: WX(29.5), x1: WX(37.5), z0: WZ(33.5), z1: WZ(44.5) },
+      ...EXTENSION_PARKS.map(park => ({ x0: W(park.x0 + .5), x1: W(park.x1 - .5), z0: W(park.z0 + .5), z1: W(park.z1 - .5) }))
+    ];
+    this.pigeonFlocks = parks.map(bounds => new PigeonFlock(scene, bounds, {
+      groundHeight: (x, z) => this.getGroundHeight(x, z),
+      isGround: (x, z) => ['grass', 'plaza'].includes(map[Math.round(z / T)]?.[Math.round(x / T)]) &&
+        Math.hypot(x - SHELTER_LOCATION.x, z - SHELTER_LOCATION.z) > 6
+    }));
 
     const cer = P.cerros();
     cer.userData.noMerge = true;
@@ -164,13 +204,17 @@ export class Bogota {
     this.group.add(this.buildingVisibility.buildClosedView());
     const closedView = this.buildingVisibility.closedView;
     this.renderSectors = [
-      ...createRenderSectors(this.group, new Set([closedView, this.busService?.group])),
+      ...createRenderSectors(this.group, new Set([closedView, ...this.busServices.map(bus => bus.group)])),
       ...createRenderSectors(closedView)
     ];
     scene.add(this.group);
-    freezeStaticTransforms(this.group, this.busService?.group);
+    freezeStaticTransforms(this.group, new Set(this.busServices.map(bus => bus.group)));
+    this.signals = new TrafficSignals();
+    this.group.add(this.signals.group);
+    for (const bus of this.busServices) bus.signals = this.signals;
 
     this.isWalkableAt = (wx, wz) => {
+      if (inTerminal(wx,wz)) return true;
       const tx = Math.round(wx / T), tz = Math.round(wz / T);
       if (tx < 0 || tz < 0 || tx >= this.width || tz >= this.height) return false;
       return WALKABLE.has(map[tz][tx]);
@@ -178,9 +222,10 @@ export class Bogota {
 
     // Zonas reservadas (en metros)
     this.reserved = {
-      spawn:  { x: WX(20), z: WZ(11) },
+      spawn:  { ...SHELTER_RESPAWN },
+      respawn: { ...SHELTER_RESPAWN },
       sell:   { x: WX(14.5), z: WZ(34) },     // dentro del portón de la bodega
-      bed:    { x: WX(44.5), z: WZ(40) },     // lote baldío
+      bed:    { ...SHELTER_LOCATION },
       dealer: { x: WX(14.5), z: WZ(21.5) },   // la olla de El Cartucho
       craft:  { x: WX(16.5), z: WZ(24.5) },
       shop:   { x: WX(34), z: WZ(29) }        // andén de la Calle 9, de espaldas a la manzana
@@ -195,7 +240,7 @@ export class Bogota {
           const t = map[tz][tx];
           if (!['sidewalk', 'dirt', 'grass', 'plaza'].includes(t)) continue;
           const x = W(tx), z = W(tz);
-          if (this.isNearReserved(x, z)) continue;
+          if (this.isNearReserved(x, z) || inGasStation(x, z)) continue;
           grid.push(new THREE.Vector3(x, 0, z));
         }
       }
@@ -233,14 +278,34 @@ export class Bogota {
   getTrafficRoutes() {
     const lane = ([a, b], side) => W((a + b) / 2 + side * (b - a + 1) / 4);
     const top = lane(CALLES[0], 1), bottom = lane(CALLES[1], -1);
-    return [
-      new TrafficRoute(lane(CARRERAS[0], 1), lane(CARACAS.lanes[0], -1), top, bottom),
-      new TrafficRoute(lane(CARACAS.lanes[1], 1), lane(CARRERAS[1], -1), top, bottom),
-      new TrafficRoute(lane(CARRERAS[1], 1), lane(CARRERAS[2], -1), top, lane(CALLES.at(-1), -1)),
-      new TrafficRoute(lane(CARRERAS[2], 1), lane(CARRERAS[3], -1), top, lane(CALLES.at(-1), -1)),
-      new TrafficRoute(lane(CARRERAS[0], 1), lane(CARACAS.lanes[0], -1), lane(CALLES[1], 1), lane(CALLES.at(-1), -1)),
-      new TrafficRoute(lane(CARACAS.lanes[1], 1), lane(CARRERAS[1], -1), lane(CALLES[1], 1), lane(CALLES.at(-1), -1))
-    ];
+    const circuit = (left, right, top, bottom) => {
+      // El costado oriental ocupado por el conjunto deja de ser una vía de paso.
+      // Los circuitos de ese costado giran en Calle 8; los demás siguen por los barrios.
+      if ([left, right].some(x => x >= 83 && x <= 93) && bottom > 155) bottom = lane(CALLES[2], -1);
+      if (bottom - top <= 6.4) return null;
+      return new TrafficRoute(left, right, top, bottom, 3.2);
+    };
+    const routes = [
+      circuit(lane(CARRERAS[0], 1), lane(CARACAS.lanes[0], -1), top, bottom),
+      circuit(lane(CARACAS.lanes[1], 1), lane(CARRERAS[1], -1), top, bottom),
+      circuit(lane(CARRERAS[1], 1), lane(CARRERAS[2], -1), top, lane(CALLES.at(-1), -1)),
+      circuit(lane(CARRERAS[2], 1), lane(CARRERAS[3], -1), top, lane(CALLES.at(-1), -1)),
+      circuit(lane(CARRERAS[0], 1), lane(CARACAS.lanes[0], -1), lane(CALLES[1], 1), lane(CALLES.at(-1), -1)),
+      circuit(lane(CARACAS.lanes[1], 1), lane(CARRERAS[1], -1), lane(CALLES[1], 1), lane(CALLES.at(-1), -1))
+    ].filter(Boolean);
+    // Combinar calles y carreras permite continuar por otros barrios en los cruces.
+    // Solo las seis rutas de partida generan carros; las demás son alternativas.
+    const vertical = [CARRERAS[0], ...CARACAS.lanes, ...CARRERAS.slice(1)];
+    const alternatives = new Map(routes.map(route => [route.key, route]));
+    for (let left = 0; left < vertical.length - 1; left++) for (let right = left + 1; right < vertical.length; right++) {
+      for (let north = 0; north < CALLES.length - 1; north++) for (let south = north + 1; south < CALLES.length; south++) {
+        const route = circuit(lane(vertical[left], 1), lane(vertical[right], -1), lane(CALLES[north], 1), lane(CALLES[south], -1));
+        if (!route) continue;
+        if (!alternatives.has(route.key)) alternatives.set(route.key, route);
+      }
+    }
+    routes.alternatives = [...alternatives.values()];
+    return routes;
   }
 
   getBusRoute() {
@@ -248,8 +313,10 @@ export class Bogota {
     return {
       x: centerX + 3.5,
       startZ: W(this.height - 2) - P.ARTICULATED_BUS_SIZE.length / 2,
-      endZ: W(1) + P.ARTICULATED_BUS_SIZE.length / 2,
-      stationZ: WZ(21.5)
+      endZ: -62,
+      groundHeight: (_x, z) => z >= VIADUCT.start && z <= VIADUCT.end ? viaductHeight(z) : bridgeHeight(z),
+      pathX: busPathX,
+      stationZ: TERMINAL.z
     };
   }
 
@@ -286,23 +353,28 @@ export class Bogota {
       floor: new THREE.MeshStandardMaterial({ map: tex(concrete.map, 6), roughness: 0.9, color: '#8a8a86' }),
       dirt: new THREE.MeshStandardMaterial({ map: tex(dirt.map, 8), roughness: 1, color: '#8a7a64' }),
       grass: new THREE.MeshStandardMaterial({ map: dirt.map, roughness: 1, color: '#3e5a2c' }),
-      plaza: new THREE.MeshStandardMaterial({ map: tex(walk.map, 6), roughness: 0.8, color: '#c9b9a0' })
+      plaza: new THREE.MeshStandardMaterial({ map: tex(walk.map, 6), roughness: 0.8, color: '#c9b9a0' }),
+      water: new THREE.MeshStandardMaterial({ color: '#267d8b', roughness: .24, metalness: .18 })
     };
-    const scaleOf = { road: 14, busway: 14, sidewalk: 6, floor: 6, dirt: 8, grass: 8, plaza: 6 };
+    const scaleOf = { road: 14, busway: 14, sidewalk: 6, floor: 6, dirt: 8, grass: 8, plaza: 6, water: 16 };
     const heightOf = GROUND_HEIGHTS;
     const quads = {};
     for (let z = 0; z < map.length; z++) {
       for (let x = 0; x < map[0].length; x++) {
         const t = map[z][x];
-        if (!mats[t]) continue;
+        if (!mats[t] || t === 'water' || onLakeBridge(W(x), W(z))) continue;
         const g = new THREE.PlaneGeometry(T, T);
         g.rotateX(-Math.PI / 2);
         g.translate(W(x), heightOf[t], W(z));
         const uv = g.attributes.uv, pos = g.attributes.position;
+        if (onLakeBridge(W(x), W(z))) {
+          for (let i = 0; i < pos.count; i++) pos.setY(i, bridgeHeight(pos.getZ(i)));
+          g.computeVertexNormals();
+        }
         for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) / scaleOf[t], pos.getZ(i) / scaleOf[t]);
         (quads[t] ??= []).push(g);
         // bordillo: cara vertical hacia la calle
-        if (heightOf[t] >= SIDEWALK_Y) {
+        if (heightOf[t] >= SIDEWALK_Y && !onLakeBridge(W(x), W(z))) {
           for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
             const n = map[z + dz]?.[x + dx];
             if (n !== 'road' && n !== 'busway') continue;
@@ -321,6 +393,7 @@ export class Bogota {
       bumpScale: 0.12
     });
     this.groundMaterials = mats;
+    this.group.add(buildLakeWater(mats.water));
     for (const [t, list] of Object.entries(quads)) {
       this.group.add(mergeByChunk(list, mats[t], { receiveShadow: true }));
     }
@@ -353,8 +426,35 @@ export class Bogota {
   }
 
   _buildMarkings() {
+    const busText = new THREE.MeshBasicMaterial({ map: signTexture({ title: 'SOLO BUS', bg: null, fg: '#f6d340', border: false }), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+    const busCenter = (W(CARACAS.busway[0]) + W(CARACAS.busway[1])) / 2;
+    for (let z = 8; z < W(this.height) - 8; z += 22) {
+      if (z >= VIADUCT.start && z <= VIADUCT.end) continue;
+      if (CALLES.some(([a, b]) => z > W(a) - 7 && z < W(b) + 7)) continue;
+      for (const side of [-1, 1]) {
+        const label = new THREE.Mesh(new THREE.PlaneGeometry(5, 1.4), busText);
+        label.rotation.set(-Math.PI / 2, 0, side * Math.PI / 2);
+        label.position.set(busCenter + side * 3.5, this.getGroundHeight(busCenter + side * 3.5, z) + .015, z);
+        if (z > LAKE_PARK.z0) label.rotation.x -= Math.atan2(bridgeHeight(z + .1) - bridgeHeight(z - .1), .2);
+        this.group.add(label);
+      }
+    }
     const white = [], yellow = [], curbs = [];
-    const plane = (w, d, x, z) => { const g = new THREE.PlaneGeometry(w, d); g.rotateX(-Math.PI / 2); g.translate(x, 0.015, z); return g; };
+    const plane = (w, d, x, z) => {
+      const g = new THREE.PlaneGeometry(w, d); g.rotateX(-Math.PI / 2); g.translate(x, .015, z);
+      if (onLakeBridge(x, z)) {
+        const p = g.attributes.position;
+        for (let i = 0; i < p.count; i++) p.setY(i, bridgeHeight(p.getZ(i)) + .015);
+        g.computeVertexNormals();
+      }
+      return g;
+    };
+    const paintWhite = (w, d, x, z) => {
+      if (this.map[Math.round(z / T)]?.[Math.round(x / T)] !== 'grass') white.push(plane(w, d, x, z));
+    };
+    for (const z of [158, 178]) for (let x = 56; x <= 114; x += .9) {
+      if (['road', 'busway'].includes(this.map[Math.round(z / T)]?.[Math.round(x / T)])) paintWhite(.5, 1.6, x, z);
+    }
     const carrX = [...CARRERAS, [CARACAS.lanes[0][0], CARACAS.lanes[1][1]]];
     // línea amarilla al centro de las calles
     for (const [a, b] of CALLES) {
@@ -363,18 +463,18 @@ export class Bogota {
     }
     for (const [a, b] of CARRERAS) {
       const xc = (W(a) + W(b)) / 2;
-      for (let z = 2; z < W(this.height) - 2; z += 3) yellow.push(plane(0.12, 1.6, xc, z));
+      for (let z = 2; z < LAKE_PARK.z0; z += 3) yellow.push(plane(0.12, 1.6, xc, z));
     }
     // cebras a ambos lados de cada cruce
     for (const [za, zb] of CALLES) {
       for (const [xa, xb] of carrX) {
         const x0 = W(xa) - T / 2, x1 = W(xb) + T / 2;
         for (const zEdge of [W(za) - T / 2 - SIDEWALK_TILES * T / 2, W(zb) + T / 2 + SIDEWALK_TILES * T / 2]) {
-          for (let x = x0 + 0.4; x < x1; x += 0.9) white.push(plane(0.5, SIDEWALK_TILES * T - 0.4, x, zEdge));
+          for (let x = x0 + 0.4; x < x1; x += 0.9) paintWhite(0.5, SIDEWALK_TILES * T - 0.4, x, zEdge);
         }
         for (const xEdge of [W(xa) - T / 2 - SIDEWALK_TILES * T / 2, W(xb) + T / 2 + SIDEWALK_TILES * T / 2]) {
           for (let z = W(za) - T / 2 + 0.4; z < W(zb) + T / 2; z += 0.9) {
-            white.push(plane(SIDEWALK_TILES * T - 0.4, 0.5, xEdge, z));
+            paintWhite(SIDEWALK_TILES * T - 0.4, 0.5, xEdge, z);
           }
         }
       }
@@ -382,6 +482,8 @@ export class Bogota {
     // separadores de concreto de la troncal
     for (const x of [W(CARACAS.busway[0]) - T / 2, W(CARACAS.busway[1]) + T / 2]) {
       for (let z = 1; z < this.height - 1; z++) {
+        if (W(z) >= LAKE_PARK.z0) continue;
+        if (W(z) >= VIADUCT.start && W(z) <= VIADUCT.end) continue;
         if (CALLES.some(([a, b]) => z >= a - 0.5 && z <= b + 0.5)) continue;
         const g = new THREE.BoxGeometry(0.3, 0.25, T);
         g.translate(x, 0.125, W(z));
@@ -408,6 +510,25 @@ export class Bogota {
     this._interiorMat = new THREE.MeshStandardMaterial({ map: roofMat.map, color: '#675e50', roughness: 1 });
     this._uvUnits = { brick: [TX.BRICK_TILE.w, TX.BRICK_TILE.h], slab: [4, 4], tiles: [2, 2] };
     const covered = new Set();
+    this.urbanBuildings = planUrbanBuildings(map);
+    const urbanPalette = {
+      facades: URBAN_DESIGNS.map((design,i)=>{
+        const tex=TX.facade({seed:170+i,width:6,floors:3,pxPerM:32,shopFront:false,style:i===0?'ladrillo':'concreto',wallColor:['#975c40','#b6b3a8','#c3b8a5','#857c70','#687d81'][i]});
+        return new THREE.MeshStandardMaterial({map:repeatAll(tex.map),emissiveMap:repeatAll(tex.emissiveMap),emissive:'#ffffff',emissiveIntensity:0,bumpMap:repeatAll(tex.bumpMap),bumpScale:.16,roughness:i===4?.55:.9});
+      }),
+      roof:roofMat,interior:this._interiorMat,
+      concrete:new THREE.MeshStandardMaterial({color:'#686962',roughness:.95}),
+      trim:new THREE.MeshStandardMaterial({color:'#c6bda9',roughness:.8}),
+      rail:new THREE.MeshStandardMaterial({color:'#4e5552',roughness:.75}),
+      glass:new THREE.MeshStandardMaterial({color:'#263a3e',roughness:.4,metalness:.2})
+    };
+    for(const plan of this.urbanBuildings) {
+      for(let dz=0;dz<plan.tiles;dz++)for(let dx=0;dx<plan.tiles;dx++)covered.add((plan.tileX+dx)+','+(plan.tileZ+dz));
+      const shell=buildUrbanBuilding(plan,urbanPalette);
+      this.group.add(shell.root);
+      const building=this.buildingVisibility.register(shell);
+      for(const part of building.parts)for(const material of part.materials)if(material.emissiveMap)this.facadeMats.push(material);
+    }
 
     // direcciones: [dx, dz, índice de cara de BoxGeometry]
     const DIRS = [[0, -1, 5], [0, 1, 4], [-1, 0, 1], [1, 0, 0]];
@@ -470,7 +591,7 @@ export class Bogota {
     for (const [x, z] of tiles) for (let d = 0; d < depth; d++) covered.add(`${x - dx * d},${z - dz * d}`);
 
     const widthM = tiles.length * T;
-    const floors = ruin ? 2 + (Math.random() < 0.3 ? 1 : 0) : 2 + Math.floor(Math.random() * 3);
+    const floors = skylineFloors(tiles[0][0], tiles[0][1], ruin);
     const h = floors * 3;
     const style = ruin ? 'ruina' : Math.random() < 0.55 ? 'ladrillo' : 'pintada';
     // el ladrillo necesita más resolución para que cada ladrillo (36 × 12 cm) se distinga
@@ -485,17 +606,21 @@ export class Bogota {
     for (const t of [tex.map, tex.emissiveMap, tex.bumpMap, tex.roughnessMap]) {
       if (t) { t.anisotropy = 8; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; }
     }
-    const facadeMat = new THREE.MeshStandardMaterial({
-      map: tex.map,
-      emissiveMap: tex.emissiveMap,
-      emissive: '#ffffff',
-      emissiveIntensity: 0,
-      bumpMap: tex.bumpMap,
-      bumpScale: 0.35,
-      roughness: 0.95
-    });
-    if (tex.roughnessMap) facadeMat.roughnessMap = tex.roughnessMap;
-    this.facadeMats.push(facadeMat);
+    let facadeMat = this._facadeMaterials.get(textureKey);
+    if (!facadeMat) {
+      facadeMat = new THREE.MeshStandardMaterial({
+        map: tex.map,
+        emissiveMap: tex.emissiveMap,
+        emissive: '#ffffff',
+        emissiveIntensity: 0,
+        bumpMap: tex.bumpMap,
+        bumpScale: 0.35,
+        roughness: 0.85
+      });
+      if (tex.roughnessMap) facadeMat.roughnessMap = tex.roughnessMap;
+      this._facadeMaterials.set(textureKey, facadeMat);
+      this.facadeMats.push(facadeMat);
+    }
 
     const [x0, z0] = tiles[0], [x1, z1] = tiles[tiles.length - 1];
     const cx = (W(x0) + W(x1)) / 2 - dx * (depth - 1) * T / 2;
@@ -567,22 +692,36 @@ export class Bogota {
   /** Colisiones: tramos horizontales de tiles sólidos unidos en una caja */
   _buildCollisions(map, collisions) {
     if (!collisions) return;
+    const urbanTiles=new Set();
+    for(const plan of planUrbanBuildings(map)) {
+      for(let dz=0;dz<plan.tiles;dz++)for(let dx=0;dx<plan.tiles;dx++)urbanTiles.add((plan.tileX+dx)+','+(plan.tileZ+dz));
+      const object=new THREE.Object3D();object.position.set(plan.x,0,plan.z);
+      collisions.add(object,new THREE.Vector3(plan.width,plan.height,plan.depth));
+    }
+    const obstacles = [...GAS_OBSTACLES,
+      ...[AVENUE_OVERPASS.x0, AVENUE_OVERPASS.x1].map(x => ({ x, z: AVENUE_OVERPASS.z, w: 1.4, d: 4.6, h: 11.4 }))];
+    for (const { x, z, w, d, h } of obstacles) {
+      const object = new THREE.Object3D(); object.position.set(x, .12, z);
+      collisions.add(object, new THREE.Vector3(w, h, d));
+    }
     for (let z = 0; z < map.length; z++) {
       let x = 0;
       while (x < map[0].length) {
-        if (!SOLID.has(map[z][x])) { x++; continue; }
+        if (!SOLID.has(map[z][x]) || urbanTiles.has(`${x},${z}`)) { x++; continue; }
+        const water = map[z][x] === 'water';
         let x2 = x;
-        while (x2 + 1 < map[0].length && SOLID.has(map[z][x2 + 1])) x2++;
+        while (x2 + 1 < map[0].length && !urbanTiles.has(`${x2+1},${z}`) && SOLID.has(map[z][x2 + 1]) && (map[z][x2 + 1] === 'water') === water &&
+          (map[z][x2 + 1] === 'storeD69') === (map[z][x] === 'storeD69') &&
+          (map[z][x2 + 1] === 'colpatria') === (map[z][x] === 'colpatria') &&
+          (map[z][x2 + 1] === 'colpatriaAnnex') === (map[z][x] === 'colpatriaAnnex') &&
+          (map[z][x2 + 1] === 'smallBuilding') === (map[z][x] === 'smallBuilding')) x2++;
         const o = new THREE.Object3D();
-        o.position.set((W(x) + W(x2)) / 2, 0, W(z));
-        collisions.add(o, new THREE.Vector3((x2 - x + 1) * T, 8, T));
+        o.position.set((W(x) + W(x2)) / 2, water ? -.4 : 0, W(z));
+        collisions.add(o, new THREE.Vector3((x2 - x + 1) * T, water ? .4 : map[z][x] === 'smallBuilding' ? SMALL_BUILDING.height : map[z][x] === 'storeD69' ? 5 : map[z][x] === 'colpatria' ? COLPATRIA.height : map[z][x] === 'colpatriaAnnex' ? COLPATRIA_ANNEX.height : 8, T));
         x = x2 + 1;
       }
     }
-    // estación de la troncal
-    const st = new THREE.Object3D();
-    st.position.set((W(CARACAS.busway[0]) + W(CARACAS.busway[1])) / 2, 0, WZ(21.5));
-    collisions.add(st, new THREE.Vector3(2.6, 3, 16));
+
   }
 
   _add(obj, x, z, rotY = 0) {
@@ -602,8 +741,22 @@ export class Bogota {
   }
 
   getGroundHeight(x, z) {
+    if (inTerminal(x,z)) return terminalGroundHeight(x,z);
+    if (onLakeBridge(x, z)) return bridgeHeight(z);
     const t = this.map[Math.round(z / T)]?.[Math.round(x / T)];
     return GROUND_HEIGHTS[t] ?? 0;
+  }
+
+  getMovementGroundHeight(x, z, currentY) {
+    if (inTerminal(x,z)) return terminalGroundHeight(x,z);
+    const deck = viaductSurface(x, z);
+    // Solo se entra por la rampa o desde el propio tablero; debajo se conserva la calle.
+    if (deck !== null && Math.abs(deck - currentY) < .6) return deck;
+    if (onLakeBridge(x, z) && (deck === null || currentY < bridgeHeight(z) - .6)) {
+      const type = this.map[Math.round(z / T)]?.[Math.round(x / T)];
+      return GROUND_HEIGHTS[type] ?? 0;
+    }
+    return this.getGroundHeight(x, z);
   }
 
   /** Cota máxima bajo la base completa, incluida su rotación y los tiles vecinos. */
@@ -657,11 +810,14 @@ export class Bogota {
         this._add(P.streetSign([calle, carrera]), W(xa - 1), W(za - 1), 0.4);
       }
     }
-    // estación y bus articulado
-    const bx = (W(CARACAS.busway[0]) + W(CARACAS.busway[1])) / 2;
-    this._add(P.busStation(16), bx, WZ(21.5));
+    // Bus sin estación ni parada programada mientras se ajusta el puente.
     this.busService = new BusService(this.getBusRoute());
     this.group.add(this.busService.group);
+    const route = this.getBusRoute();
+    this.reverseBusService = new BusService({ ...route, x: TERMINAL.southLane, pathX: southBusPathX, startZ: route.endZ, endZ: route.startZ });
+    this.reverseBusService.group.name = 'TransMilenio hacia el sur';
+    this.group.add(this.reverseBusService.group);
+    this.busServices = [this.busService, this.reverseBusService];
 
     // Avisos de neón comerciales en esquinas principales
     const neons = [
@@ -723,9 +879,11 @@ export class Bogota {
     for (let i = 0; i < 9; i++) {
       const x = rand(29.5, 38.5), z = rand(33.5, 45.5);
       if (Math.abs(x - 33.5) < 1.6 || Math.abs(z - 39) < 1.2) continue;
+      if (Math.hypot(WX(x) - SHELTER_LOCATION.x, WZ(z) - SHELTER_LOCATION.z) < 6) continue;
       this._add(P.tree(rand(0.9, 1.3)), WX(x), WZ(z));
     }
     for (const [x, z, r] of [[32, 37, Math.PI / 2], [35, 41, -Math.PI / 2], [31, 39.8, 0], [36.5, 38.2, Math.PI]]) {
+      if (Math.hypot(WX(x) - SHELTER_LOCATION.x, WZ(z) - SHELTER_LOCATION.z) < 5) continue;
       const banca = new Banca(new THREE.Vector3(WX(x), 0.06, WZ(z)), r);
       this.group.add(banca.group);
     }
@@ -750,15 +908,31 @@ export class Bogota {
     this._vendor(W(52), W(CALLES[2][0]-1.5), 0, 'fritanga', 'Fritanga del Sur', ['lataComida','pan','refresco']);
   }
 
+  _buildLakePark() {
+    // Arbolado espaciado; solo crece en césped, nunca dentro del lago o sobre el puente.
+    for (let z = 230; z < 314; z += 12) for (let x = 14; x < 230; x += 12) {
+      if (this.map[Math.round(z / T)]?.[Math.round(x / T)] !== 'grass' || onLakeBridge(x, z)) continue;
+      this._add(P.tree(1 + ((x + z) % 3) * .12), x, z);
+    }
+    for (const [x, z] of [[20, 226], [132, 236], [134, 288], [20, 310], [156, 310]]) {
+      const bench = new Banca(new THREE.Vector3(x, this.getGroundHeight(x, z), z), 0);
+      this.group.add(bench.group);
+    }
+    this._add(P.streetSign([LAKE_PARK.name, 'Lago · Puente TransMilenio']), 150, 226);
+  }
+
   _createPedestrianNavigation() {
     const carreras = [...CARRERAS, [CARACAS.lanes[0][0], CARACAS.lanes[1][1]]];
     return new PedestrianNavigation(this.map, T, {
       // Prolongación de los andenes en los cruces; no pasean por los carriles ni la estación.
       isCrossing: (x, z) => CALLES.some(([a, b]) =>
         (z >= a - SIDEWALK_TILES && z < a) || (z > b && z <= b + SIDEWALK_TILES)) ||
+        (z === 113 || z === 155 || z === 79 || z === 89) ||
+        (viaductHeight(z * T) > 2 && Math.abs(x * T - busPathX(z * T)) < 16) ||
         carreras.some(([a, b]) =>
           (x >= a - SIDEWALK_TILES && x < a) || (x > b && x <= b + SIDEWALK_TILES)),
-      isBlocked: (x, z) => x === Math.round(this.reserved.shop.x / T) && z === Math.round(this.reserved.shop.z / T),
+      isBlocked: (x, z) => (x === Math.round(this.reserved.shop.x / T) && z === Math.round(this.reserved.shop.z / T)) ||
+        GAS_OBSTACLES.some(o => Math.abs(x * T - o.x) < o.w / 2 + .3 && Math.abs(z * T - o.z) < o.d / 2 + .3),
       groundHeight: (x, z) => this.getGroundHeight(x, z)
     });
   }
@@ -843,9 +1017,19 @@ export class Bogota {
 
   // ---------- ciclo ----------
 
-  update(dt, playerPos, camera) {
+  async preloadDetails() {
+    await Promise.all([
+      this.signals.preloadModel(),
+      ...this.props.map(prop => prop.instance.preloadModel?.())
+    ]);
+    // Actualizar los límites después de cargar el mobiliario.
+    this.group.updateWorldMatrix(true, true);
+  }
+
+  update(dt, playerPos, camera, trafficVehicles = []) {
     this.t += dt;
-    this.busService?.update(dt, { player: playerPos, pedestrians: this.npcs });
+    this.signals?.update(this.t);
+    for (const bus of this.busServices ?? []) bus.update(dt, { player: playerPos, pedestrians: this.trafficPedestrians ?? this.npcs, vehicles: trafficVehicles });
     for (const o of this.animated) o.userData.update(dt, this.t);
     // vista de la cámara una vez por cuadro: los NPC fuera de ella no se dibujan ni se animan
     let frustum = null;
@@ -855,19 +1039,30 @@ export class Bogota {
       _projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
       frustum = _frustum.setFromProjectionMatrix(_projView);
     }
-    const ctx = { player: playerPos, frustum, camera, isRaining: (this.wetness ?? 0) > 0.05 };
+    const ctx = { player: playerPos, frustum, camera, isRaining: (this.wetness ?? 0) > 0.05, animationBudget: this.animationBudget ?? 1 };
     for (const n of this.npcs) n.update(dt, ctx);
+    for (const flock of this.pigeonFlocks ?? []) flock.update(dt, playerPos, this.npcs);
   }
 
   setNightMode(isNight) {
+    for (const material of this.towerLights ?? []) material.emissiveIntensity = isNight ? 1.8 : .05;
     for (const p of this.props) p.instance.setNight?.(isNight);
     for (const m of this.facadeMats) m.emissiveIntensity = isNight ? 1.2 : 0;
     this.cerros?.userData?.setNight?.(isNight);
+    for (const material of this.buildingVisibility.closedMaterials.values()) {
+      if (material.emissiveMap) material.emissiveIntensity = isNight ? 1.2 : 0;
+    }
   }
 
   dispose(scene) {
+    for (const flock of this.pigeonFlocks ?? []) flock.dispose();
+    this.signals?.dispose();
+    this.stationGroup?.clear();
+    for (const prop of this.props) prop.instance.dispose?.();
+    for (const bus of this.busServices ?? []) bus.dispose();
     this.buildingVisibility.dispose();
     this._facadeTextures.clear();
+    this._facadeMaterials.clear();
     scene.remove(this.group);
     for (const n of this.npcs) n.dispose();
     this.group.traverse((o) => {

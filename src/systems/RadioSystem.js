@@ -50,6 +50,9 @@ export const STATIONS = [
 
 export class RadioSystem {
   constructor(audioContext = null) {
+    this._outputVolume = 1;
+    this._outputMuted = false;
+    this._paused = false;
     this.isOn = false;
     this.frequency = 540;
     this.volume = 0.7;
@@ -98,7 +101,7 @@ export class RadioSystem {
 
     // Ganancia maestra de la radio
     this._masterGain = ctx.createGain();
-    this._masterGain.gain.value = this.volume;
+    this._applyOutput();
 
     this._bandpassFilter.connect(this._masterGain);
     this._masterGain.connect(ctx.destination);
@@ -168,10 +171,25 @@ export class RadioSystem {
     this._updateTuning();
   }
 
+  setMasterVolume(volume, muted = false) {
+    this._outputVolume = Math.max(0, Math.min(1, Number(volume) || 0));
+    this._outputMuted = muted;
+    this._applyOutput();
+  }
+
+  setPaused(paused) {
+    this._paused = paused;
+    this._applyOutput();
+  }
+
+  _applyOutput() {
+    if (this._masterGain) this._masterGain.gain.value = this._paused || this._outputMuted ? 0 : this.volume * this._outputVolume;
+  }
+
   setVolume(vol) {
     this.volume = Math.max(0, Math.min(1, vol));
     if (this._masterGain) {
-      this._masterGain.gain.value = this.volume;
+      this._applyOutput();
     }
     try {
       localStorage?.setItem('bazuko.radio_vol', String(this.volume));

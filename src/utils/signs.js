@@ -2,16 +2,15 @@
 // Letreros de lugares (estilo señal informativa colombiana) y su malla iluminada.
 import * as THREE from 'three';
 
-export function signTexture({ title, sub = '', bg = '#0b4fa3', fg = '#ffffff', accent = '#f6c400', w = 1024, h = 256 }) {
+export function signTexture({ title, sub = '', bg = '#0b4fa3', fg = '#ffffff', accent = '#f6c400', w = 1024, h = 256, border = true }) {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
   const x = c.getContext('2d');
-  x.fillStyle = bg;
-  x.fillRect(0, 0, w, h);
+  if (bg) { x.fillStyle = bg; x.fillRect(0, 0, w, h); }
   x.strokeStyle = fg;
   x.lineWidth = 10;
-  x.strokeRect(18, 18, w - 36, h - 36);
+  if (border) x.strokeRect(18, 18, w - 36, h - 36);
   x.fillStyle = fg;
   x.textAlign = 'center';
   x.textBaseline = 'middle';

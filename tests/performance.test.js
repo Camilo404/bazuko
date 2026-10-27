@@ -32,21 +32,24 @@ test('FPS usa tiempo real, promedio ponderado y conserva los tirones sin limitar
   assert.equal(metrics.min, 40);
 });
 
-test('resolución adaptable responde a carga sostenida y se recupera lentamente sin exceder límites', () => {
+test('resolución adaptable responde antes a carga severa y recupera efectos antes que píxeles', () => {
   const quality = new AdaptiveResolution(2);
-  for (let i = 0; i < 29; i++) assert.equal(quality.sample(100), false);
+  for (let i = 0; i < 9; i++) assert.equal(quality.sample(100), false);
   assert.equal(quality.ratio, 1.5);
   assert.equal(quality.sample(100), true);
-  assert.equal(quality.ratio, 1.35);
+  assert.equal(quality.ratio, 1.2);
   for (let i = 0; i < 400; i++) quality.sample(100);
   assert.equal(quality.ratio, .75);
+  assert.equal(quality.pressure, 2);
   quality.resetWindow();
   for (let i = 0; i < 700; i++) quality.sample(16);
   assert.equal(quality.ratio, .75);
   for (let i = 0; i < 100; i++) quality.sample(16);
-  assert.ok(quality.ratio > .75);
+  assert.equal(quality.ratio, .75);
+  assert.equal(quality.pressure, 1);
   for (let i = 0; i < 5000; i++) quality.sample(16);
   assert.equal(quality.ratio, 1.5);
+  assert.equal(quality.pressure, 0);
   const lowDpi = new AdaptiveResolution(.5);
   for (let i = 0; i < 100; i++) lowDpi.sample(100);
   assert.equal(lowDpi.ratio, .5);

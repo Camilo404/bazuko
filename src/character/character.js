@@ -456,6 +456,11 @@ export function createCharacter(initial = DEFAULT_LOOK) {
 
   return {
     group: root,
+    ragdollRig: { hips, spine: torso, head,
+      leftArm: arms[0].shoulder, leftForeArm: arms[0].elbow,
+      rightArm: arms[1].shoulder, rightForeArm: arms[1].elbow,
+      leftUpLeg: legs[0].hip, leftLeg: legs[0].knee,
+      rightUpLeg: legs[1].hip, rightLeg: legs[1].knee },
     get look() { return look; },
     setLook(l) {
       look = normalizeLook(l);

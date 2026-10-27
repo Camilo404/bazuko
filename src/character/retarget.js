@@ -55,7 +55,7 @@ function matchRestPose(src, tgtRoot, C) {
  *   mundoDestino(t) = C · mundoOrigen(t) · reposoOrigen⁻¹ · C⁻¹ · reposoDestino
  *   localDestino(t) = mundoPadreDestino(t)⁻¹ · mundoDestino(t)
  */
-export function createRetargeter(srcRoot, tgtRoot) {
+export function createRetargeter(srcRoot, tgtRoot, { preserveHipHeight = false } = {}) {
   const src = bonesOf(srcRoot);
   const tgt = bonesOf(tgtRoot);
   const srcLocalRest = new Map([...src].map(([n, b]) => [n, [b.position.clone(), b.quaternion.clone(), b.scale.clone()]]));
@@ -69,6 +69,12 @@ export function createRetargeter(srcRoot, tgtRoot) {
   const restSrc = new Map([...src].map(([n, b]) => [n, b.getWorldQuaternion(new THREE.Quaternion())]));
   const restTgt = new Map([...tgt].map(([n, b]) => [n, b.getWorldQuaternion(new THREE.Quaternion())]));
   const restLocal = new Map([...tgt].map(([n, b]) => [n, b.quaternion.clone()]));
+  const hipName = [...src.keys()].find(n => /(^|:)Hips$/.test(n) && tgt.has(n));
+  const sourceHip = hipName && src.get(hipName);
+  const targetHip = hipName && tgt.get(hipName);
+  const sourceHipRest = sourceHip?.position.clone();
+  const targetHipRest = targetHip?.position.clone();
+  const heightRatio = sourceHipRest?.y ? targetHipRest.y / sourceHipRest.y : 1;
   const rootParentWorld = new Map();
   for (const [n, b] of tgt) {
     if (!b.parent?.isBone) rootParentWorld.set(n, b.parent.getWorldQuaternion(new THREE.Quaternion()));
@@ -86,16 +92,25 @@ export function createRetargeter(srcRoot, tgtRoot) {
 
   return function retarget(srcClip, fps = 30) {
     const mixer = new THREE.AnimationMixer(srcRoot);
-    mixer.clipAction(srcClip).play();
+    const sampleAction = mixer.clipAction(srcClip);
+    sampleAction.setLoop(THREE.LoopOnce, 1);
+    sampleAction.clampWhenFinished = true;
+    sampleAction.play();
     const frames = Math.max(2, Math.round(srcClip.duration * fps) + 1);
     const times = new Float32Array(frames);
     const values = new Map([...tgt.keys()].map((n) => [n, new Float32Array(frames * 4)]));
+    const hipPositions = preserveHipHeight && sourceHip ? new Float32Array(frames * 3) : null;
     const world = new Map();
 
     for (let f = 0; f < frames; f++) {
       const t = Math.min(srcClip.duration, f / fps);
       times[f] = t;
       mixer.setTime(t);
+      if (hipPositions) {
+        hipPositions.set([targetHipRest.x,
+          targetHipRest.y + (sourceHip.position.y - sourceHipRest.y) * heightRatio,
+          targetHipRest.z], f * 3);
+      }
       srcRoot.updateMatrixWorld(true);
       for (const b of order) {
         const parentW = b.parent?.isBone ? world.get(b.parent.name) : rootParentWorld.get(b.name);
@@ -116,6 +131,7 @@ export function createRetargeter(srcRoot, tgtRoot) {
     restoreSource();
 
     const tracks = [...values].map(([n, v]) => new THREE.QuaternionKeyframeTrack(`${n}.quaternion`, times, v));
+    if (hipPositions) tracks.push(new THREE.VectorKeyframeTrack(`${hipName}.position`, times, hipPositions));
     return new THREE.AnimationClip(srcClip.name, srcClip.duration, tracks);
   };
 }

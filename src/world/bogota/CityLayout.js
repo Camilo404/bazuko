@@ -1,9 +1,16 @@
+import { paintSmallBuilding } from './SmallBuilding.js';
 import { CARRERAS, CALLES, CARACAS, STREET_X, STREET_Z, SIDEWALK_TILES } from './StreetLayout.js';
+import { paintLakePark } from './LakePark.js';
+import { paintGasStation } from './GasStation.js';
+import { paintD69Store } from './D69Store.js';
+import { paintColpatria } from './Colpatria.js';
+import { paintViaductClearance, paintViaductGardens } from './ColpatriaViaduct.js';
+import { paintTerminalEntrance } from './TransitTerminal.js';
 
 export const ORIGINAL_CITY_WIDTH = STREET_X.size;
 export const ORIGINAL_CITY_HEIGHT = STREET_Z.size;
 export const CITY_WIDTH = 120;
-export const CITY_HEIGHT = 111;
+export const CITY_HEIGHT = 161;
 export const CITY_AREA_MULTIPLIER = CITY_WIDTH * CITY_HEIGHT / (ORIGINAL_CITY_WIDTH * ORIGINAL_CITY_HEIGHT);
 export const CITY_CARRERAS = [...CARRERAS, [84, 89, 'Carrera 8'], [106, 111, 'Carrera 6']];
 export const CITY_CALLES = [...CALLES, [72, 77, 'Calle 8'], [94, 99, 'Calle 7']];
@@ -46,7 +53,15 @@ export function expandCity(center) {
       map[z][x]=x === pathX || z === pathZ ? 'plaza' : 'grass';
     }
   }
+  paintLakePark(map);
+  paintGasStation(map);
+  paintD69Store(map);
+  paintColpatria(map);
+  paintViaductClearance(map);
+  paintSmallBuilding(map);
+  paintViaductGardens(map);
   for(let x=0;x<CITY_WIDTH;x++) map[0][x]=map[CITY_HEIGHT-1][x]='wall';
   for(let z=0;z<CITY_HEIGHT;z++) map[z][0]=map[z][CITY_WIDTH-1]='wall';
+  paintTerminalEntrance(map);
   return map;
 }

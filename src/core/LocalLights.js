@@ -7,7 +7,6 @@ export class LocalLights {
     this.scene = scene;
     this.sources = new Map();
     this.candidates = [];
-    this.elapsed = 1;
     this.halos = new LightHalos(scene);
     this.pool = Array.from({ length: count }, () => {
       const light = new THREE.PointLight(0xffffff, 0, 1);
@@ -15,27 +14,47 @@ export class LocalLights {
       scene.add(light);
       return light;
     });
+    this._onAdded = event => this.register(event.child);
+    this._onRemoved = event => this.unregister(event.child);
+    scene.addEventListener('childadded', this._onAdded);
+    scene.addEventListener('childremoved', this._onRemoved);
+    this.refreshSources();
+  }
+
+  register(root, { static: fixed = false } = {}) {
+    root.traverse(light => {
+      if (!light.isPointLight || light.userData.localLightProxy) return;
+      let entry = this.sources.get(light);
+      if (!entry) {
+        entry = { light, mask: light.layers.mask, position: new THREE.Vector3(), score: 0 };
+        this.sources.set(light, entry);
+        light.layers.set(2);
+      }
+      entry.fixed = fixed;
+      light.getWorldPosition(entry.position);
+    });
+  }
+
+  unregister(root) {
+    root.traverse(light => {
+      const entry = this.sources.get(light);
+      if (!entry) return;
+      light.layers.mask = entry.mask;
+      this.sources.delete(light);
+    });
+  }
+
+  /** Llamar tras cambiar luces dentro de una rama ya registrada o sus transformaciones. */
+  refreshSources(options) {
+    this.register(this.scene, options);
+    for (const [light, entry] of this.sources) {
+      let parent = light;
+      while (parent && parent !== this.scene) parent = parent.parent;
+      if (!parent) { light.layers.mask = entry.mask; this.sources.delete(light); }
+    }
   }
 
   update(dt, target, groundHeight, camera = null) {
-    this.elapsed += dt;
-    if (this.elapsed >= 1) {
-      this.elapsed = 0;
-      // También descubre fogones construidos durante la partida.
-      const found = new Set();
-      this.scene.traverse(light => {
-        if (!light.isPointLight || light.userData.localLightProxy) return;
-        found.add(light);
-        if (!this.sources.has(light)) {
-          this.sources.set(light, { light, mask: light.layers.mask, position: new THREE.Vector3(), score: 0 });
-          light.layers.set(2); // fuera de las pasadas normal (0) y silueta (1)
-        }
-      });
-      for (const [light, entry] of this.sources) if (!found.has(light)) {
-        light.layers.mask = entry.mask;
-        this.sources.delete(light);
-      }
-    }
     this.candidates.length = 0;
     for (const entry of this.sources.values()) {
       const light = entry.light;
@@ -43,7 +62,7 @@ export class LocalLights {
       let visible = true;
       for (let node = light; node; node = node.parent) if (!node.visible) { visible = false; break; }
       if (!visible) continue;
-      light.getWorldPosition(entry.position);
+      if (!entry.fixed) light.getWorldPosition(entry.position);
       const distance = entry.position.distanceToSquared(target);
       if (distance > 80 * 80) continue;
       // La llama parpadea, pero no debe intercambiar las luces elegidas en cada oscilación.
@@ -66,6 +85,8 @@ export class LocalLights {
   }
 
   dispose() {
+    this.scene.removeEventListener('childadded', this._onAdded);
+    this.scene.removeEventListener('childremoved', this._onRemoved);
     this.halos.dispose();
     for (const { light, mask } of this.sources.values()) light.layers.mask = mask;
     for (const light of this.pool) this.scene.remove(light);

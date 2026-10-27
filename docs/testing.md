@@ -1,21 +1,38 @@
-# Pruebas de navegador
+# Pruebas
 
-El proyecto usa [Playwright](https://playwright.dev/) para comprobar los flujos básicos del juego en Chromium.
+Las pruebas de navegador se adaptaron del PR [juanagogo/bazuko#4](https://github.com/juanagogo/bazuko/pull/4), commit `2df40da`, de Jonme-Mopri. La corrección asociada renderiza las recetas inmediatamente al abrir fabricación; esto es necesario porque el panel pausa la simulación.
 
-## Preparación
+## Pruebas unitarias y compilación
 
-```bash
-npm install
+```sh
+npm ci
+npm test
+npm run build
+```
+
+## Preparar Chromium
+
+```sh
 npx playwright install chromium
 ```
 
-## Ejecutar
+## Pruebas de navegador
 
-```bash
-npm run test:e2e          # ejecución headless
-npm run test:e2e:headed   # muestra Chromium
-npm run test:e2e:ui       # inspector interactivo de Playwright
-npm run test:report       # abre el último informe HTML
+```sh
+npm run test:e2e
+npm run test:e2e:headed
+npm run test:e2e:ui
+npm run test:report
 ```
 
-La configuración levanta Vite automáticamente en `127.0.0.1:5173`. Los tests limpian `localStorage` antes de cada caso para que una partida guardada no afecte el resultado.
+Playwright inicia su propio Vite en `127.0.0.1:5188`, con puerto estricto y sin reutilizar otro servidor, para verificar esta copia del proyecto. Ejecuta Chromium con un solo worker y WebGL por software para limitar el uso de GPU y memoria. Cada prueba limpia el almacenamiento local de su contexto aislado; no borra la partida de tu navegador habitual.
+
+Los escenarios esperan a que termine la pantalla de carga antes de interactuar. Verifican creación del personaje, talentos, recetas de fabricación, edición de apariencia, ayuda plegable «!», inventario y pausa. Se cierra fabricación antes de editar el personaje para respetar la pausa actual. Se comprueba que Escape cierre un panel sin abrir simultáneamente otro.
+
+Los informes y archivos de fallos se escriben en `playwright-report/` y `test-results/`, excluidos de Git. El informe HTML no se abre automáticamente al terminar. Para comprobar únicamente el descubrimiento de los escenarios, sin iniciar Chromium:
+
+```sh
+node node_modules/@playwright/test/cli.js test --list
+```
+
+La ejecución con renderizado por software sirve para verificar flujos; sus FPS no representan el rendimiento de una GPU real.

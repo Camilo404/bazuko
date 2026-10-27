@@ -21,13 +21,18 @@ mock.module('../src/character/RealisticCharacter.js',{namedExports:{
 }});
 const { Bogota }=await import('../src/world/districts/Bogota.js');
 
-test('la ciudad tiene exactamente 3 veces la superficie y conserva el interior original sin desplazarlo',()=>{
+test('la ciudad añade el parque del lago a la ampliación de tres veces la superficie y conserva el interior original sin desplazarlo',()=>{
   const center=Array.from({length:ORIGINAL_CITY_HEIGHT},(_,z)=>Array.from({length:ORIGINAL_CITY_WIDTH},(_,x)=>
     x===0||z===0||x===ORIGINAL_CITY_WIDTH-1||z===ORIGINAL_CITY_HEIGHT-1?'wall':`original-${x}-${z}`));
   const map=expandCity(center);
-  assert.equal(map.length*map[0].length,3*ORIGINAL_CITY_WIDTH*ORIGINAL_CITY_HEIGHT);
-  assert.equal(CITY_AREA_MULTIPLIER,3);
-  for(let z=1;z<ORIGINAL_CITY_HEIGHT-1;z++) for(let x=1;x<ORIGINAL_CITY_WIDTH-1;x++) assert.equal(map[z][x],center[z][x]);
+  assert.equal(map.length*map[0].length,CITY_WIDTH*CITY_HEIGHT);
+  assert.equal(CITY_AREA_MULTIPLIER, CITY_WIDTH * CITY_HEIGHT / (ORIGINAL_CITY_WIDTH * ORIGINAL_CITY_HEIGHT));
+  assert.ok(CITY_AREA_MULTIPLIER > 3);
+  for(let z=1;z<ORIGINAL_CITY_HEIGHT-1;z++) for(let x=1;x<ORIGINAL_CITY_WIDTH-1;x++) {
+    // La nueva curva del viaducto puede reservar suelo junto al extremo sur de la troncal.
+    if ((z >= 35 && x >= 33 && x <= 66) || (z <= 7 && x >= 27 && x <= 48)) continue;
+    assert.equal(map[z][x],center[z][x]);
+  }
   for(const version of [2,3]) {
     const saved=[141,.04,104];
     assert.deepEqual(migrateStreetPosition(saved,version),saved);
@@ -55,17 +60,30 @@ test('los barrios nuevos son accesibles a pie y los cruces conectan toda la red 
   for(const park of EXTENSION_PARKS) assert.equal(city.map[park.z0+2][park.x0+2],'grass');
   for(const [a,b] of CITY_CARRERAS) assert.equal(b-a+1,6);
   for(const [a,b] of CITY_CALLES) assert.equal(b-a+1,6);
-  for(let x=0;x<CITY_WIDTH;x++) assert.equal(city.map[0][x]+city.map[CITY_HEIGHT-1][x],'wallwall');
+  for(let x=0;x<CITY_WIDTH;x++) {
+    assert.equal(city.map[CITY_HEIGHT-1][x],'wall');
+    assert.equal(city.map[0][x] === 'wall', x < 27 || x > 48);
+  }
   for(let z=0;z<CITY_HEIGHT;z++) assert.equal(city.map[z][0]+city.map[z][CITY_WIDTH-1],'wallwall');
 });
 
 test('el distrito completo construye y actualiza barrios, vendedores, peatones y bus sin perder colisiones',async()=>{
   const scene=new THREE.Scene(),city=new Bogota(),collisions=new CollisionSystem();
   city.build(scene,collisions);
+  assert.equal(city.stationGroup.name, 'Estación Portal del Centro');
+  assert.equal(city.busServices.length, 2);
   try {
     await Promise.all(city.npcs.map(npc=>npc.ready));
     assert.equal(city.npcs.length,72); // 66 peatones y 6 vendedores.
     assert.equal(city.vendors.length,6);
+    assert.equal(city.pigeonFlocks.length, 3);
+    for (const flock of city.pigeonFlocks) {
+      assert.equal(flock.birds.length, 10);
+      for (const bird of flock.birds) {
+        const type = city.map[Math.round(bird.position.z / 2)][Math.round(bird.position.x / 2)];
+        assert.ok(['grass', 'plaza'].includes(type));
+      }
+    }
     assert.equal(city.getTrafficRoutes().length,6);
     let separateMeshes = 0;
     for (const building of city.buildingVisibility.buildings) for (const part of building.parts) {
@@ -80,11 +98,17 @@ test('el distrito completo construye y actualiza barrios, vendedores, peatones y
     assert.ok(collisions.colliders.some(({box})=>box.min.z>ORIGINAL_CITY_HEIGHT*2));
     assert.ok(city.busService.startZ>ORIGINAL_CITY_HEIGHT*2);
     for(const point of Object.values(city.reserved)) assert.ok(city.isWalkableAt(point.x,point.z));
+    assert.deepEqual(city.reserved.bed, { x: 112.98, z: 94.64 });
+    assert.deepEqual(city.reserved.respawn, { x: 112.98, z: 97.84 });
+    assert.deepEqual(city.reserved.spawn, city.reserved.respawn);
     const camera=new THREE.PerspectiveCamera(55,1,.1,500);
     camera.userData.cameraMode='isometric';
     camera.position.set(185,20,120);
     camera.lookAt(170,0,100);
     const before=city.busService.position.z;
+    city.update(.1,new THREE.Vector3(170,0,100),camera);
+    assert.ok(city.busService.position.z < before); // Sale desde el parque, antes de llegar a los cruces urbanos.
+    city.t = 25;
     city.update(.1,new THREE.Vector3(170,0,100),camera);
     assert.ok(city.busService.position.z<before);
     const culling = new FrustumCulling();

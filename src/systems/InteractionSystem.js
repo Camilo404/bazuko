@@ -1,4 +1,4 @@
-import { ITEMS } from '../data/items.js';
+import { ITEMS, itemRarityLabel } from '../data/items.js';
 import {
   INTERACT_RANGE,
   BOOST_DURATION,
@@ -76,6 +76,7 @@ export class InteractionSystem {
   }
 
   update(dt, input, clock) {
+    this.stealPrompt = null;
     // Encontrar target más cercano
     let nearest = null;
     let nearestType = null;
@@ -89,9 +90,9 @@ export class InteractionSystem {
         // Determinar tipo por `kind` o por métodos disponibles
         if (t.kind === 'shop') nearestType = 'shop';
         else if (t.kind === 'cambuche') nearestType = 'cambuche';
-        else if (t.kind === 'recycler') nearestType = 'sell';
         else if (t.kind === 'dog') nearestType = 'dog';
         else if (t.kind === 'cart') nearestType = 'cart';
+        else if (t.kind === 'recycler') nearestType = 'sell';
         else if (typeof t.harvest === 'function') nearestType = 'pickup';
         else if (typeof t.steal === 'function') nearestType = 'car';
         else if (typeof t.sellSubstances === 'function') nearestType = 'dealer';
@@ -135,9 +136,6 @@ export class InteractionSystem {
 
     // === Interacción principal (E) ===
     if (input.consumePress('KeyE') && nearest) {
-      if (typeof document !== 'undefined' && document.pointerLockElement) {
-        try { document.exitPointerLock(); } catch {}
-      }
       switch (nearestType) {
         case 'pickup':
           this._harvestTrash(nearest, false);
@@ -151,14 +149,14 @@ export class InteractionSystem {
         case 'cambuche':
           window.dispatchEvent(new CustomEvent('open-cambuche'));
           break;
-        case 'car':
-          this._stealCar(nearest);
-          break;
         case 'dog':
           this._interactDog(nearest);
           break;
         case 'cart':
           nearest.toggleGrab(this.player, this.inventory);
+          break;
+        case 'car':
+          this._stealCar(nearest);
           break;
         case 'dealer': {
           const hasSubstances = this.inventory.items.some((i) => ITEMS[i.id]?.substance);
@@ -202,7 +200,7 @@ export class InteractionSystem {
         detail: { text: `🐕 ¡Le diste ${ITEMS[foodItem.id]?.name ?? 'comida'} a El Chato! Ahora te acompaña.`, type: 'rare' }
       }));
     } else {
-      dog.pet();
+      if (!dog.pet()) return;
       this.stats.saludMental = Math.min(100, this.stats.saludMental + 5);
       window.dispatchEvent(new CustomEvent('toast', {
         detail: { text: '🐕 Acariciaste a El Chato (+5 salud mental).', type: 'info' }
@@ -224,18 +222,27 @@ export class InteractionSystem {
     this.player.playAction?.('buscar', 0.8);
 
     const added = [];
+    const uncollected = [];
+    let collectedRare = null;
     for (const itemId of result.items) {
       const item = ITEMS[itemId];
-      if (item && this.inventory.add(item)) added.push(item.name);
+      if (item && this.inventory.add(item)) {
+        const rarity = itemRarityLabel(itemId);
+        added.push(`${item.name}${rarity ? ` (${rarity})` : ''}`);
+        if (item.rare || ['rare', 'veryRare'].includes(item.rarity)) collectedRare ??= itemId;
+      } else if (item) uncollected.push(itemId);
     }
+    target.returnUncollected?.(uncollected, result.sorted);
+    if (uncollected.length) window.dispatchEvent(new CustomEvent('toast', {
+      detail: { text: 'Costal sin espacio: los objetos restantes siguen en esta bolsa.', type: 'info' }
+    }));
+    if (!added.length) { this.audio?.play('full'); return; }
 
     this.audio?.play('pickup');
-    if (result.rare) {
+    if (collectedRare) {
       this.audio?.play('treasure');
       this.stats.saludMental = Math.min(100, this.stats.saludMental + MENTAL_RESTORE_RARE);
     }
-    if (added.length === 0) this.audio?.play('full');
-
     // Riesgo de enfermedad
     const diseaseResist = this.talents.getEffect('diseaseResist', 1) * this._origin('diseaseResist');
     const sortDiseaseMult = this.talents.getEffect('sortDiseaseMult', 1);
@@ -244,7 +251,7 @@ export class InteractionSystem {
     this.stats.addXP(XP_PICKUP, this.talents);
 
     window.dispatchEvent(new CustomEvent('pickup', {
-      detail: { added, rare: result.rare, sorted: result.sorted }
+      detail: { added, rare: collectedRare, sorted: result.sorted }
     }));
   }
 
@@ -253,6 +260,10 @@ export class InteractionSystem {
     const caughtMult = this.talents.getEffect('stealCaughtMult', 1);
     const result = target.steal(caughtMult);
     if (!result) return;
+    if (result.items.includes('retrovisor')) {
+      if (target.traffic) this.audio?.playMovingTheft?.(target);
+      else this.audio?.playCarAlarm?.(target);
+    }
 
     const added = [];
     for (const itemId of result.items) {

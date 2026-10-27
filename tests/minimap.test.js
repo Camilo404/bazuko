@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 import { Minimap } from '../src/ui/Minimap.js';
+import * as THREE from 'three';
 
 beforeEach(() => {
   const store = new Map();
@@ -60,4 +61,21 @@ test('Minimap calcula y muestra el punto de interés más cercano', () => {
   map.update(player, 0, pois, 1000);
   assert.match(map.infoEl.textContent, /Cambuche/);
   assert.match(map.infoEl.textContent, /⛺/);
+});
+
+test('el radar usa el frente real de la cámara tanto isométrica como de tercera persona', () => {
+  const map = new Minimap(), camera = new THREE.PerspectiveCamera();
+  let now = 1000;
+  for (const [x, z] of [[0, 10], [10, 0], [12, 12], [-12, -12]]) {
+    camera.position.set(x, 16, z); camera.lookAt(0, 0, 0); camera.updateMatrixWorld();
+    const e = camera.matrixWorld.elements, yaw = Math.atan2(e[8], e[10]);
+    const forward = new THREE.Vector3(); camera.getWorldDirection(forward).setY(0).normalize();
+    const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+    const directions = [[forward, 'Al frente'], [right, 'Derecha'], [forward.clone().negate(), 'Atrás'], [right.clone().negate(), 'Izquierda']];
+    for (const [direction, text] of directions) {
+      map.update({ x: 0, z: 0 }, yaw, [{ name: 'Objetivo', icon: '⛺', x: direction.x * 10, z: direction.z * 10 }], now += 100);
+      assert.ok(map.infoEl.textContent.includes(text), map.infoEl.textContent);
+      assert.ok(map.infoEl.textContent.includes('10m'));
+    }
+  }
 });

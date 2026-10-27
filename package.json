@@ -17,7 +17,6 @@
     "cannon-es": "^0.20.0",
     "howler": "^2.2.4",
     "lucide": "1.50.0",
-    "overpass": "^0.2.2",
     "three": "0.186.1"
   },
   "devDependencies": {

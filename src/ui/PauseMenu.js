@@ -4,7 +4,10 @@ import { el, button } from './dom.js';
 import { cop } from '../utils/money.js';
 
 export function openPauseMenu(game) {
-  if (!game || game._deathPending || game.creator?.isOpen) return;
+  if (!game || game._loading || game._deathPending || game.creator?.isOpen || game.isSleeping || game.player?.isStunned) return;
+  if (game.menu?.isOpen || game.inventoryUI?.isOpen || game.hud?._talentOpen || game.hud?._craftOpen || game.hud?._dealerOpen) return;
+  game.cameraRig?.releaseControls?.();
+  if (game.input) { game.input.keys = {}; game.input.endFrame(); }
   if (typeof document !== 'undefined' && document.pointerLockElement) {
     try { document.exitPointerLock(); } catch { /* sin pointer lock */ }
   }
@@ -125,21 +128,6 @@ export function openPauseMenu(game) {
             game._toggleModel();
             game.menu.refresh();
           }
-        }),
-        button('⛺ Volver al cambuche', {
-          onClick: () => {
-            const district = game.world.active;
-            if (district?.reserved) {
-              game.player.position.set(district.reserved.bed.x, 0, district.reserved.bed.z + 2);
-              game.player.root.position.copy(game.player.position);
-              game.cameraRig._snap = true;
-              game.cameraRig.follow(game.player.position, 0, game.collisions);
-              window.dispatchEvent(new CustomEvent('toast', {
-                detail: { text: '⛺ Regresaste a tu cambuche.', type: 'info' }
-              }));
-              game.menu.close();
-            }
-          }
         })
       )
     );
@@ -159,6 +147,7 @@ export function openPauseMenu(game) {
         el('li', {}, el('kbd', { text: 'T' }), ' — Abrir árbol de talentos.'),
         el('li', {}, el('kbd', { text: 'C' }), ' — Abrir mesa de crafteo.'),
         el('li', {}, el('kbd', { text: 'P' }), ' — Modificar apariencia del personaje.'),
+        el('li', {}, el('kbd', { text: 'I / Tab' }), ' — Inventario y acceso rápido.'),
         el('li', {}, el('kbd', { text: 'N' }), ' — Alternar radar / minimapa urbano.'),
         el('li', {}, el('kbd', { text: 'M' }), ' — Alternar entre modelo 3D realista y liviano.'),
                 el('li', {}, el('kbd', { text: 'R' }), ' — Abrir sintonizador de radio transistor AM/FM.'),

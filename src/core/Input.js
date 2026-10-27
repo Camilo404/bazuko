@@ -7,6 +7,7 @@ export class Input {
 
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', (e) => {
+        if (this.locked) return;
         if (e.target?.closest?.('input, textarea, select, [contenteditable="true"]')) return;
         if (e.code?.startsWith?.('Arrow') || e.code === 'Space') e.preventDefault?.();
         if (!this.keys[e.code]) this.pressedThisFrame.add(e.code);
@@ -20,6 +21,7 @@ export class Input {
       });
 
       window.addEventListener('mousedown', (e) => {
+        if (this.locked) return;
         if (e.target?.closest?.('input, textarea, select, button, [contenteditable="true"], .menu, .creator, #hud, #topbar, #controls-help')) return;
         if (e.button === 0) {
           this.pressedThisFrame.add('Mouse0');
@@ -34,7 +36,7 @@ export class Input {
   }
 
   isDown(code) {
-    return !!this.keys[code];
+    return !this.locked && !!this.keys[code];
   }
 
   /**

@@ -1,11 +1,14 @@
 // src/entities/Pickup.js
 import * as THREE from 'three';
-import { LOOT_COMMON, LOOT_RARE } from '../data/items.js';
+import { ITEMS, LOOT_COMMON, LOOT_RARE } from '../data/items.js';
 import { PICKUP_COOLDOWN, COLORS, SORT_BASE_TIME } from '../utils/constants.js';
+import { createImportedModel, disposeImportedInstance } from '../utils/ImportedModels.js';
 
 export class Pickup {
-  constructor(scene, position) {
+  constructor(scene, position, { modelKind = 'bolsa', cooldown = PICKUP_COOLDOWN } = {}) {
     this.scene = scene;
+    this.modelKind = modelKind;
+    this.refillSeconds = cooldown;
     this.used = false;
     this.cooldown = 0;
     this.sorting = false;
@@ -76,10 +79,23 @@ export class Pickup {
 
     this._boostActive = false;
     this.onRespawn = null;
+    this.guaranteedLoot = [];
+    this._pendingLoot = null;
   }
 
   get position() { return this.group.position; }
   get sortComplete() { return this.sortProgress >= SORT_BASE_TIME; }
+
+  preloadModel() {
+    return this._modelPromise ??= createImportedModel(this.modelKind).then(model => {
+      if (this._disposed) { disposeImportedInstance(model); return; }
+      this.group.remove(this.mesh);
+      this.mesh.geometry.dispose(); this.mesh.material.dispose();
+      this.mesh = model;
+      this.importedModel = model;
+      this.group.add(model);
+    });
+  }
 
   setBoost(active) {
     this._boostActive = active;
@@ -114,7 +130,9 @@ export class Pickup {
 
     const rareChanceMult = talentEffects.rareChanceMult ?? 1;
 
-    const items = [];
+    const pending = this._pendingLoot;
+    this._pendingLoot = null;
+    const items = pending ? [...pending.items] : [...this.guaranteedLoot];
     let rolls;
     let rareChance;
 
@@ -128,24 +146,36 @@ export class Pickup {
     }
     rolls += talentEffects.extraRolls ?? 0;
 
-    for (let i = 0; i < rolls; i++) {
+    for (let i = 0; !pending && i < rolls; i++) {
       items.push(this._weightedPick(LOOT_COMMON));
     }
 
     let rare = null;
-    if (Math.random() < rareChance) {
+    if (!pending && Math.random() < rareChance) {
       rare = this._weightedPick(LOOT_RARE);
       items.push(rare);
     }
+    rare ??= items.find(id => ['rare', 'veryRare'].includes(ITEMS[id]?.rarity) || ITEMS[id]?.rare) ?? null;
 
     this.used = true;
-    this.cooldown = PICKUP_COOLDOWN;
+    this.cooldown = this.refillSeconds;
     this.mesh.visible = false;
     this.marker.visible = false;
     this.aura.visible = false;
     this.stopSorting();
 
-    return { items, rare, sorted };
+    return { items, rare, sorted: pending?.sorted ?? sorted };
+  }
+
+  /** Conserva el contenido que no cabe; recoger de nuevo no vuelve a sortearlo. */
+  returnUncollected(items, sorted = false) {
+    if (!items.length) return;
+    this._pendingLoot = { items: [...items], sorted };
+    this.used = false;
+    this.cooldown = 0;
+    this.mesh.visible = true;
+    this.marker.visible = true;
+    this.aura.visible = true;
   }
 
   update(dt) {
@@ -209,6 +239,8 @@ export class Pickup {
   }
 
   dispose() {
+    this._disposed = true;
+    if (this.importedModel) disposeImportedInstance(this.importedModel);
     this.scene.remove(this.group);
     this.group.traverse((o) => {
       o.geometry?.dispose?.();

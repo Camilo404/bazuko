@@ -12,7 +12,9 @@ function fixture() {
   const game = Object.assign(Object.create(Game.prototype), {
     stats: new StatsSystem(), deathCount: 0, _deathPending: false,
     talents: { getEffect: (key, fallback) => fallback }, clock: { isNight: false },
-    player: { position: new THREE.Vector3(40, 0, 26), root: new THREE.Group() },
+    player: { position: new THREE.Vector3(40, 0, 26), root: new THREE.Group(),
+      receiveVehicleImpact(direction, speed) { this.lastImpact = { direction, speed }; },
+      clearVehicleImpact() { this.lastImpact = null; } },
     world: { active: { reserved: { bed: { x: 89, z: 80 } } } },
     input: { keys: { KeyW: true }, endFrame() {} },
     audio: { updateSteps() {} },
@@ -26,6 +28,46 @@ function fixture() {
   game.inventory.items = [{ id: 'papel', qty: 2 }, { id: 'carton', qty: 3 }];
   return game;
 }
+
+test('un atropello aplica daño proporcional a la velocidad y protege de golpes repetidos por cuadro', () => {
+  const game = fixture(), direction = new THREE.Vector3(1, 0, 0);
+  let messages = 0; window.addEventListener('toast', () => messages++);
+  game._onVehicleImpact({ speed: 6, direction });
+  assert.equal(game.stats.salud, 69);
+  assert.equal(game.player.lastImpact.speed, 6);
+  assert.equal(game.player.lastImpact.direction, direction);
+  game._onVehicleImpact({ speed: 12, direction });
+  assert.equal(game.stats.salud, 69);
+  assert.equal(messages, 1);
+  const slower = fixture(); slower._onVehicleImpact({ speed: 3, direction });
+  assert.ok(slower.stats.salud > game.stats.salud);
+});
+
+test('un atropello grave pausa la muerte y limpia el golpe solo al recuperar en el cambuche', () => {
+  const game = fixture(), position = game.player.position.clone();
+  game._onVehicleImpact({ speed: 12, direction: new THREE.Vector3(1, 0, 0) });
+  assert.equal(game.stats.salud, 0);
+  assert.equal(game._handleDeath(), true);
+  assert.equal(game.menu.options.title, 'Te atropellaron');
+  assert.ok(game.player.position.equals(position));
+  assert.equal(game.deathCount, 1);
+  game._handleDeath(); assert.equal(game.deathCount, 1);
+  game._respawn();
+  assert.equal(game.player.lastImpact, null);
+  assert.equal(game._deathCause, null);
+  assert.ok(game.stats.salud >= 60);
+});
+
+test('la recuperación fatal espera a que termine el vuelo del ragdoll', () => {
+  const game = fixture(); game.stats.salud = 0;
+  game.player.isRagdollActive = true;
+  assert.equal(game._handleDeath(), false);
+  assert.equal(game.menu.isOpen, false);
+  assert.equal(game.deathCount, 0);
+  game.player.isRagdollActive = false;
+  assert.equal(game._handleDeath(), true);
+  assert.equal(game.deathCount, 1);
+});
 
 test('al agotarse la sed, la muerte se pausa sin trasladar al jugador', () => {
   const game = fixture();
@@ -56,12 +98,14 @@ test('solo la recuperación explícita traslada al cambuche una vez y sincroniza
   const game = fixture();
   game._respawn();
   assert.deepEqual(game.player.position.toArray(), [40, 0, 26]);
+  game.world.active.reserved.respawn = { x: 112.98, z: 97.84 };
+  game.world.active.getGroundHeight = () => .08;
   for (const need of NEEDS) game.stats[need] = 0;
   game.diseases.hasAny = true;
   game._handleDeath();
   game._respawn();
   assert.equal(game.paused, false);
-  assert.deepEqual(game.player.position.toArray(), [89, 0, 82]);
+  assert.deepEqual(game.player.position.toArray(), [112.98, .08, 97.84]);
   assert.deepEqual(game.player.root.position, game.player.position);
   assert.deepEqual(game.cameraRig.target, game.player.position);
   assert.equal(game.cameraRig._snap, true);

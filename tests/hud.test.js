@@ -18,6 +18,18 @@ function fixture() {
   });
 }
 
+test('abrir fabricación muestra las recetas inmediatamente aunque el mundo quede en pausa', () => {
+  const hud = fixture(), crafting = {}, inventory = {}, talents = {};
+  hud.craftPanel.classList = { toggle() {} };
+  let rendered = 0, released = 0;
+  window.__game = { crafting, inventory, talents, cameraRig: { releaseControls() { released++; } } };
+  hud.renderCrafting = (...args) => { rendered++; assert.deepEqual(args, [crafting, inventory, talents]); };
+  hud.toggleCraftPanel();
+  assert.equal(hud._craftOpen, true); assert.equal(rendered, 1); assert.equal(released, 1);
+  hud.toggleCraftPanel();
+  assert.equal(hud._craftOpen, false); assert.equal(rendered, 1);
+});
+
 test('avisa antes de agotar la sed y mantiene visible el daño hasta recuperarse', () => {
   const hud = fixture();
   hud.statusEl = { textContent: '', hidden: true };

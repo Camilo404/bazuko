@@ -2,5 +2,7 @@
 /node_modules
 # Build de Vite (se genera con npm run build)
 /dist
-playwright-report/
-test-results/
+# Archivos temporales de desarrollo y comprobación
+/work/
+/playwright-report/
+/test-results/

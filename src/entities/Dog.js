@@ -11,6 +11,11 @@ export class Dog {
     this.time = 0;
     this._barkTimer = 0;
     this._lastBarkTime = -99999;
+    this._petCooldown = 0;
+    this._routeTimer = 0;
+    this._route = [];
+    this._delta = new THREE.Vector3();
+    this.sleeping = false;
 
     this.position = position.clone();
     this.group = new THREE.Group();
@@ -104,8 +109,11 @@ export class Dog {
   }
 
   pet() {
+    if (this._petCooldown > 0) return false;
+    this._petCooldown = 20;
     // Reacciona agitando la cola
     this.time += 2;
+    return true;
   }
 
   bark(reason = '¡Guau!') {
@@ -116,10 +124,13 @@ export class Dog {
     window.dispatchEvent(new CustomEvent('toast', {
       detail: { text: `🐕 El Chato: ${reason}`, type: 'info' }
     }));
+    window.dispatchEvent(new CustomEvent('dog-bark'));
   }
 
   update(dt, playerPosition, pickups = []) {
     this.time += dt;
+    this._petCooldown = Math.max(0, this._petCooldown - dt);
+    if (this.sleeping) return;
 
     // Movimiento de cola
     const tailSpeed = this.isFriend ? 14 : 6;
@@ -144,9 +155,23 @@ export class Dog {
         while (diff < -Math.PI) diff += Math.PI * 2;
         this.group.rotation.y += diff * Math.min(1, 10 * dt);
 
-        const moveDist = followSpeed * dt;
-        this.position.x += (dx / dist) * moveDist;
-        this.position.z += (dz / dist) * moveDist;
+        this._routeTimer -= dt;
+        if (this.navigation && this._routeTimer <= 0) {
+          this._route = this.navigation.route(this.position, playerPosition);
+          this._routeTimer = 1;
+        }
+        while (this._route.length && this.position.distanceTo(this._route[0]) < .18) this._route.shift();
+        const target = this.navigation ? this._route[0] : playerPosition;
+        if (target) {
+          this._delta.copy(target).sub(this.position).setY(0);
+          const remaining = this._delta.length();
+          const moveDist = Math.min(followSpeed * dt, remaining, dist - stopDist);
+          this._delta.multiplyScalar(moveDist / Math.max(.001, remaining));
+          if (this.navigation?.collisions) this.navigation.collisions.resolveMove(this.position, this._delta, .24, this.position);
+          else this.position.add(this._delta);
+          this.group.rotation.y = Math.atan2(this._delta.x, this._delta.z);
+        }
+        this.position.y = this.navigation?.district.getGroundHeight?.(this.position.x, this.position.z) ?? this.position.y;
         this.group.position.copy(this.position);
 
         // Animación de patas al caminar
@@ -169,7 +194,7 @@ export class Dog {
       this._barkTimer += dt;
       if (this._barkTimer > 10) {
         this._barkTimer = 0;
-        const nearLoot = pickups.some((p) => p.position && p.position.distanceTo(this.position) < 8.5);
+        const nearLoot = pickups.some((p) => !p.used && p.position && p.position.distanceTo(this.position) < 8.5);
         if (nearLoot) {
           this.bark('¡Olfatea algo valioso en la basura cercana!');
         }
@@ -183,5 +208,33 @@ export class Dog {
 
   destroy() {
     this.scene.remove(this.group);
+    const geometries = new Set(), materials = new Set();
+    this.group.traverse(object => {
+      if (object.geometry) geometries.add(object.geometry);
+      if (object.material) materials.add(object.material);
+    });
+    for (const geometry of geometries) geometry.dispose();
+    for (const material of materials) material.dispose();
+  }
+
+  resetNear(position) {
+    const nearest = this.navigation?.nearest(position) ?? -1;
+    this.position.copy(nearest >= 0 ? this.navigation.point(nearest) : position);
+    this.group.position.copy(this.position);
+    this._route = []; this._routeTimer = 0;
+  }
+
+  restAt(position) {
+    if (!this.isFriend) return;
+    this.resetNear(position.clone().add(new THREE.Vector3(1, 0, 0)));
+    this.sleeping = true;
+    this.group.scale.y = .55;
+    this.head.rotation.x = -.35;
+  }
+
+  wake() {
+    this.sleeping = false;
+    this.group.scale.y = 1;
+    this.head.rotation.x = 0;
   }
 }
