@@ -1639,10 +1639,26 @@ void Simulation::UpdateTraffic(float dt) {
     constexpr float acceleration = 1.8f;
     constexpr float gap = 1.8f;
     constexpr float probeStep = 0.5f;
-    std::vector<bool> previouslyYielding(m_Traffic.size(), false);
+    constexpr float kStallBeforeForcing = 3.0f;   // s detenido sin semaforo ni peaton antes de forzar el paso
+    constexpr float kForceDuration = 4.0f;        // s que se mantiene el paso forzado (evita avanzar a tirones)
+    constexpr float kConflictHorizon = 3.0f;      // s hacia adelante en que se predice el recorrido de otro carro
+    // Orden total y estable entre carros (semaforo y luego indice): sin ciclos, asi que en cualquier grupo
+    // que se bloquea mutuamente siempre hay uno con derecho de paso que puede avanzar.
     const auto hasPriority = [&](size_t first, size_t second) {
-        if (previouslyYielding[first] != previouslyYielding[second])
-            return static_cast<bool>(previouslyYielding[second]);
+        // Dos carros por el mismo carril y en la misma direccion: el que va adelante tiene la prioridad
+        // (el de atras lo sigue); si no, al fundirse dos rutas cada uno esperaria al otro.
+        {
+            const TrafficVehicle& a = m_Traffic[first];
+            const TrafficVehicle& b = m_Traffic[second];
+            const glm::vec2 direction(a.direction.x, a.direction.z);
+            const glm::vec2 otherDirection(b.direction.x, b.direction.z);
+            if (glm::dot(direction, otherDirection) >= 0.6f) {
+                const glm::vec2 offset(b.position.x - a.position.x, b.position.z - a.position.z);
+                const float along = glm::dot(offset, direction);
+                const float lateral = std::abs(direction.x * offset.y - direction.y * offset.x);
+                if (lateral <= (a.width + b.width) * 0.5f + 0.3f && std::abs(along) > 0.05f) return along < 0.0f;
+            }
+        }
         const auto signalPriority = [&](const TrafficVehicle& vehicle) {
             const glm::vec2 direction(vehicle.direction.x, vehicle.direction.z);
             const size_t axis = std::abs(direction.x) >= std::abs(direction.y) ? 0 : 1;
@@ -1652,15 +1668,11 @@ void Simulation::UpdateTraffic(float dt) {
         const int firstPriority = signalPriority(m_Traffic[first]);
         const int secondPriority = signalPriority(m_Traffic[second]);
         if (firstPriority != secondPriority) return firstPriority > secondPriority;
-        if (std::abs(m_Traffic[first].speed - m_Traffic[second].speed) > 0.1f)
-            return m_Traffic[first].speed > m_Traffic[second].speed;
         return first < second;
     };
     float remaining = std::min(dt, 0.5f);
     while (remaining > 1e-8f) {
         const float stepTime = std::min(remaining, 0.05f);
-        for (size_t index = 0; index < m_Traffic.size(); ++index)
-            previouslyYielding[index] = m_Traffic[index].yieldingForTraffic;
         for (auto& vehicle : m_Traffic) {
             float clearance = std::numeric_limits<float>::infinity();
             bool stoppedForPerson = false;
@@ -1669,6 +1681,24 @@ void Simulation::UpdateTraffic(float dt) {
                 if (&vehicle == &other || vehicle.routeIndex != other.routeIndex) continue;
                 const float routeGap = std::fmod(other.distance - vehicle.distance + routeLength, routeLength);
                 clearance = std::min(clearance, std::max(0.0f, routeGap - (vehicle.length + other.length) * 0.5f - gap));
+            }
+            // Varias rutas comparten tramos de calle: un carro de otra ruta que va por el mismo carril, por delante y en
+            // la misma direccion, tambien es el carro de adelante (si no, se solapan y se quedan esperando).
+            {
+                const glm::vec2 own(vehicle.direction.x, vehicle.direction.z);
+                for (const auto& other : m_Traffic) {
+                    if (&vehicle == &other || vehicle.routeIndex == other.routeIndex) continue;
+                    const glm::vec2 otherDirection(other.direction.x, other.direction.z);
+                    if (glm::dot(own, otherDirection) < 0.6f) continue;
+                    const glm::vec2 offset(other.position.x - vehicle.position.x, other.position.z - vehicle.position.z);
+                    const float along = glm::dot(offset, own);
+                    const float lateral = std::abs(own.x * offset.y - own.y * offset.x);
+                    if (lateral > (vehicle.width + other.width) * 0.5f + 0.3f || along > 60.0f) continue;
+                    const bool ahead = along > 0.05f
+                        || (std::abs(along) <= 0.05f && &vehicle - m_Traffic.data() > &other - m_Traffic.data());
+                    if (!ahead) continue;
+                    clearance = std::min(clearance, std::max(0.0f, along - (vehicle.length + other.length) * 0.5f - gap));
+                }
             }
             const float lookAhead = std::max(5.0f, vehicle.speed * vehicle.speed / (2.0f * braking) + vehicle.speed * 0.2f + 2.0f);
             const float radius = lookAhead + std::hypot(vehicle.length * 0.5f + 0.8f, vehicle.width * 0.5f + 0.55f);
@@ -1691,6 +1721,31 @@ void Simulation::UpdateTraffic(float dt) {
                 }
             }
             const size_t vehicleIndex = static_cast<size_t>(&vehicle - m_Traffic.data());
+            vehicle.waitingAtSignal = std::isfinite(signalDistance) && signalDistance < lookAhead + vehicle.length;
+            // Atascado de verdad (no es semaforo ni peaton): quien tiene derecho de paso atraviesa a los que lo
+            // bloquean en vez de esperar para siempre; el cruce dura un instante y se despeja.
+            if (vehicle.stalledTime > kStallBeforeForcing) vehicle.forcingRemaining = kForceDuration;
+            const bool forceThrough = vehicle.forcingRemaining > 0.0f;
+            // Posicion futura de otro carro (por su propia ruta) dentro de `time` segundos
+            const auto futureBox = [&](const TrafficVehicle& other, float time, glm::vec3& position, glm::vec2& direction) {
+                glm::vec3 futureDirection;
+                size_t futureWaypoint = 0;
+                SampleCircuit(other.route, other.routeCumulative, other.routeLength, other.distance + other.speed * time,
+                              position, futureDirection, futureWaypoint);
+                direction = {futureDirection.x, futureDirection.z};
+            };
+            // Mi cuerpo ya esta en el camino que recorrera `other` en los proximos segundos: debo terminar de
+            // cruzar, no ceder (si cediera, ambos quedarian esperandose).
+            const auto alreadyInPathOf = [&](const TrafficVehicle& other) {
+                for (float time = 0.0f; time <= kConflictHorizon; time += 0.5f) {
+                    glm::vec3 position;
+                    glm::vec2 direction;
+                    futureBox(other, time, position, direction);
+                    if (OrientedBoxesOverlap(vehicle.position, forward, vehicle.length, vehicle.width,
+                                             position, direction, other.length, other.width)) return true;
+                }
+                return false;
+            };
             // Un carro que cruza y ya tiene el cuerpo en el corredor del bus termina de cruzar: si frenara
             // por el bus, ambos quedarian esperandose. El bus frena para el (UpdateBus) y los demas ceden.
             bool committedInBusLane = false;
@@ -1717,15 +1772,32 @@ void Simulation::UpdateTraffic(float dt) {
                         vehicle.position, forward, vehicle.length, vehicle.width,
                         other.position, {other.direction.x, other.direction.z},
                         other.length, other.width);
-                    if (other.yieldingForTraffic && hasPriority(vehicleIndex, otherIndex)) continue;
-                    if (alreadyOverlapping && other.speed <= 0.1f
-                        && hasPriority(vehicleIndex, otherIndex)) continue;
+                    const bool outranks = hasPriority(vehicleIndex, otherIndex);
+                    if (other.yieldingForTraffic && outranks) continue;
+                    if (alreadyOverlapping && other.speed <= 0.1f && outranks) continue;
+                    if (forceThrough && outranks) continue;
                     if (OrientedBoxesOverlap(probePosition, probeForward, vehicle.length, vehicle.width,
                                              other.position, {other.direction.x, other.direction.z},
                                              other.length, other.width)) {
+                        // Ya estoy atravesado en su camino: despejo el cruce; el otro frena porque ve mi cuerpo
+                        if (alreadyInPathOf(other)) continue;
                         clearance = std::min(clearance, std::max(0.0f, ahead - probeStep));
                         blockedByVehicle = true;
                         break;
+                    }
+                    // Cede con tiempo al que tiene prioridad y llegaria al mismo punto: se detiene antes de
+                    // entrar al cruce en vez de quedar atravesado cuando el otro llegue.
+                    if (!outranks && other.speed > 0.5f) {
+                        glm::vec3 futurePosition;
+                        glm::vec2 futureDirection;
+                        futureBox(other, ahead / std::max(vehicle.speed, 2.0f), futurePosition, futureDirection);
+                        if (OrientedBoxesOverlap(probePosition, probeForward, vehicle.length + 0.6f, vehicle.width + 0.4f,
+                                                 futurePosition, futureDirection, other.length, other.width)
+                            && !alreadyInPathOf(other)) {
+                            clearance = std::min(clearance, std::max(0.0f, ahead - probeStep));
+                            blockedByVehicle = true;
+                            break;
+                        }
                     }
                 }
                 if (blockedByVehicle) break;
@@ -1811,6 +1883,9 @@ void Simulation::UpdateTraffic(float dt) {
         for (auto& vehicle : m_Traffic) {
             vehicle.distance = vehicle.nextDistance;
             vehicle.speed = vehicle.nextSpeed;
+            vehicle.forcingRemaining = std::max(0.0f, vehicle.forcingRemaining - stepTime);
+            const bool legitimateStop = vehicle.waitingAtSignal || vehicle.blockedForPerson;
+            vehicle.stalledTime = (vehicle.speed < 0.1f && !legitimateStop) ? vehicle.stalledTime + stepTime : 0.0f;
             vehicle.wheelRotation -= vehicle.speed * stepTime / 0.33f;
             SampleCircuit(vehicle.route, vehicle.routeCumulative, vehicle.routeLength, vehicle.distance,
                           vehicle.position, vehicle.direction, vehicle.nextWaypoint);

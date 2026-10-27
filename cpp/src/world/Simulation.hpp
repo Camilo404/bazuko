@@ -66,6 +66,9 @@ struct TrafficVehicle {
     float nextSpeed = 0.0f;
     bool blockedForPerson = false;
     bool yieldingForTraffic = false;
+    bool waitingAtSignal = false;
+    float forcingRemaining = 0.0f;   // s restantes de paso forzado tras un atasco
+    float stalledTime = 0.0f;   // s seguidos detenido sin semaforo ni peaton
     std::vector<glm::vec3> route;
     std::vector<float> routeCumulative;
     size_t nextWaypoint = 0;
@@ -146,6 +149,7 @@ public:
     bool GetVehicleImpact(const glm::vec3& position, float& speed, glm::vec3& direction) const;
     const std::vector<TrafficVehicle>& GetTrafficVehicles() const { return m_Traffic; }
     size_t GetParkedCarCount() const { return m_ParkedCars.size(); }
+    const std::vector<TrafficVehicle>& GetParkedCars() const { return m_ParkedCars; }
     const glm::vec3& GetBusPosition() const { return m_BusPosition; }
     float GetBusSpeed() const { return m_BusSpeed; }
     void Render(Renderer& renderer, float time, const glm::vec3& focusPosition) const;

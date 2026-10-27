@@ -182,6 +182,21 @@ target_include_directories(bazuko_birds_test PRIVATE src)
 target_link_libraries(bazuko_birds_test PRIVATE glm::glm)
 add_test(NAME bazuko_birds COMMAND bazuko_birds_test)
 
+# Prueba de trafico con la simulacion real (ventana oculta para el contexto GL). No esta en CTest por defecto:
+#   build\Release\bazuko_traffic_test.exe [segundos] [semilla]
+add_executable(bazuko_traffic_test
+    tests/TrafficTest.cpp
+    src/core/Paths.cpp
+    src/renderer/Buffer.cpp src/renderer/VertexArray.cpp src/renderer/Shader.cpp
+    src/renderer/Mesh.cpp src/renderer/Camera.cpp src/renderer/Renderer.cpp
+    src/renderer/Texture.cpp src/renderer/Model.cpp
+    src/world/CityLayout.cpp src/world/Simulation.cpp src/world/BirdFlock.cpp
+    src/world/TextRaster.cpp src/world/SignAtlas.cpp
+)
+target_include_directories(bazuko_traffic_test PRIVATE src third_party/include third_party/glad/include ${BAZUKO_WEBP_INCLUDE_DIR})
+target_compile_definitions(bazuko_traffic_test PRIVATE BAZUKO_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(bazuko_traffic_test PRIVATE glfw glm::glm glad imgui Threads::Threads opusfile assimp ${BAZUKO_WEBP_TARGET} ${CMAKE_DL_LIBS})
+
 add_custom_command(TARGET bazuko POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:bazuko>/assets"
 )
