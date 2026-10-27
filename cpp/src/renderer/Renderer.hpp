@@ -29,6 +29,12 @@ struct alignas(16) LightBlockData {
     float _pad2 = 0.0f;
     glm::vec3 fogColor;
     float fogDensity = 0.012f;
+    // Farolas encendidas cerca del jugador (las mas cercanas): xyz posicion y w alcance; rgb color y w intensidad
+    static constexpr int kMaxLampLights = 32;
+    int lampCount = 0;
+    int _pad3[3] = {0, 0, 0};
+    glm::vec4 lampPosition[kMaxLampLights] = {};
+    glm::vec4 lampColor[kMaxLampLights] = {};
 };
 
 class Renderer {
@@ -58,6 +64,9 @@ public:
     // Humedad del suelo 0..1 (lluvia): oscurece un poco y da brillo de charco a las superficies horizontales
     void SetWetness(float wetness) { m_Wetness = std::clamp(wetness, 0.0f, 1.0f); }
 
+    // Dibuja sin iluminacion (bombillas, ventanas): el color es el propio albedo
+    void SetUnlit(bool unlit) { m_Unlit = unlit; }
+
     Shader& GetDefaultShader() { return *m_DefaultShader; }
     LightBlockData& GetLighting() { return m_LightingData; }
 
@@ -78,6 +87,7 @@ private:
     int m_ScaledHeight = 0;
     int m_ScreenViewport[4] = {0, 0, 0, 0};
     bool m_ScaledActive = false;
+    bool m_Unlit = false;
     float m_Wetness = 0.0f;
     float m_Contrast = 1.0f;
     float m_Saturation = 1.0f;

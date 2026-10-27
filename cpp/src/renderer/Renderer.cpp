@@ -112,6 +112,7 @@ void Renderer::Submit(const Mesh& mesh, const glm::mat4& transform, const glm::v
     m_DefaultShader->SetMat4("uModel", transform);
     m_DefaultShader->SetVec4("uAlbedo", albedo);
     m_DefaultShader->SetInt("uUseTexture", useTexture ? 1 : 0);
+    m_DefaultShader->SetInt("uUnlit", m_Unlit ? 1 : 0);
     m_DefaultShader->SetInt("uAlphaMode", alphaMode);
     m_DefaultShader->SetFloat("uAlphaCutoff", alphaCutoff);
     m_DefaultShader->SetInt("uUseSpecularTexture", specularTexture ? 1 : 0);

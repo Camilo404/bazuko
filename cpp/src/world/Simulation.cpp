@@ -17,6 +17,7 @@ namespace Bazuko {
 namespace {
 
 constexpr size_t kRainDropCount = 350;   // gotas alrededor del jugador, como el original
+constexpr float kDayLengthSeconds = 3600.0f;   // un dia de juego = una hora real, como el original
 
 std::vector<glm::vec3> MakeTrafficCircuit(float left, float right, float top, float bottom) {
     constexpr float radius = 1.0f;
@@ -406,6 +407,8 @@ Simulation::Simulation(const CityLayout& city, uint32_t seed,
     m_CarTaxiSign = Mesh::CreateCube({0.6f, 0.18f, 0.3f}, {1.0f, 0.92f, 0.69f, 1.0f});
     m_StreetLampPole = Mesh::CreateCube({0.10f, 3.2f, 0.10f}, {0.22f, 0.23f, 0.24f, 1.0f});
     m_StreetLampHead = Mesh::CreateCube({0.44f, 0.10f, 0.18f}, {0.88f, 0.76f, 0.48f, 1.0f});
+    m_LampBulb = Mesh::CreateRoundedBox({0.32f, 0.32f, 0.32f}, 0.15f, 3, {1.0f, 1.0f, 1.0f, 1.0f});
+    m_LampHalo = Mesh::CreateRoundedBox({2.2f, 2.2f, 2.2f}, 1.05f, 4, {1.0f, 1.0f, 1.0f, 1.0f});
     m_MissionMarker = Mesh::CreateCube({0.42f, 1.5f, 0.42f}, {0.92f, 0.64f, 0.12f, 1.0f});
     m_DogBody = Mesh::CreateRoundedBox({0.78f, 0.42f, 1.12f}, 0.12f, 3);
     m_DogHead = Mesh::CreateRoundedBox({0.48f, 0.42f, 0.48f}, 0.10f, 3);
@@ -1181,17 +1184,61 @@ bool Simulation::ThrowPoop(const glm::vec3& position, const glm::vec3& direction
     return true;
 }
 
+namespace {
+// Bombilla de una farola: en el extremo del brazo, bajo la luminaria (1,7 m hacia la calle desde el poste)
+glm::vec3 LampBulbPosition(const StreetLamp& lamp) {
+    return lamp.position + glm::vec3(std::cos(lamp.yaw) * 1.7f, 3.92f, -std::sin(lamp.yaw) * 1.7f);
+}
+} // namespace
+
+std::vector<glm::vec4> Simulation::GetNearestLampLights(const glm::vec3& focus, size_t maxCount, float maxDistance) const {
+    std::vector<std::pair<float, glm::vec3>> candidates;
+    for (const StreetLamp& lamp : m_StreetLamps) {
+        const float distance = glm::distance(glm::vec2(lamp.position.x, lamp.position.z), glm::vec2(focus.x, focus.z));
+        if (distance <= maxDistance) candidates.emplace_back(distance, LampBulbPosition(lamp));
+    }
+    const size_t count = std::min(maxCount, candidates.size());
+    std::partial_sort(candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(count), candidates.end(),
+                      [](const auto& a, const auto& b) { return a.first < b.first; });
+    std::vector<glm::vec4> lights;
+    lights.reserve(count);
+    const float lastDistance = count > 0 ? candidates[count - 1].first : 1.0f;
+    const bool full = count == maxCount && candidates.size() > count;   // si sobran farolas, la mas lejana entra y sale suave
+    for (size_t index = 0; index < count; ++index) {
+        const float fade = full ? 1.0f - AtmosphereSmoothstep(0.75f, 1.0f, candidates[index].first / std::max(lastDistance, 1.0f)) : 1.0f;
+        lights.emplace_back(candidates[index].second, fade);
+    }
+    return lights;
+}
+
 void Simulation::Update(float dt, const glm::vec3& playerPosition) {
-    m_Clock = std::fmod(m_Clock + dt / 600.0f, 1.0f);
+    m_Clock = std::fmod(m_Clock + dt / kDayLengthSeconds, 1.0f);
     m_DayProgress = m_Clock;
     m_WeatherRemaining -= dt;
     if (m_WeatherRemaining <= 0.0f) {
-        m_IsRaining = !m_IsRaining;
-        m_WeatherChange = m_IsRaining ? 1 : 2;
+        // despejado -> llovizna (60 %) o neblina (40 %); desde cualquiera de las dos vuelve a despejar
+        const Weather previous = m_Weather;
+        if (previous == Weather::Clear) m_Weather = m_Unit(m_Random) < 0.6f ? Weather::Drizzle : Weather::Mist;
+        else m_Weather = Weather::Clear;
+        m_WeatherChange = m_Weather == Weather::Drizzle ? 1 : m_Weather == Weather::Mist ? 3 : previous == Weather::Drizzle ? 2 : 4;
+        m_RainTarget = m_Weather == Weather::Drizzle ? 0.35f + 0.65f * m_Unit(m_Random) : 0.0f;
+        m_MistTarget = m_Weather == Weather::Mist ? 0.5f + 0.5f * m_Unit(m_Random) : 0.0f;
+        m_RainRetarget = 40.0f + m_Unit(m_Random) * 50.0f;
         m_WeatherRemaining = 150.0f + m_Unit(m_Random) * 150.0f;
     }
-    m_Wetness = m_IsRaining ? std::min(1.0f, m_Wetness + dt * 0.25f) : std::max(0.0f, m_Wetness - dt * 0.04f);
-    if (m_IsRaining) {
+    // mientras llovizna, la intensidad cambia de ritmo cada 40-90 s
+    if (m_Weather == Weather::Drizzle) {
+        m_RainRetarget -= dt;
+        if (m_RainRetarget <= 0.0f) {
+            m_RainTarget = 0.3f + 0.7f * m_Unit(m_Random);
+            m_RainRetarget = 40.0f + m_Unit(m_Random) * 50.0f;
+        }
+    }
+    m_RainIntensity += std::clamp(m_RainTarget - m_RainIntensity, -0.08f * dt, 0.12f * dt);
+    m_Mist += std::clamp(m_MistTarget - m_Mist, -0.02f * dt, 0.03f * dt);
+    m_Wetness = IsRaining() ? std::min(1.0f, m_Wetness + dt * 0.25f * std::min(1.0f, m_RainIntensity * 2.0f))
+                            : std::max(0.0f, m_Wetness - dt * 0.04f);
+    if (IsRaining()) {
         for (auto& drop : m_RainOffsets) {
             drop.y -= 24.0f * dt;
             if (drop.y < 0.0f) {
@@ -2112,18 +2159,30 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
         }
     }
     for (const auto& lamp : m_StreetLamps) {
-        if (m_StreetLampModel) {
-            glm::mat4 transform = glm::translate(glm::mat4(1.0f), lamp.position);
-            transform = glm::rotate(transform, lamp.yaw, {0.0f, 1.0f, 0.0f});
-            m_StreetLampModel->Draw(renderer, transform * m_StreetLampModelFit);
-            continue;
-        }
         glm::mat4 lampRoot = glm::translate(glm::mat4(1.0f), lamp.position);
         lampRoot = glm::rotate(lampRoot, lamp.yaw, {0.0f, 1.0f, 0.0f});
-        glm::mat4 pole = glm::translate(lampRoot, {0.0f, 1.6f, 0.0f});
-        renderer.Submit(*m_StreetLampPole, pole);
-        glm::mat4 head = glm::translate(lampRoot, {0.18f, 3.18f, 0.0f});
-        renderer.Submit(*m_StreetLampHead, head, glm::vec4(1.0f, 0.89f, 0.65f, 1.0f));
+        if (m_StreetLampModel) {
+            m_StreetLampModel->Draw(renderer, lampRoot * m_StreetLampModelFit);
+        } else {
+            renderer.Submit(*m_StreetLampPole, glm::translate(lampRoot, {0.0f, 1.6f, 0.0f}));
+            renderer.Submit(*m_StreetLampHead, glm::translate(lampRoot, {0.18f, 3.18f, 0.0f}), glm::vec4(1.0f, 0.89f, 0.65f, 1.0f));
+        }
+    }
+    // Farolas encendidas: la bombilla y su halo se dibujan en todas las que estan a la vista, aunque su luz sobre el
+    // suelo solo llegue a las mas cercanas
+    if (m_LampGlow > 0.05f) {
+        const float glowRange = 190.0f;
+        renderer.SetUnlit(true);
+        for (const auto& lamp : m_StreetLamps) {
+            const float distance = glm::distance(glm::vec2(lamp.position.x, lamp.position.z), glm::vec2(focusPosition.x, focusPosition.z));
+            if (distance > glowRange) continue;
+            const glm::mat4 bulb = glm::translate(glm::mat4(1.0f), LampBulbPosition(lamp));
+            renderer.Submit(*m_LampBulb, bulb, glm::vec4(1.0f, 0.9f, 0.62f, 1.0f));
+            // el halo es pequeno de cerca (para que no se vea como un bloque) y crece con la distancia
+            const float haloScale = 0.3f + 0.9f * AtmosphereSmoothstep(6.0f, 70.0f, distance);
+            renderer.Submit(*m_LampHalo, glm::scale(bulb, glm::vec3(haloScale)), glm::vec4(1.0f, 0.78f, 0.45f, 0.16f * m_LampGlow), false, false, nullptr, 2);
+        }
+        renderer.SetUnlit(false);
     }
     for (size_t index = 0; index < m_GrassPositions.size(); ++index) {
         const auto& position = m_GrassPositions[index];
@@ -2223,8 +2282,8 @@ void Simulation::Render(Renderer& renderer, float time, const glm::vec3& focusPo
             m_RatModel->Draw(renderer, ratTransform);
         }
     }
-    if (m_IsRaining) {
-        const size_t visibleDrops = m_ReducedWeather ? kRainDropCount / 3 : m_RainOffsets.size();
+    if (IsRaining()) {
+        const size_t visibleDrops = static_cast<size_t>(std::ceil(static_cast<float>(m_ReducedWeather ? kRainDropCount / 3 : m_RainOffsets.size()) * m_RainIntensity));
         for (size_t index = 0; index < visibleDrops; ++index) {
             const glm::vec3 position = focusPosition + m_RainOffsets[index];
             const glm::mat4 drop = glm::translate(glm::mat4(1.0f), position);

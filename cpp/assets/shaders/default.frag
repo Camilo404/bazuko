@@ -22,10 +22,17 @@ layout(std140, binding = 1) uniform LightBlock {
     float _pad2;
     vec3 uFogColor;
     float uFogDensity;
+    int uLampCount;
+    int _pad3a;
+    int _pad3b;
+    int _pad3c;
+    vec4 uLampPosition[32];
+    vec4 uLampColor[32];
 };
 
 uniform vec4 uAlbedo;
 uniform int uUseTexture;
+uniform int uUnlit = 0;   // bombillas: sin iluminacion
 uniform int uAlphaMode;
 uniform float uAlphaCutoff;
 layout(binding = 0) uniform sampler2D uTexture;
@@ -65,6 +72,17 @@ void main() {
     }
 
     vec3 result = (ambient + diffuse) * baseColor.rgb + specular;
+    // farolas encendidas: luz puntual calida con caida suave hasta su alcance
+    for (int i = 0; i < uLampCount; ++i) {
+        const vec3 toLamp = uLampPosition[i].xyz - vFragPos;
+        const float lampDistance = length(toLamp);
+        const float lampRange = uLampPosition[i].w;
+        if (lampDistance >= lampRange) continue;
+        float falloff = 1.0 - lampDistance / lampRange;
+        falloff *= falloff;
+        const float facingLamp = max(dot(norm, toLamp / max(lampDistance, 0.001)), 0.0) * 0.8 + 0.2;
+        result += baseColor.rgb * uLampColor[i].rgb * uLampColor[i].w * falloff * facingLamp;
+    }
     if (uWetness > 0.0) {
         // superficies que miran hacia arriba (calles, andenes): mas oscuras, con brillo del sol y reflejo del cielo
         const float wet = uWetness * smoothstep(0.75, 0.95, norm.y);
@@ -78,6 +96,8 @@ void main() {
     float fogFactor = 1.0 - exp(-dist * uFogDensity);
     fogFactor = clamp(fogFactor, 0.0, 1.0);
     result = mix(result, uFogColor, fogFactor);
+    // bombillas y halos: casi no los apaga la niebla, se ven encendidos desde lejos
+    if (uUnlit == 1) result = mix(baseColor.rgb, uFogColor, fogFactor * 0.25);
 
     if (uContrast != 1.0 || uSaturation != 1.0 || uHueDegrees != 0.0) {
         const vec3 luma = vec3(0.2126, 0.7152, 0.0722);

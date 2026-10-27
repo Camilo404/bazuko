@@ -495,10 +495,12 @@ void AudioManager::SetMuted(bool muted) {
     ma_engine_set_volume(&m_Impl->engine, muted ? 0.0f : m_Impl->masterVolume);
 }
 
-void AudioManager::SetRaining(bool raining) {
-    if (!m_Impl || !m_Impl->ready || m_Impl->raining == raining) return;
-    m_Impl->raining = raining;
+void AudioManager::SetRaining(bool raining, float intensity) {
+    if (!m_Impl || !m_Impl->ready) return;
     auto& sound = m_Impl->sounds[static_cast<size_t>(SoundSlot::Rain)];
+    if (raining && sound.initialized) ma_sound_set_volume(&sound.value, 0.45f * (0.25f + 0.75f * std::clamp(intensity, 0.0f, 1.0f)));
+    if (m_Impl->raining == raining) return;
+    m_Impl->raining = raining;
     if (!sound.initialized) return;
     if (raining) {
         ma_sound_start(&sound.value);

@@ -214,6 +214,12 @@ add_executable(bazuko_radio_test tests/RadioSynthTest.cpp src/audio/RadioSynth.c
 target_include_directories(bazuko_radio_test PRIVATE src)
 add_test(NAME bazuko_radio COMMAND bazuko_radio_test)
 
+# Luz y cielo segun la hora y el clima
+add_executable(bazuko_atmosphere_test tests/AtmosphereTest.cpp)
+target_include_directories(bazuko_atmosphere_test PRIVATE src)
+target_link_libraries(bazuko_atmosphere_test PRIVATE glm::glm)
+add_test(NAME bazuko_atmosphere COMMAND bazuko_atmosphere_test)
+
 # Resolucion adaptativa (calidad efectiva bajo carga)
 add_executable(bazuko_adaptive_test tests/AdaptiveResolutionTest.cpp)
 target_include_directories(bazuko_adaptive_test PRIVATE src)

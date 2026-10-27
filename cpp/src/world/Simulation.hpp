@@ -1,4 +1,5 @@
 #pragma once
+#include "Atmosphere.hpp"
 
 #include "CityLayout.hpp"
 #include "BirdFlock.hpp"
@@ -192,16 +193,30 @@ public:
     void DropPoop(const glm::vec3& position);
     bool ThrowPoop(const glm::vec3& position, const glm::vec3& direction);
     size_t ConsumePoopHitCount() { return std::exchange(m_PoopHitCount, 0); }
+    // Farolas mas cercanas al foco (posicion de la bombilla), para encender solo las que se ven
+    // Cada elemento: posicion de la bombilla (xyz) y atenuacion 0..1 (w) que apaga suavemente la ultima de la lista
+    // para que no aparezcan de golpe al avanzar.
+    std::vector<glm::vec4> GetNearestLampLights(const glm::vec3& focus, size_t maxCount, float maxDistance) const;
+    // 0..1: las bombillas se dibujan encendidas
+    void SetLampGlow(float glow) { m_LampGlow = glow; }
     float GetDayProgress() const { return m_DayProgress; }
-    bool IsRaining() const { return m_IsRaining; }
-    // Humedad 0..1: sube con la llovizna (0,25/s) y se seca despacio (0,04/s); el suelo se ve mojado
+    bool IsRaining() const { return m_RainIntensity > 0.02f; }
+    // Intensidad de la lluvia 0..1: sube y baja despacio, y cambia de ritmo mientras llovizna
+    float GetRainIntensity() const { return m_RainIntensity; }
+    // Niebla baja 0..1 (neblina de los cerros)
+    float GetMist() const { return m_Mist; }
+    // Hora del dia 0..24
+    float GetHour() const { return m_DayProgress * 24.0f; }
+    // Humedad 0..1: sube con la llovizna (hasta 0,25/s) y se seca despacio (0,04/s); el suelo se ve mojado
     float GetWetness() const { return m_ReducedWeather ? 0.0f : m_Wetness; }
-    // Cambio de clima pendiente de avisar: 0 ninguno, 1 empieza la llovizna, 2 cesa (se consume al leerlo)
+    // Cambio de clima pendiente de avisar: 0 ninguno, 1 empieza la llovizna, 2 cesa, 3 llega la neblina,
+    // 4 se disipa (se consume al leerlo)
     int ConsumeWeatherChange() { const int change = m_WeatherChange; m_WeatherChange = 0; return change; }
     // Calidad baja: menos gotas y sin suelo mojado
     void SetReducedWeather(bool reduced) { m_ReducedWeather = reduced; }
     void SetDayProgress(float progress) { m_Clock = std::clamp(progress, 0.0f, 1.0f); m_DayProgress = m_Clock; }
-    bool IsNight() const { return m_DayProgress > 0.78f || m_DayProgress < 0.22f; }
+    // Noche de 20:00 a 6:00, como el original
+    bool IsNight() const { return m_DayProgress >= 20.0f / 24.0f || m_DayProgress < 6.0f / 24.0f; }
     size_t GetPedestrianCount() const { return m_Pedestrians.size(); }
     size_t GetTrafficCount() const { return m_Traffic.size(); }
     size_t GetMissionProgress() const { return m_MissionProgress; }
@@ -354,7 +369,10 @@ private:
     glm::mat4 m_PetModelFit{1.0f};
     std::shared_ptr<Mesh> m_StreetLampPole;
     std::shared_ptr<Mesh> m_StreetLampHead;
+    std::shared_ptr<Mesh> m_LampBulb;
+    std::shared_ptr<Mesh> m_LampHalo;
     std::vector<StreetLamp> m_StreetLamps;
+    float m_LampGlow = 0.0f;
     std::shared_ptr<Mesh> m_DogBody;
     std::shared_ptr<Mesh> m_DogHead;
     std::shared_ptr<Mesh> m_DogSnout;
@@ -403,7 +421,13 @@ private:
     std::vector<Rat> m_Rats;
     std::vector<glm::vec3> m_RainOffsets;
     float m_WeatherRemaining = 180.0f;
-    bool m_IsRaining = true;
+    enum class Weather { Clear, Drizzle, Mist };
+    Weather m_Weather = Weather::Drizzle;   // la partida empieza lloviznando, como el original
+    float m_RainIntensity = 0.7f;
+    float m_RainTarget = 0.7f;
+    float m_RainRetarget = 60.0f;
+    float m_Mist = 0.0f;
+    float m_MistTarget = 0.0f;
     float m_Wetness = 0.6f;   // como el original: la partida empieza lloviznando con el suelo humedo
     int m_WeatherChange = 0;
     bool m_ReducedWeather = false;

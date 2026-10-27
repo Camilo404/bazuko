@@ -16,6 +16,7 @@
 #include "ui/UIManager.hpp"
 #include "game/GameData.hpp"
 #include "world/SafeSpawn.hpp"
+#include "world/Atmosphere.hpp"
 #include "core/AdaptiveResolution.hpp"
 #include "game/Harvest.hpp"
 #include "audio/AudioManager.hpp"
@@ -148,6 +149,8 @@ int main(int argc, char** argv) {
     int level = 1;
     int talentPoints = 0;
     bool bigSack = false;   // Costal grande comprado en la tienda
+    float playerWetness = 0.0f;    // 0 seco .. 1 empapado: la lluvia moja, el tiempo seca; no se guarda
+    float coldCheckTimer = 0.0f;
     bool radioOn = false;          // radio transistor: encendida, volumen propio y bateria (100 % dura unos 40 min)
     float radioVolume = 0.7f;
     float radioBattery = 100.0f;
@@ -789,6 +792,34 @@ int main(int argc, char** argv) {
         needs[2] = std::max(0.0f, needs[2] - (100.0f / 5400.0f) * dtClamped - (isRunning && currentSpeed > 0.0f ? 0.01f * dtClamped : 0.0f));
         needs[4] = std::max(0.0f, needs[4] - (100.0f / 21600.0f) * dtClamped);
         needs[6] = std::max(0.0f, needs[6] - (60.0f / 7200.0f) * dtClamped);
+        // Lluvia: moja al jugador (empapado en ~45 s con lluvia fuerte), lo lava un poco y, si sigue mojado,
+        // puede resfriarse; con el tiempo se seca
+        {
+            const float rain = simulation.GetRainIntensity();
+            const bool wasSoaked = playerWetness >= 0.7f;
+            if (rain > 0.1f) {
+                playerWetness = std::min(1.0f, playerWetness + dtClamped * rain / 45.0f);
+                needs[4] = std::min(100.0f, needs[4] + 0.03f * rain * dtClamped);
+            } else {
+                playerWetness = std::max(0.0f, playerWetness - dtClamped / 120.0f);
+            }
+            if (!wasSoaked && playerWetness >= 0.7f) ui.Notify("Estás empapado por la llovizna. Busca resguardo o te resfriarás.", ToastType::Warn);
+            if (playerWetness >= 0.6f) {
+                coldCheckTimer += dtClamped;
+                if (coldCheckTimer >= 20.0f) {
+                    coldCheckTimer = 0.0f;
+                    const float chance = 0.04f * (simulation.IsNight() ? 1.6f : 1.0f) * talentEffect("diseaseResist")
+                        * characterManager.GetDiseaseResistance();
+                    const bool hasCold = std::any_of(diseases.begin(), diseases.end(), [](const DiseaseState& disease) { return disease.id == "gripe"; });
+                    if (!hasCold && std::uniform_real_distribution<float>(0.0f, 1.0f)(lootRandom) < chance) {
+                        diseases.push_back({"gripe", 45.0f, 0.12f, 0.01f});
+                        ui.Notify("Te resfriaste por la lluvia: tienes gripe.", ToastType::Warn);
+                    }
+                }
+            } else {
+                coldCheckTimer = 0.0f;
+            }
+        }
         float healthDrain = 0.0f;
         float mentalDrain = 0.0f;
         for (auto disease = diseases.begin(); disease != diseases.end();) {
@@ -1283,10 +1314,14 @@ int main(int argc, char** argv) {
         }
         showDeathScreenIfNeeded();
         if (ui.IsDeathScreenOpen()) dt = 0.0f;
-        audio.SetRaining(simulation.IsRaining());
+        audio.SetRaining(simulation.IsRaining(), simulation.GetRainIntensity());
         simulation.SetReducedWeather(graphicsQuality == 0);
-        if (const int weatherChange = simulation.ConsumeWeatherChange(); weatherChange != 0)
-            ui.Notify(weatherChange == 1 ? "Comienza a lloviznar en el centro de Bogotá…" : "La llovizna cesa sobre los cerros orientales.", ToastType::Info);
+        if (const int weatherChange = simulation.ConsumeWeatherChange(); weatherChange != 0) {
+            static const char* const weatherMessages[] = {
+                "", "Comienza a lloviznar en el centro de Bogotá…", "La llovizna cesa sobre los cerros orientales.",
+                "Una neblina baja cubre el centro de la ciudad…", "La neblina se disipa."};
+            ui.Notify(weatherMessages[weatherChange], ToastType::Info);
+        }
         audio.UpdateVehicleAudio(dt, playerPos, simulation, ui.IsPaused());
 
         // 7. Actualizar cámara
@@ -1319,6 +1354,26 @@ int main(int argc, char** argv) {
             ui.SetEffectiveRenderScale(adaptiveResolution.ratio, adaptiveResolution.pressure);
         }
         renderer.SetWetness(simulation.GetWetness());
+        {   // luz y cielo segun la hora y el clima (la calidad baja solo conserva la hora)
+            const bool reducedWeather = graphicsQuality == 0;
+            const Atmosphere atmosphere = ComputeAtmosphere(simulation.GetHour(), reducedWeather ? 0.0f : simulation.GetRainIntensity(), reducedWeather ? 0.0f : simulation.GetMist());
+            LightBlockData& lighting = renderer.GetLighting();
+            lighting.sunColor = atmosphere.sunColor;
+            lighting.ambientColor = atmosphere.ambientColor;
+            lighting.fogColor = atmosphere.fogColor;
+            lighting.fogDensity = atmosphere.fogDensity;
+            // farolas: se encienden solas al oscurecer; solo las mas cercanas aportan luz
+            lighting.lampCount = 0;
+            if (atmosphere.lampPower > 0.01f) {
+                const size_t lampBudget = graphicsQuality == 0 ? 12 : graphicsQuality == 1 ? 20 : static_cast<size_t>(LightBlockData::kMaxLampLights);
+                for (const glm::vec4& lamp : simulation.GetNearestLampLights(playerPos, lampBudget, 110.0f)) {
+                    lighting.lampPosition[lighting.lampCount] = glm::vec4(glm::vec3(lamp), 18.0f);
+                    lighting.lampColor[lighting.lampCount] = glm::vec4(1.0f, 0.78f, 0.45f, 2.4f * atmosphere.lampPower * lamp.w);
+                    ++lighting.lampCount;
+                }
+            }
+            simulation.SetLampGlow(atmosphere.lampPower);
+        }
         renderer.BeginScaledTarget();
         renderer.BeginScene(camera, clock.GetElapsedTime());
 

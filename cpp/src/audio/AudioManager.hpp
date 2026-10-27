@@ -29,7 +29,8 @@ public:
     void SetMuted(bool muted);
     float GetVolume() const;
     void SetVolume(float volume);
-    void SetRaining(bool raining);
+    // El volumen del bucle de lluvia sigue su intensidad (0..1)
+    void SetRaining(bool raining, float intensity = 1.0f);
     void Play(AudioCue cue);
     void PlayCarAlarm(float distance);
     void PlayTheftRemark(float distance);
