@@ -141,7 +141,7 @@ En WSLg se puede girar la cámara arrastrando con un botón del ratón o con las
 - `R`: Abrir o cerrar la radio.
 - `N`: Mostrar u ocultar el radar.
 - `P`: Abrir el creador y personalizador del personaje.
-- `Tab`: Capturar o liberar el cursor; al estar libre, clic izquierdo o derecho lo captura. También se puede girar la cámara arrastrando.
+- `Tab` o `I`: Abrir el inventario (cuadrícula con detalle; `1`–`5` asignan la barra rápida, `Enter` usa, `X` tira). Con el cursor libre, un clic lo captura; también se puede girar la cámara arrastrando.
 - `Flechas`: Girar la cámara; `Rueda del mouse`: acercar o alejar.
 - `F11`: Alternar pantalla completa.
 - `Esc`: Cerrar directamente el menú abierto; desde el menú principal de pausa, continuar jugando.
@@ -159,7 +159,7 @@ En WSLg se puede girar la cámara arrastrando con un botón del ratón o con las
 - También puedes fabricar arma, mochila, curitas y cartón de rifa con `C` si consigues sus materiales.
 - `V`: Alternar entre cámara en Tercera Persona y Vista Isométrica.
 - `Click izquierdo`: Bloquear cursor para mirar alrededor (estilo juego de acción 3D).
-- `Tab`: Bloquear o liberar cursor del mouse.
+- `1`–`5`: Usar el objeto de la barra de acceso rápido.
 - `Rueda del mouse`: Zoom de la cámara.
 - `Esc`: Liberar cursor o salir.
 

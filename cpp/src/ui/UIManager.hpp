@@ -12,6 +12,7 @@
 #include "../world/CityLayout.hpp"
 #include "../world/Simulation.hpp"
 #include "../audio/AudioManager.hpp"
+#include "../core/FrameMetrics.hpp"
 
 struct GLFWwindow;
 
@@ -42,6 +43,17 @@ struct InventoryOption {
     int quantity = 0;
     float weight = 0.0f;
     bool usable = false;
+    std::string description;
+    std::string effects;      // "+40 energía · +15 ánimo"
+    std::string rarityLabel;
+    int hotbarSlot = -1;      // 0..4 si esta en la barra rapida
+};
+
+// Casilla de la barra de acceso rapido (teclas 1-5)
+struct HotbarSlot {
+    std::string id;
+    std::string name;
+    int quantity = 0;
 };
 
 // Producto de una tienda (La Esquinita o un vendedor ambulante)
@@ -90,6 +102,9 @@ struct CambuchePieceOption {
     bool canBuild = false;
 };
 
+// Tipos de aviso del juego web (.loot-toast): el color del borde y del texto indica de que se trata.
+enum class ToastType { Plain, Info, Rare, Sell, Warn, Death };
+
 class UIManager {
 public:
     UIManager(GLFWwindow* window);
@@ -107,6 +122,8 @@ public:
     // `itemKeys` limita los productos (vendedores ambulantes); vacio = toda la tienda.
     void OpenShopMenu(const std::string& title, const std::string& subtitle, const std::vector<std::string>& itemKeys = {});
     void OpenRecyclerMenu();
+    // Nota del desarrollador (pantalla de inicio del juego web); se cierra con Continuar jugando.
+    void OpenDeveloperNote();
     bool IsShopMenuOpen() const { return m_Paused && m_PauseSection == 5; }
     bool IsRecyclerMenuOpen() const { return m_Paused && m_PauseSection == 6; }
     const std::vector<std::string>& ShopFilter() const { return m_ShopFilter; }
@@ -126,6 +143,11 @@ public:
     std::string ConsumeCraftRequest();
     size_t ConsumeInventoryUseRequest();
     size_t ConsumeInventoryDropRequest();
+    bool InventoryDropWasAll() const { return m_InventoryDropAll; }
+    // Barra de acceso rapido: main publica las casillas y recoge las peticiones de uso y de asignacion
+    void SetHotbar(const std::array<HotbarSlot, 5>& slots) { m_Hotbar = slots; }
+    int ConsumeHotbarUseRequest();
+    bool ConsumeHotbarAssign(int& slot, size_t& itemIndex);
     bool ConsumeInventorySortRequest();
     std::string ConsumeTalentUnlockRequest();
     std::string ConsumeDealerPurchaseRequest();
@@ -162,6 +184,8 @@ public:
     bool ConsumeCharacterCreatorRequest();
     void RequestCharacterCreator() { m_CharacterCreatorRequest = true; }
     void SetSaveNotification(const std::string& message);
+    // Aviso apilado en pantalla (2,5 s). Los textos de SetPickupNotification toman el tipo de su contenido.
+    void Notify(const std::string& message, ToastType type = ToastType::Plain);
     void SetPickupNotification(const std::string& message, bool rare = false);
     void RenderQuitScreen(Window& window);
 
@@ -189,9 +213,12 @@ private:
     bool m_CharacterCreatorRequest = false;
     std::string m_SaveNotification;
     float m_SaveNotificationTimer = 0.0f;
-    std::string m_PickupNotification;
-    float m_PickupNotificationTimer = 0.0f;
-    bool m_PickupNotificationRare = false;
+    struct Toast {
+        std::string text;
+        ToastType type = ToastType::Plain;
+        float remaining = 2.5f;
+    };
+    std::vector<Toast> m_Toasts;
     float m_WhisperTimer = 5.0f;
     std::string m_ActiveWhisper;
     float m_ActiveWhisperTimer = 0.0f;
@@ -204,6 +231,13 @@ private:
     std::string m_TalentUnlockRequest;
     std::string m_DealerPurchaseRequest;
     float m_SortProgress = -1.0f;
+    std::array<HotbarSlot, 5> m_Hotbar{};
+    int m_HotbarUseRequest = -1;
+    int m_HotbarAssignSlot = -1;
+    size_t m_HotbarAssignItem = 0;
+    bool m_InventoryDropAll = false;
+    size_t m_InventorySelected = 0;
+    FrameMetrics m_Metrics;
     std::string m_ShopTitle;
     std::string m_ShopSubtitle;
     std::vector<std::string> m_ShopFilter;

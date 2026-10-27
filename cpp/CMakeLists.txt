@@ -199,6 +199,11 @@ target_compile_definitions(bazuko_harvest_test PRIVATE BAZUKO_GAME_DATA_PATH="${
 target_link_libraries(bazuko_harvest_test PRIVATE glm::glm)
 add_test(NAME bazuko_harvest COMMAND bazuko_harvest_test)
 
+# Medidor de FPS del panel de rendimiento
+add_executable(bazuko_framemetrics_test tests/FrameMetricsTest.cpp)
+target_include_directories(bazuko_framemetrics_test PRIVATE src)
+add_test(NAME bazuko_framemetrics COMMAND bazuko_framemetrics_test)
+
 # Prueba de trafico con la simulacion real (ventana oculta para el contexto GL). No esta en CTest por defecto:
 #   build\Release\bazuko_traffic_test.exe [segundos] [semilla]
 add_executable(bazuko_traffic_test

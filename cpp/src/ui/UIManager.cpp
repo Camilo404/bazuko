@@ -235,6 +235,16 @@ void UIManager::OpenShopMenu(const std::string& title, const std::string& subtit
     Input::SetCursorLocked(false);
 }
 
+void UIManager::OpenDeveloperNote() {
+    if (m_DeathScreenOpen) return;
+    m_Paused = true;
+    m_PauseSection = 7;
+    m_RadioMenuOpen = false;
+    m_RadioReturnsToPause = false;
+    m_CraftMenuOpen = false;
+    Input::SetCursorLocked(false);
+}
+
 void UIManager::OpenRecyclerMenu() {
     if (m_DeathScreenOpen) return;
     m_Paused = true;
@@ -306,6 +316,20 @@ size_t UIManager::ConsumeInventoryUseRequest() {
     const size_t request = m_InventoryUseRequest;
     m_InventoryUseRequest = static_cast<size_t>(-1);
     return request;
+}
+
+int UIManager::ConsumeHotbarUseRequest() {
+    const int request = m_HotbarUseRequest;
+    m_HotbarUseRequest = -1;
+    return request;
+}
+
+bool UIManager::ConsumeHotbarAssign(int& slot, size_t& itemIndex) {
+    if (m_HotbarAssignSlot < 0) return false;
+    slot = m_HotbarAssignSlot;
+    itemIndex = m_HotbarAssignItem;
+    m_HotbarAssignSlot = -1;
+    return true;
 }
 
 size_t UIManager::ConsumeInventoryDropRequest() {
@@ -422,10 +446,30 @@ void UIManager::SetSaveNotification(const std::string& message) {
     m_SaveNotificationTimer = 3.5f;
 }
 
+void UIManager::Notify(const std::string& message, ToastType type) {
+    if (message.empty()) return;
+    // El mismo aviso repetido solo reinicia su tiempo
+    for (Toast& toast : m_Toasts) {
+        if (toast.text == message) {
+            toast.remaining = 2.5f;
+            return;
+        }
+    }
+    m_Toasts.push_back({message, type, 2.5f});
+    if (m_Toasts.size() > 5) m_Toasts.erase(m_Toasts.begin());
+}
+
 void UIManager::SetPickupNotification(const std::string& message, bool rare) {
-    m_PickupNotification = message;
-    m_PickupNotificationTimer = 2.5f;
-    m_PickupNotificationRare = rare;
+    const auto has = [&](const char* part) { return message.find(part) != std::string::npos; };
+    ToastType type = ToastType::Plain;
+    if (rare) type = ToastType::Rare;
+    else if (has("enfermaste") || has("Alarma") || has("descubrieron") || has("defendió") || has("Atropell")) type = ToastType::Death;
+    else if (message.rfind("Vendiste", 0) == 0) type = ToastType::Sell;
+    else if (message.rfind("No ", 0) == 0 || message.rfind("Espera", 0) == 0 || has("demasiado") || has("lleno") || has("rechaza")
+             || has("ignoran") || has("Falló") || has("agotado") || has("mínimo")) type = ToastType::Warn;
+    else if (message.rfind("Compraste", 0) == 0 || message.rfind("Construiste", 0) == 0 || has("curó") || has("Dormiste")
+             || has("Entregaste") || has("Misión completa") || has("activada")) type = ToastType::Info;
+    Notify(message, type);
 }
 
 void UIManager::LoadLoadingArtwork(int index) {
@@ -575,10 +619,10 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
         m_SaveNotificationTimer -= (dt > 0.0f ? dt : 0.016f);
         if (m_SaveNotificationTimer <= 0.0f) m_SaveNotification.clear();
     }
-    if (m_PickupNotificationTimer > 0.0f) {
-        m_PickupNotificationTimer -= (dt > 0.0f ? dt : 0.016f);
-        if (m_PickupNotificationTimer <= 0.0f) m_PickupNotification.clear();
-    }
+    for (Toast& toast : m_Toasts) toast.remaining -= (dt > 0.0f ? dt : 0.016f);
+    std::erase_if(m_Toasts, [](const Toast& toast) { return toast.remaining <= 0.0f; });
+    // Rendimiento: el intervalo real entre cuadros, aunque la simulacion limite su dt
+    m_Metrics.Sample(ImGui::GetTime() * 1000.0, !m_Paused);
     static const char* needNames[] = {"Hambre", "Sed", "Energia", "Salud", "Higiene", "Animo", "Vicio"};
     static const ImVec4 needColors[] = {
         {0.82f, 0.62f, 0.12f, 1.0f}, {0.20f, 0.48f, 0.88f, 1.0f},
@@ -618,18 +662,33 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
         return;
     }
 
-    if (!m_Paused && !m_PickupNotification.empty() && m_PickupNotificationTimer > 0.0f) {
-        const float alpha = std::clamp(m_PickupNotificationTimer / 0.5f, 0.0f, 1.0f);
-        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f,
-                                      ImGui::GetIO().DisplaySize.y * 0.78f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-        ImGui::SetNextWindowBgAlpha(0.82f * alpha);
-        if (ImGui::Begin("PickupNotification", nullptr, hudFlags | ImGuiWindowFlags_NoInputs)) {
-            const ImVec4 color = m_PickupNotificationRare
-                ? ImVec4(1.0f, 0.78f, 0.25f, alpha)
-                : ImVec4(0.94f, 0.94f, 0.90f, alpha);
-            ImGui::TextColored(color, "%s", m_PickupNotification.c_str());
+    if (!m_Paused && !m_Toasts.empty()) {
+        // Avisos apilados a 40 % de la altura, con borde de color segun el tipo (.loot-toast del juego web)
+        const SignUI::Fonts& toastFonts = SignUI::GetFonts();
+        ImDrawList* toastDraw = ImGui::GetForegroundDrawList();
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        float y = display.y * 0.40f;
+        for (const Toast& toast : m_Toasts) {
+            const float alpha = std::clamp(toast.remaining / 0.5f, 0.0f, 1.0f);
+            ImU32 accent = IM_COL32(102, 102, 102, 255);
+            ImU32 text = IM_COL32(221, 221, 221, 255);
+            switch (toast.type) {
+            case ToastType::Rare: accent = text = IM_COL32(201, 162, 39, 255); break;
+            case ToastType::Sell: accent = text = IM_COL32(42, 183, 202, 255); break;
+            case ToastType::Warn: accent = text = IM_COL32(208, 160, 32, 255); break;
+            case ToastType::Info: accent = text = IM_COL32(39, 174, 96, 255); break;
+            case ToastType::Death: accent = text = IM_COL32(192, 57, 43, 255); break;
+            case ToastType::Plain: break;
+            }
+            const auto fade = [&](ImU32 color) { return (color & 0x00FFFFFF) | (static_cast<ImU32>(((color >> 24) & 0xFF) * alpha) << 24); };
+            const ImVec2 size = toastFonts.mono14->CalcTextSizeA(14.0f, display.x * 0.7f, 0.0f, toast.text.c_str());
+            const ImVec2 min((display.x - size.x) * 0.5f - 16.0f, y);
+            const ImVec2 max((display.x + size.x) * 0.5f + 16.0f, y + size.y + 16.0f);
+            toastDraw->AddRectFilled(min, max, fade(IM_COL32(0, 0, 0, 217)));
+            toastDraw->AddRectFilled(min, ImVec2(min.x + 3.0f, max.y), fade(accent));
+            toastDraw->AddText(toastFonts.mono14, 14.0f, ImVec2(min.x + 16.0f, y + 8.0f), fade(text), toast.text.c_str(), nullptr, display.x * 0.7f);
+            y = max.y + 6.0f;
         }
-        ImGui::End();
     }
 
     if (m_CraftMenuOpen && !m_Paused) {
@@ -710,6 +769,10 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
             pauseTitle = m_ShopTitle;
             pauseSubtitle = m_ShopSubtitle;
             pauseIcon = Icon::Bag;
+        } else if (m_PauseSection == 7) {
+            pauseTitle = "Nota del desarrollador";
+            pauseSubtitle = "Colaboración abierta";
+            pauseIcon = Icon::Book;
         } else if (m_PauseSection == 6) {
             pauseTitle = "Recicladora El Progreso";
             pauseSubtitle = "Pagan de contado. Comida, remedios y sustancias no se reciben.";
@@ -739,7 +802,8 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
         // ancho de la columna derecha de una fila: cantidad + botones
         const auto rowRight = [](float contentWidth) { return ImGui::GetWindowWidth() - 10.0f - contentWidth; };
         bool closeRequested = false;
-        if (SignUI::BeginMenu(pauseTitle.c_str(), pauseTitle.c_str(), pauseSubtitle.c_str(), pauseIcon, &closeRequested)) {
+        if (SignUI::BeginMenu(pauseTitle.c_str(), pauseTitle.c_str(), pauseSubtitle.c_str(), pauseIcon, &closeRequested,
+                               560.0f, m_PauseSection == 7 ? 312.0f : 680.0f)) {
             if (m_RadioMenuOpen) {
                 ImGui::PushStyleColor(ImGuiCol_Text, blueText);
                 ImGui::TextWrapped("Selecciona una emisora. La reproducción de audio en línea se conectará en una etapa posterior.");
@@ -782,38 +846,105 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                     ImGui::TextWrapped("El costal está vacío. Rebusca en las bolsas para encontrar objetos.");
                     ImGui::PopStyleColor();
                 } else {
-                    SignUI::FlexReset();
-                    if (SignUI::Button("Ordenar por nombre", Icon::Book)) m_InventorySortRequest = true;
-                    ImGui::Spacing();
-                    int rowIndex = 0;
-                    for (const auto& item : inventoryOptions) {
-                        ImGui::PushID(static_cast<int>(item.itemIndex));
-                        if (SignUI::BeginRow("fila", rowIndex++)) {
-                            const float useWidth = SignUI::RowButtonWidth("Usar");
-                            const float dropWidth = SignUI::RowButtonWidth("Soltar");
-                            const float cluster = 46.0f + useWidth + dropWidth + 16.0f;
-                            const float rowTop = SignUI::RowBegin();
-                            ImGui::PushFont(fonts.monoBold14);
-                            ImGui::Text("%s", item.name.c_str());
-                            ImGui::PopFont();
-                            ImGui::SameLine(rowRight(cluster));
-                            ImGui::SetCursorPosY(rowTop + 7.0f);
-                            ImGui::TextColored(ImVec4(0.96f, 0.77f, 0.0f, 1.0f), "x%d", item.quantity);
-                            SignUI::RowCluster(rowTop, rowRight(useWidth + dropWidth + 8.0f));
-                            if (SignUI::RowButton("Usar", item.usable, true)) m_InventoryUseRequest = item.itemIndex;
-                            ImGui::SameLine(0.0f, 8.0f);
-                            if (SignUI::RowButton("Soltar")) m_InventoryDropRequest = item.itemIndex;
-                            SignUI::RowBelow(rowTop);
-                            ImGui::PushStyleColor(ImGuiCol_Text, blueText);
-                            ImGui::Text("%.1f kg c/u", item.weight);
-                            ImGui::PopStyleColor();
-                        }
-                        SignUI::EndRow();
-                        ImGui::PopID();
+                    const size_t count = inventoryOptions.size();
+                    constexpr int columns = 5;
+                    constexpr float slotSize = 56.0f;
+                    constexpr float slotGap = 6.0f;
+                    if (m_InventorySelected >= count) m_InventorySelected = count - 1;
+                    // Teclado: flechas o WASD mueven, Enter usa, X o Supr tiran (Mayús: todo), 1-5 asignan la barra rápida
+                    const auto pressed = [](ImGuiKey a, ImGuiKey b) { return ImGui::IsKeyPressed(a, false) || ImGui::IsKeyPressed(b, false); };
+                    if (pressed(ImGuiKey_RightArrow, ImGuiKey_D)) m_InventorySelected = std::min(count - 1, m_InventorySelected + 1);
+                    if (pressed(ImGuiKey_LeftArrow, ImGuiKey_A) && m_InventorySelected > 0) --m_InventorySelected;
+                    if (pressed(ImGuiKey_DownArrow, ImGuiKey_S) && m_InventorySelected + columns < count) m_InventorySelected += columns;
+                    if (pressed(ImGuiKey_UpArrow, ImGuiKey_W) && m_InventorySelected >= static_cast<size_t>(columns)) m_InventorySelected -= columns;
+                    const InventoryOption& chosen = inventoryOptions[m_InventorySelected];
+                    if (pressed(ImGuiKey_Enter, ImGuiKey_KeypadEnter) && chosen.usable) m_InventoryUseRequest = chosen.itemIndex;
+                    if (pressed(ImGuiKey_X, ImGuiKey_Delete)) {
+                        m_InventoryDropRequest = chosen.itemIndex;
+                        m_InventoryDropAll = ImGui::GetIO().KeyShift;
                     }
+                    for (int slot = 0; slot < 5; ++slot) {
+                        if (ImGui::IsKeyPressed(static_cast<ImGuiKey>(ImGuiKey_1 + slot), false) && chosen.usable) {
+                            m_HotbarAssignSlot = slot;
+                            m_HotbarAssignItem = chosen.itemIndex;
+                        }
+                    }
+
+                    const ImVec2 base = ImGui::GetCursorScreenPos();
+                    const float totalWidth = ImGui::GetContentRegionAvail().x;
+                    const float gridWidth = columns * slotSize + (columns - 1) * slotGap;
+                    ImDrawList* draw = ImGui::GetWindowDrawList();
+                    const size_t slotCount = std::max<size_t>(20, ((count + columns - 1) / columns) * columns);
+                    for (size_t index = 0; index < slotCount; ++index) {
+                        const ImVec2 min(base.x + static_cast<float>(index % columns) * (slotSize + slotGap),
+                                         base.y + static_cast<float>(index / columns) * (slotSize + slotGap));
+                        const ImVec2 max(min.x + slotSize, min.y + slotSize);
+                        const bool filled = index < count;
+                        ImGui::SetCursorScreenPos(min);
+                        ImGui::PushID(static_cast<int>(index));
+                        if (ImGui::InvisibleButton("##casilla", ImVec2(slotSize, slotSize)) && filled) m_InventorySelected = index;
+                        if (filled && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0) && inventoryOptions[index].usable)
+                            m_InventoryUseRequest = inventoryOptions[index].itemIndex;
+                        const bool hovered = ImGui::IsItemHovered();
+                        ImGui::PopID();
+                        const bool selected = filled && index == m_InventorySelected;
+                        draw->AddRectFilled(min, max, hovered ? IM_COL32(26, 44, 72, 245) : IM_COL32(14, 24, 40, 235), 6.0f);
+                        draw->AddRect(min, max, selected ? IM_COL32(246, 196, 0, 255) : IM_COL32(74, 100, 140, 200), 6.0f, 0, selected ? 2.5f : 1.0f);
+                        if (!filled) continue;
+                        const InventoryOption& slotItem = inventoryOptions[index];
+                        draw->PushClipRect(ImVec2(min.x + 3.0f, min.y + 3.0f), ImVec2(max.x - 3.0f, max.y - 14.0f), true);
+                        draw->AddText(fonts.mono11, 11.0f, ImVec2(min.x + 5.0f, min.y + 14.0f), IM_COL32(230, 236, 246, 255),
+                                      slotItem.name.c_str(), nullptr, slotSize - 10.0f);
+                        draw->PopClipRect();
+                        char amount[16];
+                        std::snprintf(amount, sizeof(amount), "x%d", slotItem.quantity);
+                        const float amountWidth = fonts.monoBold12->CalcTextSizeA(12.0f, FLT_MAX, 0.0f, amount).x;
+                        draw->AddText(fonts.monoBold12, 12.0f, ImVec2(max.x - amountWidth - 5.0f, max.y - 15.0f), IM_COL32(246, 196, 0, 255), amount);
+                        if (slotItem.hotbarSlot >= 0) {
+                            char key[4];
+                            std::snprintf(key, sizeof(key), "%d", slotItem.hotbarSlot + 1);
+                            draw->AddRectFilled(ImVec2(min.x + 3.0f, min.y + 3.0f), ImVec2(min.x + 15.0f, min.y + 16.0f), IM_COL32(246, 196, 0, 255), 3.0f);
+                            draw->AddText(fonts.monoBold12, 12.0f, ImVec2(min.x + 6.0f, min.y + 2.0f), IM_COL32(14, 15, 18, 255), key);
+                        }
+                    }
+                    const float gridHeight = static_cast<float>(slotCount / columns) * (slotSize + slotGap);
+
+                    // Detalle del objeto seleccionado
+                    const float detailX = base.x + gridWidth + 16.0f;
+                    const float detailWidth = std::max(120.0f, base.x + totalWidth - detailX);
+                    ImGui::SetCursorScreenPos(ImVec2(detailX, base.y));
+                    ImGui::BeginGroup();
+                    ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + detailWidth);
+                    ImGui::PushFont(fonts.monoBold14);
+                    ImGui::TextUnformatted(chosen.name.c_str());
+                    ImGui::PopFont();
+                    if (!chosen.rarityLabel.empty()) ImGui::TextColored(gold, "%s", chosen.rarityLabel.c_str());
+                    ImGui::PushStyleColor(ImGuiCol_Text, blueText);
+                    ImGui::TextWrapped("%s", chosen.description.c_str());
+                    if (!chosen.effects.empty()) ImGui::TextWrapped("%s", chosen.effects.c_str());
+                    ImGui::Text("%.1f kg c/u · %.1f kg", chosen.weight, chosen.weight * static_cast<float>(chosen.quantity));
+                    ImGui::PopStyleColor();
+                    ImGui::PopTextWrapPos();
+                    ImGui::Spacing();
+                    SignUI::FlexReset();
+                    if (SignUI::Button("Usar", Icon::None, false, false) && chosen.usable) m_InventoryUseRequest = chosen.itemIndex;
+                    if (SignUI::Button("Tirar 1")) { m_InventoryDropRequest = chosen.itemIndex; m_InventoryDropAll = false; }
+                    if (SignUI::Button("Tirar todo")) { m_InventoryDropRequest = chosen.itemIndex; m_InventoryDropAll = true; }
+                    if (SignUI::Button("Ordenar", Icon::Book)) m_InventorySortRequest = true;
+                    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.78f, 0.84f, 0.95f, 0.65f));
+                    ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + detailWidth);
+                    ImGui::TextWrapped(chosen.usable ? "Acceso rápido: pulsa 1-5 para asignar. Enter usa; X tira (Mayús: todo)."
+                                                       : "Este objeto no se puede usar; X lo tira (Mayús: todo).");
+                    ImGui::PopTextWrapPos();
+                    ImGui::PopStyleColor();
+                    ImGui::EndGroup();
+                    ImGui::SetCursorScreenPos(ImVec2(base.x, base.y + std::max(gridHeight, ImGui::GetItemRectSize().y)));
                 }
                 SignUI::BeginFooter();
                 if (SignUI::PrimaryButton("Cerrar inventario")) TogglePause();
+                ImGui::SameLine(0.0f, 16.0f);
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 11.0f);
+                ImGui::TextColored(blueText, "Peso %.1f / %.0f kg", inventoryWeight, inventoryCapacity);
             } else if (m_PauseSection == 2) {
                 ImGui::PushStyleColor(ImGuiCol_Text, blueText);
                 ImGui::TextWrapped("Invierte puntos ganados al subir de nivel. Cada talento puede desbloquearse una sola vez.");
@@ -912,6 +1043,25 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                 }
                 SignUI::BeginFooter();
                 if (SignUI::PrimaryButton("Cerrar")) TogglePause();
+            } else if (m_PauseSection == 7) {
+                // Misma nota que muestra el juego web al iniciar (los creditos siguen ocultos alli)
+                ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 12.0f));
+                ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0.20f));
+                ImGui::BeginChild("solicitud", ImVec2(0, 0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar);
+                ImGui::PopStyleColor();
+                ImGui::PopStyleVar();
+                const ImVec2 start = ImGui::GetWindowPos();
+                ImGui::GetWindowDrawList()->AddRectFilled(start, ImVec2(start.x + 3.0f, start.y + ImGui::GetWindowHeight()), IM_COL32(255, 223, 133, 255));
+                ImGui::PushFont(fonts.monoBold14);
+                ImGui::TextColored(ImVec4(1.0f, 0.875f, 0.52f, 1.0f), "Hagamos visibles las tareas pendientes");
+                ImGui::PopFont();
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1, 1, 1, 1));
+                ImGui::TextWrapped("A quienes mantienen y colaboran en el proyecto: por favor, publiquen las funcionalidades que se deben desarrollar como issues abiertos al público, indicando qué se necesita y su estado. Así cualquiera podrá conocer las tareas, proponer ideas y colaborar sin duplicar esfuerzos.");
+                ImGui::PopStyleColor();
+                ImGui::TextColored(ImVec4(1.0f, 0.875f, 0.52f, 1.0f), "github.com/juanagogo/bazuko/issues");
+                ImGui::EndChild();
+                SignUI::BeginFooter();
+                if (SignUI::PrimaryButton("Continuar jugando")) TogglePause();
             } else if (m_PauseSection == 5) {
                 int rowIndex = 0;
                 for (const ShopOption& option : m_ShopOptions) {
@@ -1088,7 +1238,8 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                         {"F", "Entregar reciclables de la misión en la recicladora."},
                         {"B / L", "Pedir limosna a peatones."},
                         {"Z / X", "Hacer popo / lanzar un mojón."},
-                        {"I", "Inventario y acceso rápido."},
+                        {"I / Tab", "Inventario: cuadrícula, detalle y tirar objetos."},
+                        {"1-5", "Usar el objeto de la barra rápida (se asigna en el inventario)."},
                         {"T", "Abrir árbol de talentos."},
                         {"O", "Ficha de El Chato."},
                         {"C", "Abrir mesa de crafteo."},
@@ -1337,7 +1488,7 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
         if (m_RadarVisible) {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
             ImGui::SetNextWindowPos(ImVec2(panelLeft, 18.0f), ImGuiCond_Always);
-            ImGui::SetNextWindowSize(ImVec2(panelWidth, 182.0f), ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2(panelWidth, 196.0f), ImGuiCond_Always);
             ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.03f, 0.06f, 0.09f, 0.86f));
             ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.33f, 0.47f, 0.42f, 0.75f));
             if (ImGui::Begin("Radar Bogota [N]", nullptr, (hudFlags & ~ImGuiWindowFlags_AlwaysAutoResize) | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoInputs)) {
@@ -1381,6 +1532,29 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                 for (const auto& pickup : simulation.GetPickups()) marker(pickup.position, 2.0f, IM_COL32(248, 204, 78, 255));
                 if (!simulation.IsMissionComplete()) marker(simulation.GetMissionNpcPosition(), 3.0f, IM_COL32(237, 84, 72, 255));
                 marker(simulation.GetDogPosition(), 2.5f, IM_COL32(117, 184, 255, 255));
+                struct Place { const char* name; glm::vec3 position; ImU32 color; };
+                const Place places[] = {
+                    {"Cambuche", simulation.GetCambuchePosition(), IM_COL32(255, 209, 102, 255)},
+                    {"Recicladora", simulation.GetRecyclerPosition(), IM_COL32(42, 183, 202, 255)},
+                    {"Dealer", simulation.GetDealerPosition(), IM_COL32(155, 89, 182, 255)},
+                };
+                const Place* nearestPlace = nullptr;
+                float nearestPlaceDistance = 1.0e9f;
+                for (const Place& place : places) {
+                    const float placeDistance = glm::distance(glm::vec2(playerPos.x, playerPos.z), glm::vec2(place.position.x, place.position.z));
+                    if (placeDistance < nearestPlaceDistance) {
+                        nearestPlaceDistance = placeDistance;
+                        nearestPlace = &place;
+                    }
+                    glm::vec2 offset((place.position.x - playerPos.x) / range, (place.position.z - playerPos.z) / range);
+                    const float offsetLength = glm::length(offset);
+                    const bool outside = offsetLength > 0.94f;
+                    if (outside) offset *= 0.94f / offsetLength;
+                    const ImVec2 at(center.x + offset.x * radius, center.y + offset.y * radius);
+                    const float size = outside ? 3.5f : 5.0f;
+                    draw->AddQuadFilled(ImVec2(at.x, at.y - size), ImVec2(at.x + size, at.y), ImVec2(at.x, at.y + size), ImVec2(at.x - size, at.y), place.color);
+                    draw->AddQuad(ImVec2(at.x, at.y - size), ImVec2(at.x + size, at.y), ImVec2(at.x, at.y + size), ImVec2(at.x - size, at.y), IM_COL32(0, 0, 0, 200), 1.0f);
+                }
                 draw->AddCircleFilled(center, 4.0f, IM_COL32(49, 220, 115, 255));
                 draw->AddCircle(center, 7.0f, IM_COL32(12, 38, 24, 255));
                 const ImU32 compassColor = IM_COL32(210, 216, 228, 200);
@@ -1391,6 +1565,11 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                 char info[64];
                 std::snprintf(info, sizeof(info), "El Chato: %.0f m", glm::distance(playerPos, simulation.GetDogPosition()));
                 draw->AddText(fonts.mono11, 10.0f, ImVec2(origin.x + 10.0f, origin.y + 28.0f + diameter + 8.0f), IM_COL32(238, 214, 136, 255), info);
+                if (nearestPlace) {
+                    char placeInfo[64];
+                    std::snprintf(placeInfo, sizeof(placeInfo), "%s: %.0f m", nearestPlace->name, nearestPlaceDistance);
+                    draw->AddText(fonts.mono11, 10.0f, ImVec2(origin.x + 10.0f, origin.y + 28.0f + diameter + 20.0f), IM_COL32(238, 214, 136, 255), placeInfo);
+                }
             }
             ImGui::End();
             ImGui::PopStyleColor(2);
@@ -1399,13 +1578,13 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
 
         // Costal: lista de objetos y peso
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
-        ImGui::SetNextWindowPos(ImVec2(display.x - 16.0f, 208.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+        ImGui::SetNextWindowPos(ImVec2(display.x - 16.0f, 222.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.60f));
         ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
         if (ImGui::Begin("Inventario", nullptr, hudFlags | ImGuiWindowFlags_NoInputs)) {
             ImDrawList* draw = ImGui::GetWindowDrawList();
             const float width = panelWidth - 16.0f;
-            const size_t maxRows = static_cast<size_t>(std::max(3.0f, (display.y - 208.0f - 80.0f) / 19.0f));
+            const size_t maxRows = static_cast<size_t>(std::max(3.0f, (display.y - 222.0f - 80.0f) / 19.0f));
             if (inventoryOptions.empty()) {
                 ImGui::TextDisabled("Costal vacío");
                 ImGui::Dummy(ImVec2(width, 1.0f));
@@ -1414,7 +1593,6 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
             for (const auto& item : inventoryOptions) {
                 if (shown++ >= maxRows) break;
                 const ImVec2 at = ImGui::GetCursorScreenPos();
-                draw->AddText(fonts.mono12, 12.0f, ImVec2(at.x, at.y + 1.0f), IM_COL32(204, 204, 204, 255), item.name.c_str());
                 char amount[24];
                 std::snprintf(amount, sizeof(amount), "x%d", item.quantity);
                 float right = at.x + width;
@@ -1425,6 +1603,9 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                 }
                 const float amountWidth = fonts.mono12->CalcTextSizeA(12.0f, FLT_MAX, 0.0f, amount).x;
                 draw->AddText(fonts.mono12, 12.0f, ImVec2(right - amountWidth, at.y + 1.0f), IM_COL32(201, 162, 39, 255), amount);
+                draw->PushClipRect(at, ImVec2(right - amountWidth - 6.0f, at.y + 18.0f), true);
+                draw->AddText(fonts.mono12, 12.0f, ImVec2(at.x, at.y + 1.0f), IM_COL32(204, 204, 204, 255), item.name.c_str());
+                draw->PopClipRect();
                 draw->AddLine(ImVec2(at.x, at.y + 17.0f), ImVec2(at.x + width, at.y + 17.0f), IM_COL32(34, 34, 34, 255));
                 ImGui::Dummy(ImVec2(width, 19.0f));
             }
@@ -1470,9 +1651,53 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
     else if (nearContainer) interactionPrompt = "[E] Revisar caneca · mantén [Q] para clasificar (más botín)";
     else if (nearPickup) interactionPrompt = "[E] Recoger bolsa · mantén [Q] para clasificar (más botín)";
     else if (inventorySummary.find("Pan duro") != std::string::npos || inventorySummary.find("Botella agua") != std::string::npos || inventorySummary.find("Vendaje") != std::string::npos || inventorySummary.find("Curita") != std::string::npos || inventorySummary.find("Tinto") != std::string::npos || inventorySummary.find("Comida enlatada") != std::string::npos || inventorySummary.find("Refresco") != std::string::npos || inventorySummary.find("Tintico") != std::string::npos || inventorySummary.find("Pegante") != std::string::npos || inventorySummary.find("Pastilla") != std::string::npos || inventorySummary.find("Cigarrillo") != std::string::npos || inventorySummary.find("Jabón") != std::string::npos || inventorySummary.find("Cepillo") != std::string::npos || inventorySummary.find("Vacuna") != std::string::npos || inventorySummary.find("Carbón activo") != std::string::npos || inventorySummary.find("Jarabe") != std::string::npos || inventorySummary.find("Pomada") != std::string::npos || inventorySummary.find("Antiparasitario") != std::string::npos || inventorySummary.find("Antibiótico") != std::string::npos) interactionPrompt = "[E] Usar el primer consumible o medicamento del costal";
+    if (!m_Paused && !m_DeathScreenOpen) {
+        // Barra de acceso rapido (teclas 1-5): se asigna desde el inventario
+        const SignUI::Fonts& quickFonts = SignUI::GetFonts();
+        const ImVec2 display = ImGui::GetIO().DisplaySize;
+        constexpr float slotSize = 46.0f;
+        constexpr float slotGap = 6.0f;
+        const float barWidth = 5.0f * slotSize + 4.0f * slotGap;
+        ImGui::SetNextWindowPos(ImVec2((display.x - barWidth) * 0.5f, display.y - 70.0f), ImGuiCond_Always, ImVec2(0.0f, 1.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+        if (ImGui::Begin("Barra rapida", nullptr, hudFlags | ImGuiWindowFlags_NoBackground)) {
+            ImDrawList* draw = ImGui::GetWindowDrawList();
+            const ImVec2 base = ImGui::GetCursorScreenPos();
+            for (int slot = 0; slot < 5; ++slot) {
+                const HotbarSlot& entry = m_Hotbar[static_cast<size_t>(slot)];
+                const ImVec2 min(base.x + static_cast<float>(slot) * (slotSize + slotGap), base.y);
+                const ImVec2 max(min.x + slotSize, min.y + slotSize);
+                ImGui::SetCursorScreenPos(min);
+                ImGui::PushID(slot);
+                if (ImGui::InvisibleButton("##rapida", ImVec2(slotSize, slotSize)) && !entry.id.empty() && entry.quantity > 0) m_HotbarUseRequest = slot;
+                const bool hovered = ImGui::IsItemHovered();
+                ImGui::PopID();
+                const bool filled = !entry.id.empty();
+                draw->AddRectFilled(min, max, hovered ? IM_COL32(24, 34, 52, 235) : IM_COL32(8, 12, 20, 205), 4.0f);
+                draw->AddRect(min, max, filled && entry.quantity > 0 ? IM_COL32(201, 162, 39, 255) : IM_COL32(74, 86, 108, 255), 4.0f);
+                const ImU32 dim = entry.quantity > 0 ? IM_COL32(230, 236, 246, 255) : IM_COL32(120, 128, 142, 255);
+                char key[4];
+                std::snprintf(key, sizeof(key), "%d", slot + 1);
+                draw->AddText(quickFonts.monoBold12, 12.0f, ImVec2(min.x + 4.0f, min.y + 2.0f), IM_COL32(255, 209, 102, 255), key);
+                if (!filled) continue;
+                draw->PushClipRect(ImVec2(min.x + 2.0f, min.y + 14.0f), ImVec2(max.x - 2.0f, max.y - 13.0f), true);
+                draw->AddText(quickFonts.mono11, 10.0f, ImVec2(min.x + 4.0f, min.y + 15.0f), dim, entry.name.c_str(), nullptr, slotSize - 8.0f);
+                draw->PopClipRect();
+                char amount[16];
+                std::snprintf(amount, sizeof(amount), "x%d", entry.quantity);
+                const float amountWidth = quickFonts.mono11->CalcTextSizeA(11.0f, FLT_MAX, 0.0f, amount).x;
+                draw->AddText(quickFonts.mono11, 11.0f, ImVec2(max.x - amountWidth - 4.0f, max.y - 13.0f), IM_COL32(201, 162, 39, 255), amount);
+            }
+            ImGui::SetCursorScreenPos(base);
+            ImGui::Dummy(ImVec2(barWidth, slotSize));
+        }
+        ImGui::End();
+        ImGui::PopStyleVar();
+    }
+
     if (m_SortProgress >= 0.0f && !m_Paused) {
         const bool complete = m_SortProgress >= 1.0f;
-        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y - 112.0f), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y - 178.0f), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.80f));
         ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.2f, 0.2f, 0.2f, 1.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 10.0f));
@@ -1489,7 +1714,7 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
     }
 
     if (!interactionPrompt.empty()) {
-        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y - 62.0f), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y - 128.0f), ImGuiCond_Always, ImVec2(0.5f, 1.0f));
         ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0, 0, 0, 0.80f));
         ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.79f, 0.64f, 0.15f, 0.85f));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(14.0f, 8.0f));
@@ -1517,6 +1742,38 @@ void UIManager::RenderHUD(float dt, const glm::vec3& playerPos, Camera& camera, 
                 ImVec2((display.x - width) * 0.5f, display.y - 36.0f + static_cast<float>(line) * 14.0f),
                 IM_COL32(255, 255, 255, 80), lines[line]);
         }
+    }
+
+    {
+        // Panel de rendimiento y coordenadas (abajo a la derecha, como #performance-panel del juego web)
+        const FrameMetrics::Recent recent = m_Metrics.RecentStats();
+        const auto fps = [&](float value) {
+            char buffer[24];
+            if (m_Metrics.frames) std::snprintf(buffer, sizeof(buffer), "%.1f", value);
+            else std::snprintf(buffer, sizeof(buffer), "—");
+            return std::string(buffer);
+        };
+        char lines[512];
+        std::snprintf(lines, sizeof(lines),
+            "FPS actual %s%s\nMín %s · Máx %s\nPromedio %s · %.1f ms\nÚltimos %zu cuadros · p95 %.1f ms · p99 %.1f ms\n"
+            "1%% bajos %.1f FPS · Tirones >100 ms %d\nX %.2f  Y %.2f  Z %.2f",
+            fps(m_Metrics.current).c_str(), m_Paused ? " · pausa" : "", fps(m_Metrics.min).c_str(), fps(m_Metrics.max).c_str(),
+            fps(m_Metrics.average).c_str(), m_Metrics.frameMs, recent.frames, recent.p95, recent.p99, recent.low1Percent,
+            recent.over100ms, playerPos.x, playerPos.y, playerPos.z);
+        ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 12.0f, ImGui::GetIO().DisplaySize.y - 48.0f), ImGuiCond_Always, ImVec2(1.0f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.035f, 0.067f, 0.082f, 0.88f));
+        ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.33f, 0.47f, 0.42f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.976f, 0.90f, 1.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 10.0f));
+        if (ImGui::Begin("Rendimiento", nullptr, hudFlags)) {
+            ImGui::PushFont(SignUI::GetFonts().mono12);
+            ImGui::TextUnformatted(lines);
+            if (ImGui::SmallButton("Reiniciar medición")) m_Metrics.Reset();
+            ImGui::PopFont();
+        }
+        ImGui::End();
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
     }
 
     ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - 330, 16), ImGuiCond_FirstUseEver);

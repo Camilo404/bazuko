@@ -132,6 +132,7 @@ int main(int argc, char** argv) {
     int level = 1;
     int talentPoints = 0;
     bool bigSack = false;   // Costal grande comprado en la tienda
+    std::array<std::string, 5> hotbar{};   // objetos de la barra de acceso rapido (teclas 1-5)
     bool sorting = false;   // manteniendo Q sobre una bolsa
     float sortProgress = 0.0f;
     glm::vec3 sortPosition{0.0f};
@@ -201,6 +202,11 @@ int main(int argc, char** argv) {
                     if (gameData.FindTalent(id)) unlockedTalents.insert(id);
                 }
                 bigSack = state.value("bigSack", false);
+                {
+                    const auto savedHotbar = state.value("hotbar", std::vector<std::string>{});
+                    for (size_t slot = 0; slot < std::min(hotbar.size(), savedHotbar.size()); ++slot)
+                        if (savedHotbar[slot].empty() || gameData.FindItem(savedHotbar[slot])) hotbar[slot] = savedHotbar[slot];
+                }
                 companionName = state.value("companionName", companionName);
                 companionCoat = std::clamp(state.value("companionCoat", 0), 0, 3);
                 companionIsFriend = state.value("companionIsFriend", false);
@@ -274,6 +280,7 @@ int main(int argc, char** argv) {
             xp -= 100 * level;
             ++level;
             ++talentPoints;
+            ui.Notify("¡Nivel " + std::to_string(level) + "! +1 punto de talento", ToastType::Rare);
         }
     };
 
@@ -285,6 +292,7 @@ int main(int argc, char** argv) {
         state["level"] = level;
         state["talentPoints"] = talentPoints;
         state["bigSack"] = bigSack;
+        state["hotbar"] = hotbar;
         state["talents"] = std::vector<std::string>(unlockedTalents.begin(), unlockedTalents.end());
         state["itemsCollected"] = itemsCollected;
         state["itemsSold"] = itemsSold;
@@ -342,6 +350,7 @@ int main(int argc, char** argv) {
         level = 1;
         talentPoints = 0;
         bigSack = false;
+        hotbar = {};
         unlockedTalents.clear();
         companionName = "El Chato";
         companionCoat = 0;
@@ -557,6 +566,7 @@ int main(int argc, char** argv) {
 
     ui.RenderLoadingScreen(window, 0.99f, "Sincronizando semáforos, rutas de tráfico y entorno...", "");
     ui.RenderLoadingScreen(window, 1.0f, "¡Todo listo! Entrando a Bogotá...", "");
+    ui.OpenDeveloperNote();
     std::this_thread::sleep_for(std::chrono::milliseconds(350));
 
     // Si es partida nueva o no tiene personaje configurado, abrir creador inmediatamente
@@ -611,9 +621,7 @@ int main(int argc, char** argv) {
         vehicleImpactCooldown = std::max(0.0f, vehicleImpactCooldown - dt);
         if (Input::IsKeyPressed(GLFW_KEY_C)) ui.ToggleCraftMenu();
 
-        if (!ui.IsPaused() && !characterCreatorUI.IsOpen() && Input::IsKeyPressed(GLFW_KEY_TAB)) {
-            Input::ToggleCursorLock();
-        }
+        if (!characterCreatorUI.IsOpen() && Input::IsKeyPressed(GLFW_KEY_TAB)) ui.OpenPauseSection(1);
 
         if (!ui.IsPaused() && !characterCreatorUI.IsOpen() && Input::IsKeyPressed(GLFW_KEY_V)) {
             camera.ToggleMode();
@@ -662,6 +670,9 @@ int main(int argc, char** argv) {
         const float withdrawal = needs[6] < 20.0f ? (20.0f - needs[6]) * 5.0f : 0.0f;
         const bool highWithdrawal = withdrawal >= 50.0f;
         const bool criticalWithdrawal = withdrawal >= 80.0f;
+        static bool wasInWithdrawal = false;
+        if (withdrawal > 0.0f && !wasInWithdrawal) ui.Notify("Abstinencia: tu cuerpo pide consumir; vas más lento y el ánimo baja.", ToastType::Warn);
+        wasInWithdrawal = withdrawal > 0.0f;
         const float psychosisSeverity = std::clamp((withdrawal - 50.0f) / 50.0f, 0.0f, 1.0f);
         float statusSpeedMultiplier = 1.0f;
         if (needs[5] < 30.0f) statusSpeedMultiplier *= 0.8f;
@@ -1096,6 +1107,7 @@ int main(int argc, char** argv) {
                 inventoryWeight += lootTable[resultIndex].weight;
                 awardXp(10);
                 audio.Play(AudioCue::Treasure);
+                ui.Notify("Crafteado: " + lootTable[resultIndex].name + " ×" + std::to_string(resultQuantity), ToastType::Info);
             }
         }
 
@@ -1264,8 +1276,11 @@ int main(int argc, char** argv) {
         inventoryOptions.reserve(inventory.size());
         for (const auto& entry : inventory) {
             const Item& item = lootTable[entry.itemIndex];
+            const auto hotbarSlot = std::find(hotbar.begin(), hotbar.end(), item.id);
             inventoryOptions.push_back({entry.itemIndex, item.id, item.name, entry.quantity, item.weight,
-                item.consumableNeed >= 0 || !item.cure.empty() || item.id == "vendaje" || item.id == "curita"});
+                item.consumableNeed >= 0 || !item.cure.empty() || item.id == "vendaje" || item.id == "curita",
+                item.desc, DescribeItemEffects(item), item.rarityLabel,
+                hotbarSlot == hotbar.end() ? -1 : static_cast<int>(hotbarSlot - hotbar.begin())});
         }
         std::vector<DealerOption> dealerOptions;
         for (const std::string& id : {std::string("tintico"), std::string("pegante"), std::string("pastilla")}) {
@@ -1382,27 +1397,61 @@ int main(int argc, char** argv) {
             }
         }
 
-        const size_t useIndex = ui.ConsumeInventoryUseRequest();
-        if (useIndex < lootTable.size()) {
+        const auto useInventoryItem = [&](size_t itemIndex) {
             auto entry = std::find_if(inventory.begin(), inventory.end(),
-                [&](const InventoryEntry& value) { return value.itemIndex == useIndex; });
-            if (entry != inventory.end()) {
-                const Item& item = lootTable[entry->itemIndex];
-                if (applyItemEffect(item)) {
-                    inventoryWeight = std::max(0.0f, inventoryWeight - item.weight);
-                    if (--entry->quantity == 0) inventory.erase(entry);
-                    audio.Play(AudioCue::Pickup);
-                }
+                [&](const InventoryEntry& value) { return value.itemIndex == itemIndex; });
+            if (entry == inventory.end()) return;
+            const Item& item = lootTable[entry->itemIndex];
+            if (!applyItemEffect(item)) return;
+            inventoryWeight = std::max(0.0f, inventoryWeight - item.weight);
+            if (--entry->quantity == 0) inventory.erase(entry);
+            audio.Play(AudioCue::Pickup);
+        };
+        const size_t useIndex = ui.ConsumeInventoryUseRequest();
+        if (useIndex < lootTable.size()) useInventoryItem(useIndex);
+        // Barra rapida: teclas 1-5 (o clic) usan el objeto; desde el inventario se asignan
+        for (size_t slot = 0; slot < hotbar.size(); ++slot) {
+            if (!ui.IsPaused() && !characterCreatorUI.IsOpen() && Input::IsKeyPressed(GLFW_KEY_1 + static_cast<int>(slot)) && !hotbar[slot].empty()) {
+                const int index = gameData.ItemIndex(hotbar[slot]);
+                if (index >= 0) useInventoryItem(static_cast<size_t>(index));
             }
+        }
+        if (const int clicked = ui.ConsumeHotbarUseRequest(); clicked >= 0 && static_cast<size_t>(clicked) < hotbar.size() && !hotbar[static_cast<size_t>(clicked)].empty()) {
+            const int index = gameData.ItemIndex(hotbar[static_cast<size_t>(clicked)]);
+            if (index >= 0) useInventoryItem(static_cast<size_t>(index));
+        }
+        int assignSlot = 0;
+        size_t assignItem = 0;
+        if (ui.ConsumeHotbarAssign(assignSlot, assignItem) && assignItem < lootTable.size() && assignSlot >= 0 && assignSlot < 5) {
+            const std::string& id = lootTable[assignItem].id;
+            const bool alreadyThere = hotbar[static_cast<size_t>(assignSlot)] == id;
+            for (std::string& slotId : hotbar) if (slotId == id) slotId.clear();
+            if (!alreadyThere) hotbar[static_cast<size_t>(assignSlot)] = id;
+        }
+        {
+            std::array<HotbarSlot, 5> hotbarView;
+            for (size_t slot = 0; slot < hotbar.size(); ++slot) {
+                const int index = hotbar[slot].empty() ? -1 : gameData.ItemIndex(hotbar[slot]);
+                if (index < 0) continue;
+                int quantity = 0;
+                for (const auto& entry : inventory) if (entry.itemIndex == static_cast<size_t>(index)) quantity += entry.quantity;
+                hotbarView[slot] = {hotbar[slot], lootTable[static_cast<size_t>(index)].name, quantity};
+            }
+            ui.SetHotbar(hotbarView);
         }
         const size_t dropIndex = ui.ConsumeInventoryDropRequest();
         if (dropIndex < lootTable.size()) {
             auto entry = std::find_if(inventory.begin(), inventory.end(),
                 [&](const InventoryEntry& value) { return value.itemIndex == dropIndex; });
             if (entry != inventory.end()) {
-                simulation.RestorePickup({dropIndex, playerPos});
-                inventoryWeight = std::max(0.0f, inventoryWeight - lootTable[dropIndex].weight);
-                if (--entry->quantity == 0) inventory.erase(entry);
+                const int dropped = ui.InventoryDropWasAll() ? entry->quantity : 1;
+                PickupItem bag;
+                bag.position = playerPos;
+                bag.pendingLoot.assign(static_cast<size_t>(dropped), lootTable[dropIndex].id);
+                simulation.RestorePickup(bag);
+                inventoryWeight = std::max(0.0f, inventoryWeight - lootTable[dropIndex].weight * static_cast<float>(dropped));
+                entry->quantity -= dropped;
+                if (entry->quantity <= 0) inventory.erase(entry);
             }
         }
         if (ui.ConsumeInventorySortRequest()) {
@@ -1418,6 +1467,7 @@ int main(int argc, char** argv) {
                 && unlockedTalents.insert(talentRequest).second) {
                 talentPoints -= talent->cost;
                 ui.SetSaveNotification("Talento aprendido: " + talent->name);
+                ui.Notify("Talento: " + talent->name, ToastType::Rare);
             }
         }
         if (ui.ConsumePetRequest()) {
