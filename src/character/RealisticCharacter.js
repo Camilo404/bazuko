@@ -11,14 +11,15 @@ import { addGrime, addHairTone } from './weathering.js';
 import { attachAccessories } from './props.js';
 import { addHatClip, hatEdgeProfile } from './hatFit.js';
 
-const BASE = '/models/personaje/';
+const MODEL_BASE = `${import.meta.env?.BASE_URL ?? '/'}models/`;
+const BASE = `${MODEL_BASE}personaje/`;
 // Animaciones descargadas de Mixamo (tools/personaje/mixamo_a_glb.py); si no están, las de prueba
-const ANIM_URLS = ['/models/animaciones.glb', '/models/animaciones-prueba.glb'];
+const ANIM_URLS = ['animaciones.glb', 'animaciones-prueba.glb'].map(file => MODEL_BASE + file);
 
 // El modelo mide ~1,7 m; el mundo usa la escala del personaje procedural (~1,85 m)
 export const REALISTIC_SCALE = 1.08;
 
-const ACTIONFORGE_URL = '/models/animaciones-actionforge.glb';
+const ACTIONFORGE_URL = `${MODEL_BASE}animaciones-actionforge.glb`;
 
 export const REAL_DEFAULT = {
   sexo: 'hombre', edad: 'adulto', pelo: 'desordenado', barba: 'descuidada', ropa: 'chaqueta', calzado: 'tenis-rotos', cabeza: 'sin-sombrero'
@@ -178,12 +179,14 @@ async function buildInstance(catalog, look, lod = false) {
   const folder = `${BASE}${body.id}/`;
   // LOD: cuerpo proxy y piezas simplificadas (si el catálogo las trae)
   const useLod = lod && body.piezas[real.ropa]?.lod;
-  const bodyGltf = await load(folder + (useLod ? 'lod/cuerpo.gltf' : 'cuerpo.gltf'));
   const parts = PART_CATS
     .map((cat) => ({ cat, info: body.piezas[real[cat]] }))
     .filter((p) => p.info?.file);
-  const [clips, ...partGltfs] = await Promise.all([
-    clipsForBody(body.id + (useLod ? ':lod' : ''), bodyGltf),
+  // Las prendas no dependen de descargar el cuerpo: iniciar todo en paralelo.
+  const bodyPromise = load(folder + (useLod ? 'lod/cuerpo.gltf' : 'cuerpo.gltf'));
+  const [bodyGltf, clips, ...partGltfs] = await Promise.all([
+    bodyPromise,
+    bodyPromise.then(gltf => clipsForBody(body.id + (useLod ? ':lod' : ''), gltf)),
     ...parts.map((p) => load(folder + (useLod && p.info.lod ? p.info.lod : p.info.file)))
   ]);
 
