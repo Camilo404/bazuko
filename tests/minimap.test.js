@@ -108,7 +108,21 @@ test('con destino activo el radar muestra la distancia restante y el giro siguie
   };
   // yaw 0: el frente de la cámara es −Z
   map.update({ x: 0, z: 0 }, 0, [{ name: 'Cambuche', icon: '⛺', x: 1, z: 1 }], 1000, { gps });
-  assert.equal(map.infoEl.textContent, '♻️ Recicladora: 1.2km (⬆️ Al frente)');
+  assert.equal(map.infoEl.textContent, '♻️ Recicladora\n1.2km ∙ ↑ Al frente');
   map.update({ x: 0, z: 0 }, 0, [], 2000, { gps: { ...gps, route: [] } });
-  assert.match(map.infoEl.textContent, /sin ruta a pie/);
+  assert.match(map.infoEl.textContent, /Sin ruta a pie/);
+});
+
+test('el tamaño del radar se limita a s, m o l, se guarda y se refleja en la columna', () => {
+  const dock = { dataset: {} };
+  const getById = document.getElementById;
+  document.getElementById = (id) => id === 'hud-dock' ? dock : getById(id);
+  const map = new Minimap();
+  assert.equal(map.size, 'm');
+  assert.equal(dock.dataset.radarSize, 'm');
+  assert.equal(map.setSize('l'), 'l');
+  assert.equal(dock.dataset.radarSize, 'l');
+  assert.equal(localStorage.getItem('bazuko.minimap_size'), 'l');
+  assert.equal(new Minimap().size, 'l');
+  assert.equal(map.setSize('xl'), 'm');
 });

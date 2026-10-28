@@ -2,11 +2,17 @@
 // Radar urbano con plano de la ciudad, ruta del GPS y zoom dinámico.
 
 const ZOOM_KEY = 'bazuko.minimap_zoom';
+const SIZE_KEY = 'bazuko.minimap_size';
 export const RADAR_ZOOM_MIN = 40;
 export const RADAR_ZOOM_MAX = 140;
+export const RADAR_SIZES = [
+  { id: 's', label: 'Pequeño' },
+  { id: 'm', label: 'Mediano' },
+  { id: 'l', label: 'Grande' },
+];
 const RUN_ZOOM = 1.45;
-const DIRECTIONS = ['⬆️ Al frente', '↗️ Diagonal der.', '➡️ Derecha', '↘️ Atrás der.',
-  '⬇️ Atrás', '↙️ Atrás izq.', '⬅️ Izquierda', '↖️ Diagonal izq.'];
+const DIRECTIONS = ['↑ Al frente', '↗ Diagonal der.', '→ Derecha', '↘ Atrás der.',
+  '↓ Atrás', '↙ Atrás izq.', '← Izquierda', '↖ Diagonal izq.'];
 
 const readStorage = (key) => {
   try { return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null; } catch { return null; }
@@ -25,6 +31,8 @@ export class Minimap {
     const zoom = Number(readStorage(ZOOM_KEY));
     this.zoomBase = Number.isFinite(zoom) && zoom >= RADAR_ZOOM_MIN && zoom <= RADAR_ZOOM_MAX ? zoom : 70;
     this.range = this.zoomBase;
+    const size = readStorage(SIZE_KEY);
+    this.size = RADAR_SIZES.some(s => s.id === size) ? size : 'm';
 
     this.container = document.getElementById('minimap-container');
     if (!this.container && typeof document !== 'undefined') {
@@ -36,6 +44,8 @@ export class Minimap {
     this.infoEl = document.getElementById('minimap-info');
     this.container?.classList.toggle('hidden', !this.visible);
     this.raster = null;
+    this.setSize(this.size, false);
+    this._bindControls();
 
     this._lastUpdate = 0;
     this._cachedNearest = '';
@@ -44,22 +54,55 @@ export class Minimap {
   }
 
   _createDOM() {
-    const div = document.createElement('div');
+    const div = document.createElement('section');
     div.id = 'minimap-container';
     div.className = this.visible ? '' : 'hidden';
+    div.setAttribute?.('aria-label', 'Radar');
     div.innerHTML = `
-      <canvas id="minimap-canvas" width="440" height="300" aria-label="Radar con plano y ruta"></canvas>
-      <div class="minimap-bar">
-        <div id="minimap-info" class="minimap-info">Cargando puntos…</div>
-        <button type="button" class="minimap-toggle-btn" id="minimap-toggle-btn" title="Ocultar radar (N)">N</button>
+      <div class="radar__screen">
+        <canvas id="minimap-canvas" width="440" height="330" aria-label="Radar con plano y ruta"></canvas>
+        <div class="radar__tools">
+          <button type="button" data-radar="in" title="Acercar (+)" aria-label="Acercar radar">+</button>
+          <button type="button" data-radar="out" title="Alejar (−)" aria-label="Alejar radar">−</button>
+          <button type="button" data-radar="toggle" title="Ocultar radar (N)" aria-label="Ocultar radar">✕</button>
+        </div>
       </div>
+      <div id="minimap-info" class="minimap-info">Cargando puntos…</div>
+      <button type="button" class="radar__show" data-radar="toggle" title="Mostrar radar (N)">🧭 Radar · N</button>
     `;
-    document.body.appendChild(div);
+    (document.getElementById('hud-dock') ?? document.body).appendChild(div);
     this.container = div;
+  }
 
-    document.getElementById('minimap-toggle-btn')?.addEventListener('click', () => {
-      this.toggle();
+  _bindControls() {
+    this.container?.addEventListener?.('click', (e) => {
+      const action = e.target?.closest?.('[data-radar]')?.dataset.radar;
+      if (action === 'in') this.zoomStep(1);
+      else if (action === 'out') this.zoomStep(-1);
+      else if (action === 'toggle') this.toggle();
+      else return;
+      e.target.blur?.();
     });
+    // El lienzo sigue el tamaño CSS (tamaño elegido y pantalla) con la densidad de píxeles real.
+    if (this.canvas && typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(([entry]) => {
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const { width, height } = entry.contentRect;
+        if (!width || !height) return;
+        this.canvas.width = Math.round(width * dpr);
+        this.canvas.height = Math.round(height * dpr);
+        this._lastUpdate = 0;
+      }).observe(this.canvas);
+    }
+  }
+
+  /** Tamaño del radar (y del ancho de la columna de necesidades): s, m o l. */
+  setSize(size, save = true) {
+    this.size = RADAR_SIZES.some(s => s.id === size) ? size : 'm';
+    const dock = typeof document !== 'undefined' ? document.getElementById('hud-dock') : null;
+    if (dock?.dataset) dock.dataset.radarSize = this.size;
+    if (save) writeStorage(SIZE_KEY, this.size);
+    return this.size;
   }
 
   /** Plano rasterizado de la ciudad (ver CityMapRaster). */
@@ -238,9 +281,20 @@ export class Minimap {
 
     ctx.restore();
 
+    // Escala: alcance aproximado de la vista
+    ctx.font = `800 ${8 * u}px Overpass, sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = 'rgba(214,228,255,.7)';
+    ctx.fillText(`${Math.round(this.range)} m`, 8 * u, h - 7 * u);
+
     if (this.infoEl) {
-      this._cachedNearest = this._infoText(playerPos, cameraYaw, gps, nearestPoi, nearestDist);
-      this.infoEl.textContent = this._cachedNearest;
+      const text = this._infoText(playerPos, cameraYaw, gps, nearestPoi, nearestDist);
+      if (text !== this._cachedNearest) {
+        this._cachedNearest = text;
+        this.infoEl.textContent = text;
+        this.infoEl.classList?.toggle('is-route', !!gps?.waypoint);
+      }
     }
   }
 
@@ -253,12 +307,12 @@ export class Minimap {
     };
     if (gps?.waypoint) {
       const { name, icon } = gps.waypoint;
-      if (!gps.route.length) return `${icon} ${name}: sin ruta a pie`;
+      if (!gps.route.length) return `${icon} ${name}\nSin ruta a pie`;
       const ahead = gps.lookAhead(playerPos, 12);
-      return `${icon} ${name}: ${formatDistance(gps.remainingDistance(playerPos))} (${sector(ahead.x, ahead.z)})`;
+      return `${icon} ${name}\n${formatDistance(gps.remainingDistance(playerPos))} ∙ ${sector(ahead.x, ahead.z)}`;
     }
     if (!nearestPoi) return 'Sin puntos cercanos';
     const hint = nearestDist < 2 ? '📍 Aquí' : sector(nearestPoi.x, nearestPoi.z);
-    return `${nearestPoi.icon} ${nearestPoi.name}: ${Math.round(nearestDist)}m (${hint})`;
+    return `${nearestPoi.icon} ${nearestPoi.name}\n${Math.round(nearestDist)}m ∙ ${hint}`;
   }
 }

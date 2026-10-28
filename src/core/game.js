@@ -52,7 +52,7 @@ import { PerformanceHUD } from '../ui/PerformanceHUD.js';
 import { LocalLights } from './LocalLights.js';
 import { GRAPHICS_PROFILES } from './GraphicsQuality.js';
 import { FrameProfiler } from './FrameProfiler.js';
-import { loadInBatches, withLoadTimeout } from './Startup.js';
+import { loadTaskGroups, withLoadTimeout } from './Startup.js';
 import { paintLoadingFrame } from '../ui/LoadingScreen.js';
 import { el, button } from '../ui/dom.js';
 import { Menu } from '../ui/Menu.js';
@@ -147,6 +147,7 @@ export class Game {
       // La pausa ya abierta atiende M con su propio listener; la marca evita cerrarla en la misma pulsación.
       if (e.code === 'KeyM' && !this.paused && !this.isSleeping) { e._pauseOpened = true; openPauseMenu(this, 'mapa'); }
       if (e.code === 'KeyK' && !this.paused) this._toggleModel();
+      if (e.code === 'F3') { e.preventDefault(); this.performanceHUD.toggle(); }
       if ((e.code === 'Equal' || e.code === 'NumpadAdd') && !this.paused) this.minimap.zoomStep(1);
       if ((e.code === 'Minus' || e.code === 'NumpadSubtract') && !this.paused) this.minimap.zoomStep(-1);
       if (e.code === 'KeyR') {
@@ -220,25 +221,31 @@ export class Game {
     if (!this.look) {
       await this._createCharacter(loading);
     }
-    await loading.stage('Cargando personajes y sonidos…', 2);
+    await loading.stage('Cargando personajes, vehículos y ciudad…', 2);
     let modelo = null;
     try { modelo = localStorage.getItem('bazuko.modelo'); } catch { /* sin almacenamiento */ }
-    await withLoadTimeout(Promise.all([
-      modelo !== 'procedural' ? this.player.setModel('realista') : Promise.resolve(),
-      loadInBatches(district?.npcs ?? [], npc => npc.preload(), (done, total) =>
-        loading.stage(`Cargando personajes… ${done}/${total}`, 2 + done / total)),
-      this.audio.ready
-    ]), 'La carga de personajes tardó demasiado.');
-
-    await loading.stage('Cargando carros, TransMilenio y cambuche…', 3.2);
     const importedEntities = [
       ...(this.cars ?? []),
       ...(this.traffic?.vehicles ?? []).map(vehicle => vehicle.car),
       ...(district?.busServices ?? [district?.busService]), this.cambuche, ...(this.pickups ?? [])
     ].filter(Boolean);
-    await withLoadTimeout(loadInBatches(importedEntities, entity => entity.preloadModel()), 'La carga de vehículos y refugio tardó demasiado.');
-    await loading.stage('Preparando estación, lámparas y semáforos…', 3.7);
-    await withLoadTimeout(district?.preloadDetails?.() ?? Promise.resolve(), 'La carga del mobiliario urbano tardó demasiado.');
+    let lastPaint = performance.now();
+    await withLoadTimeout(loadTaskGroups([
+      [() => modelo !== 'procedural' ? this.player.setModel('realista') : Promise.resolve(),
+        () => this.audio.ready],
+      (district?.npcs ?? []).map(npc => () => npc.preload()),
+      importedEntities.map(entity => () => entity.preloadModel()),
+      [() => district?.preloadDetails?.()]
+    ], (done, total) => {
+      const text = `Cargando recursos… ${done} de ${total}`;
+      const progress = 2 + 1.8 * done / total;
+      // Repintar por presupuesto temporal, no dos fotogramas por cada instancia.
+      if (performance.now() - lastPaint >= 50) {
+        lastPaint = performance.now();
+        return loading.stage(text, progress);
+      }
+      loading.update?.(text, progress);
+    }), 'La carga de los recursos de la ciudad tardó demasiado.');
     if (this.traffic) this.traffic.signals = district?.signals;
     this.traffic?.setBus?.(district?.busServices ?? district?.busService);
     if (this.cambuche) this.cambuche.group.position.y = district?.getGroundHeightUnder?.(this.cambuche.group)

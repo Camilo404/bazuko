@@ -4,7 +4,8 @@ import { el, button } from './dom.js';
 import { cop } from '../utils/money.js';
 import { XP_PER_LEVEL } from '../utils/constants.js';
 import { MapView } from './MapView.js';
-import { formatDistance, RADAR_ZOOM_MIN, RADAR_ZOOM_MAX } from './Minimap.js';
+import { formatDistance, RADAR_ZOOM_MIN, RADAR_ZOOM_MAX, RADAR_SIZES } from './Minimap.js';
+import { NEED_META, needLevel } from './needsMeta.js';
 
 export const PAUSE_TABS = [
   { id: 'mapa', label: 'Mapa', icon: '🗺️' },
@@ -13,17 +14,10 @@ export const PAUSE_TABS = [
   { id: 'controles', label: 'Controles', icon: '⌨️' },
 ];
 
-const NEED_LABELS = [
-  ['hambre', '🍞', 'Hambre', '#c9a227'], ['sed', '💧', 'Sed', '#3a7bd5'],
-  ['energia', '😴', 'Energía', '#b06ad6'], ['salud', '🩹', 'Salud', '#c0392b'],
-  ['higiene', '🧼', 'Higiene', '#3fb5a3'], ['animo', '🧠', 'Ánimo', '#e67e22'],
-  ['vicio', '🚬', 'Vicio', '#8d8d8d'],
-];
-
 const CONTROL_GROUPS = [
-  ['Movimiento', [['WASD', 'Caminar'], ['Shift', 'Correr'], ['Espacio', 'Saltar'], ['Ratón', 'Clic fija la cámara · rueda acerca'], ['V', 'Vista tercera persona / isométrica']]],
-  ['Acciones', [['E', 'Interactuar: basura, tiendas, cambuche, carros'], ['Q', 'Mantener para clasificar basura · dealer'], ['B / L', 'Pedir limosna'], ['F', 'Boost de adrenalina'], ['G / Clic', 'Golpear'], ['X', 'Lanzar / recoger'], ['Z', 'Defecar']]],
-  ['Paneles', [['I / Tab', 'Inventario · 1-5 acceso rápido'], ['T', 'Talentos'], ['C', 'Fabricar'], ['P', 'Personalizar a El Chato'], ['R', 'Radio transistor'], ['K', 'Modelo realista / liviano'], ['Esc', 'Pausa · cerrar panel']]],
+  ['Movimiento', [['WASD', 'Caminar'], ['Shift', 'Correr'], ['Espacio', 'Saltar'], ['Ratón', 'Clic fija la cámara ∙ rueda acerca'], ['V', 'Vista tercera persona / isométrica']]],
+  ['Acciones', [['E', 'Interactuar: basura, tiendas, cambuche, carros'], ['Q', 'Mantener para clasificar basura ∙ dealer'], ['B / L', 'Pedir limosna'], ['F', 'Boost de adrenalina'], ['G / Clic', 'Golpear'], ['X', 'Lanzar / recoger'], ['Z', 'Defecar']]],
+  ['Paneles', [['I / Tab', 'Inventario ∙ 1-5 acceso rápido'], ['T', 'Talentos'], ['C', 'Fabricar'], ['P', 'Personalizar a El Chato'], ['R', 'Radio transistor'], ['K', 'Modelo realista / liviano'], ['F3', 'Panel de rendimiento'], ['Esc', 'Pausa ∙ cerrar panel']]],
   ['Mapa y GPS', [['M', 'Abrir / cerrar el mapa'], ['N', 'Mostrar / ocultar radar'], ['+ / −', 'Zoom del radar'], ['Clic', 'Marcar destino en el mapa'], ['Clic der. / Supr', 'Quitar destino'], ['Q / E', 'Cambiar de pestaña en la pausa']]],
 ];
 
@@ -87,7 +81,7 @@ export function openPauseMenu(game, tab = 'estado') {
 
   game.menu.open({
     title: 'Partida en Pausa',
-    sub: 'Vagabundo / Habitante de Calle · Bogotá',
+    sub: 'Vagabundo / Habitante de Calle ∙ Bogotá',
     ic: 'pause',
     wide: true,
     render,
@@ -120,7 +114,7 @@ function statePanel(game) {
     el('div', { class: 'pause-cards' },
       card('Personaje', game.look?.nombre ?? 'Parcero'),
       card('Dinero', cop(stats.dinero ?? 0)),
-      card('Tiempo', `Día ${clock.day ?? 1} · ${h}:${m}`),
+      card('Tiempo', `Día ${clock.day ?? 1} ∙ ${h}:${m}`),
       card('El Chato', game.dog?.isFriend ? '🐕 Te acompaña' : 'Sin adoptar'),
     ),
     el('div', { class: 'pause-level' },
@@ -128,17 +122,17 @@ function statePanel(game) {
       el('div', { class: 'pause-meter' }, el('div', { class: 'pause-meter__fill', style: `width:${xpPct}%;--c:#19c463` })),
       el('span', { class: 'pause-level__xp', text: `${stats.xp ?? 0} / ${xpNeeded} XP` })),
     el('h3', { class: 'pause-section-title', text: 'Necesidades' }),
-    el('ul', { class: 'pause-needs' }, NEED_LABELS.map(([key, icon, label, color]) => {
-      const value = Math.round(stats[key] ?? 0);
-      return el('li', { class: `pause-need${value < 25 ? ' is-low' : ''}` },
+    el('ul', { class: 'pause-needs' }, NEED_META.map(({ id, icon, label, color }) => {
+      const value = Math.round(stats[id] ?? 0);
+      return el('li', { class: `pause-need is-${needLevel(value)}` },
         el('span', { class: 'pause-need__label', text: `${icon} ${label}` }),
         el('div', { class: 'pause-meter' }, el('div', { class: 'pause-meter__fill', style: `width:${value}%;--c:${color}` })),
         el('span', { class: 'pause-need__value', text: `${value}%` }));
     })),
     el('div', { class: 'pause-row pause-row--split' },
       el('span', { class: 'pause-gps-summary', text: wp
-        ? `📍 Destino: ${wp.icon} ${wp.name}${pos && game.gps.route.length ? ` · ${formatDistance(game.gps.remainingDistance(pos))}` : ''}`
-        : '📍 Sin destino marcado · abre el mapa con M' }),
+        ? `📍 Destino: ${wp.icon} ${wp.name}${pos && game.gps.route.length ? ` ∙ ${formatDistance(game.gps.remainingDistance(pos))}` : ''}`
+        : '📍 Sin destino marcado ∙ abre el mapa con M' }),
       button('💾 Guardar partida', {
         onClick: () => {
           game._save?.();
@@ -189,12 +183,22 @@ function settingsPanel(game) {
   return el('div', { class: 'pause-settings' },
     section('🔊 Sonido', row('Volumen', volumeInput, volumeLabel), row('Silencio', muteBtn)),
     section('⚡ Calidad gráfica',
-      el('div', { class: 'pause-actions' }, quality('baja', '⚡ Baja · más FPS'), quality('media', '⚖️ Media'), quality('alta', '✨ Alta'))),
+      el('div', { class: 'pause-segmented' }, quality('baja', '⚡ Baja'), quality('media', '⚖️ Media'), quality('alta', '✨ Alta')),
+      el('p', { class: 'pause-hint', text: 'Baja da más FPS. Bajo carga la calidad puede bajar sola sin cambiar tu elección.' }),
+      row('Rendimiento', button(game.performanceHUD?.visible ? 'Visible (F3)' : 'Oculto (F3)', {
+        primary: !!game.performanceHUD?.visible, class: 'pause-choice',
+        onClick: () => { game.performanceHUD?.toggle(); game.menu.refresh(); }
+      }))),
     section('🧭 Radar y GPS',
       row('Radar', button(minimap?.visible ? 'Visible (N)' : 'Oculto (N)', {
         primary: !!minimap?.visible, class: 'pause-choice',
         onClick: () => { minimap?.toggle(); game.menu.refresh(); }
       })),
+      row('Tamaño', el('div', { class: 'pause-segmented', role: 'group', 'aria-label': 'Tamaño del radar' },
+        RADAR_SIZES.map(({ id, label }) => button(label, {
+          primary: minimap?.size === id, class: 'pause-choice',
+          onClick: () => { minimap?.setSize(id); game.menu.refresh(); }
+        })))),
       row('Alcance base', zoomInput, zoomLabel),
       row('Haz del destino', button(game.showGpsBeacon !== false ? 'Visible' : 'Oculto', {
         primary: game.showGpsBeacon !== false, class: 'pause-choice',

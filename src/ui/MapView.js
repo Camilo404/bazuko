@@ -1,11 +1,12 @@
 // src/ui/MapView.js
 // Mapa grande de la pestaña «Mapa»: norte arriba, arrastre, rueda para zoom y clic para marcar destino.
 import { el, button } from './dom.js';
-import { streetLabels } from '../world/bogota/CityMapRaster.js';
+import { streetLabels, MAP_COLORS } from '../world/bogota/CityMapRaster.js';
 import { formatDistance } from './Minimap.js';
 
 const PAN_STEP = 24;
 const HIT_RADIUS = 14;
+const LEGEND = [['Andén', 'sidewalk'], ['Calle', 'road'], ['Parque', 'grass'], ['Agua', 'water'], ['Edificio', 'building']];
 
 export class MapView {
   constructor(game) {
@@ -24,8 +25,17 @@ export class MapView {
     this.ctx = this.canvas.getContext?.('2d');
     this.sidebar = el('aside', { class: 'map-view__side' });
     this.coords = el('span', { class: 'map-view__coords' });
+    const tool = (text, label, onclick) => el('button', { type: 'button', class: 'map-view__tool', title: label, 'aria-label': label, onclick, text });
     this.root = el('div', { class: 'map-view' },
       el('div', { class: 'map-view__stage' }, this.canvas,
+        el('div', { class: 'map-view__tools' },
+          tool('+', 'Acercar', () => this._zoomAt(this.cssWidth / 2, this.cssHeight / 2, 1.3)),
+          tool('−', 'Alejar', () => this._zoomAt(this.cssWidth / 2, this.cssHeight / 2, 1 / 1.3)),
+          tool('◎', 'Centrar en mí', () => this.centerOnPlayer()),
+          tool('⤢', 'Ver toda la ciudad', () => this.fitCity())),
+        el('ul', { class: 'map-view__legend', 'aria-label': 'Leyenda' },
+          LEGEND.map(([name, key]) => el('li', { style: `--c:${MAP_COLORS[key]}`, text: name })),
+          el('li', { class: 'is-route', text: 'Ruta' })),
         el('div', { class: 'map-view__hint' },
           el('span', {}, el('kbd', { text: 'Clic' }), ' marcar'),
           el('span', {}, el('kbd', { text: 'Clic der.' }), ' quitar'),
@@ -53,6 +63,20 @@ export class MapView {
     this.cssHeight = rect.height;
     if (!this.zoom) this.zoom = 2.2;
     this.zoom = this._clampZoom(this.zoom);
+  }
+
+  centerOnPlayer() {
+    const p = this.game.player?.position;
+    if (p) { this.centerX = p.x; this.centerZ = p.z; this.draw(); }
+  }
+
+  fitCity() {
+    const r = this.game.mapRaster;
+    if (!r || !this.cssWidth) return;
+    this.centerX = r.originX + r.worldWidth / 2;
+    this.centerZ = r.originZ + r.worldHeight / 2;
+    this.zoom = this._clampZoom(0);
+    this.draw();
   }
 
   _clampZoom(z) {
@@ -181,9 +205,10 @@ export class MapView {
       : el('div', { class: 'map-view__dest is-empty' },
         el('span', { class: 'map-view__dest-label', text: 'Sin destino' }),
         el('span', { class: 'map-view__dest-meta', text: 'Haz clic en el mapa o elige un lugar.' }));
-    const pois = this._pois().filter(poi => poi.name !== 'El Chato');
+    const distance = (poi) => p ? Math.hypot(poi.x - p.x, poi.z - p.z) : 0;
+    const pois = this._pois().filter(poi => poi.name !== 'El Chato').sort((a, b) => distance(a) - distance(b));
     const list = el('ul', { class: 'map-view__list' }, pois.map(poi => {
-      const dist = p ? formatDistance(Math.hypot(poi.x - p.x, poi.z - p.z)) : '';
+      const dist = p ? formatDistance(distance(poi)) : '';
       const active = wp && wp.name === poi.name;
       return el('li', {},
         el('button', { type: 'button', class: `map-view__place${active ? ' is-active' : ''}`,
@@ -194,8 +219,7 @@ export class MapView {
     }));
     this.sidebar.replaceChildren(
       current,
-      button('◎ Centrar en mí', { onClick: () => { if (p) { this.centerX = p.x; this.centerZ = p.z; this.draw(); } } }),
-      el('h4', { class: 'map-view__list-title', text: 'Ir a…' }),
+      el('h4', { class: 'map-view__list-title', text: 'Ir a… (más cerca primero)' }),
       list);
   }
 
@@ -316,11 +340,20 @@ export class MapView {
       ctx.restore();
     }
 
-    // Rosa de los vientos fija
-    ctx.font = '900 13px Overpass, sans-serif';
+    // Norte fijo, junto a los botones de zoom
+    ctx.beginPath();
+    ctx.arc(w - 64, 26, 15, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(14,15,18,.85)';
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,.25)';
+    ctx.stroke();
+    ctx.font = '900 12px Overpass, sans-serif';
     ctx.fillStyle = '#f6c400';
     ctx.textAlign = 'center';
-    ctx.fillText('N ▲', w - 28, 22);
+    ctx.textBaseline = 'middle';
+    ctx.fillText('▲', w - 64, 20);
+    ctx.fillText('N', w - 64, 32);
   }
 
   _tag(text, x, y) {
