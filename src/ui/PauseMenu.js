@@ -145,6 +145,8 @@ function statePanel(game) {
 
 function settingsPanel(game) {
   const audio = game.audio;
+  const row = (label, ...controls) => el('div', { class: 'pause-row' }, el('label', { class: 'pause-row__label', text: label }), ...controls);
+  const section = (title, ...rows) => el('div', { class: 'pause-section' }, el('h3', { class: 'pause-section-title', text: title }), ...rows);
   const volPct = Math.round((audio?.volume ?? 0.7) * 100);
   const volumeLabel = el('span', { class: 'pause-value', text: `${volPct}%` });
   const volumeInput = el('input', {
@@ -155,6 +157,16 @@ function settingsPanel(game) {
       volumeLabel.textContent = `${Math.round(val * 100)}%`;
     }
   });
+  const mixRows = [['ambient', 'Ambiente'], ['traffic', 'Tráfico'], ['voices', 'Voces'], ['effects', 'Efectos']]
+    .filter(() => typeof audio?.getMix === 'function').map(([category, label]) => {
+      const pct = Math.round(audio.getMix(category) * 100);
+      const value = el('span', { class: 'pause-value', text: `${pct}%` });
+      const input = el('input', {
+        type: 'range', min: '0', max: '100', value: String(pct), class: 'pause-slider', 'aria-label': `Volumen de ${label.toLowerCase()}`,
+        oninput: (e) => { value.textContent = `${Math.round(audio.setMix(category, Number(e.target.value) / 100) * 100)}%`; }
+      });
+      return row(label, input, value);
+    });
   const muteBtn = button(audio?.isMuted() ? '🔇 Activar sonido' : '🔊 Silenciar', {
     onClick: () => {
       const next = audio?.toggleMute();
@@ -177,11 +189,10 @@ function settingsPanel(game) {
     oninput: (e) => { zoomLabel.textContent = `${minimap?.setZoomBase(Number(e.target.value)) ?? e.target.value} m`; }
   });
 
-  const row = (label, ...controls) => el('div', { class: 'pause-row' }, el('label', { class: 'pause-row__label', text: label }), ...controls);
-  const section = (title, ...rows) => el('div', { class: 'pause-section' }, el('h3', { class: 'pause-section-title', text: title }), ...rows);
 
   return el('div', { class: 'pause-settings' },
-    section('🔊 Sonido', row('Volumen', volumeInput, volumeLabel), row('Silencio', muteBtn)),
+    el('div', { class: 'pause-section pause-section--compact' }, el('h3', { class: 'pause-section-title', text: '🔊 Sonido' }),
+      row('Volumen', volumeInput, volumeLabel), ...mixRows, row('Silencio', muteBtn)),
     section('⚡ Calidad gráfica',
       el('div', { class: 'pause-segmented' }, quality('baja', '⚡ Baja'), quality('media', '⚖️ Media'), quality('alta', '✨ Alta')),
       el('p', { class: 'pause-hint', text: 'Baja da más FPS. Bajo carga la calidad puede bajar sola sin cambiar tu elección.' }),

@@ -133,3 +133,23 @@ test('mapa con M, destino por clic y por la lista, ruta en el radar y pestañas 
   await page.keyboard.press('Escape');
   await expect(page.locator('#menu')).toBeHidden();
 });
+
+test('volumen por categoría en Ajustes y pisadas al caminar', async ({ page }) => {
+  await startNewGame(page);
+  await page.locator('#game-canvas').click();
+  await page.keyboard.down('w');
+  // A pocos FPS en el navegador de pruebas, caminar unos metros produce las primeras pisadas.
+  await expect.poll(() => page.evaluate(() => window.__game.audio._lastStep), { timeout: 30_000 }).toBeGreaterThanOrEqual(0);
+  await page.keyboard.up('w');
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#menu-title')).toHaveText('Partida en Pausa');
+  await page.getByRole('tab', { name: /Ajustes/ }).click();
+  for (const name of ['ambiente', 'tráfico', 'voces', 'efectos']) {
+    await expect(page.getByRole('slider', { name: `Volumen de ${name}` })).toBeVisible();
+  }
+  await page.getByRole('slider', { name: 'Volumen de tráfico' }).fill('40');
+  await expect.poll(() => page.evaluate(() => window.__game.audio.getMix('traffic'))).toBe(.4);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('bazuko.audio_mix')).traffic)).toBe(.4);
+  if (process.env.GPS_SHOTS) await page.screenshot({ path: `${process.env.GPS_SHOTS}/ajustes-sonido.png` });
+});

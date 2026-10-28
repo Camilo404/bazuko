@@ -2,11 +2,28 @@
 import { Howl, Howler } from 'howler';
 import { VehicleAudio } from './VehicleAudio.js';
 
+export const MIX_CATEGORIES = ['ambient', 'traffic', 'voices', 'effects'];
+// Mientras suena una frase, tráfico y ambiente bajan a esta fracción para que se entienda.
+const VOICE_DUCK = .45, DUCK_ATTACK = 10, DUCK_RELEASE = 2.5;
+// Pisadas aisladas de Sounds_of_a_steps.opus (inicio y duración en ms).
+const STEP_SPRITES = { step1: [215, 300], step2: [605, 300], step3: [995, 300], step4: [1385, 300],
+  step5: [1785, 300], step6: [2185, 300], step7: [2575, 280] };
+const STEP_NAMES = Object.keys(STEP_SPRITES);
+// Metros entre pisadas: con la animación escalada por velocidad mantiene el ritmo de los pies.
+const STRIDE_WALK = 1.15, STRIDE_RUN = 1.9;
+const STEP_SURFACES = {
+  grass: { volume: .3, rate: .82 }, dirt: { volume: .34, rate: .86 },
+  road: { volume: .46, rate: 1.04 }, busway: { volume: .46, rate: 1.04 },
+  sidewalk: { volume: .5, rate: 1 }, floor: { volume: .5, rate: 1 }, plaza: { volume: .5, rate: 1 }
+};
+const SOFT_SURFACES = new Set(['grass', 'dirt']);
+
 export class AudioSystem {
   constructor({ HowlClass = Howl, howler = Howler, eventTarget = globalThis.window } = {}) {
     this.howler = howler;
     this.loadErrors = new Map();
-    const sound = (file, options = {}) => new HowlClass({
+    this._baseVolume = new Map();
+    const sound = (file, options = {}) => this._track(options.volume ?? 1, new HowlClass({
       src: [`/audio/${encodeURIComponent(file)}`], ...options,
       onload: () => this.loadErrors.delete(file),
       onloaderror: (_id, error) => {
@@ -14,7 +31,7 @@ export class AudioSystem {
         this.loadErrors.set(file, String(error));
       },
       onplayerror(id) { this.once('unlock', () => this.play(id)); }
-    });
+    }));
     // Volumen maestro (0.0 a 1.0)
     this.eventTarget = eventTarget;
     this._masterVolume = .7; this.muted = false;
@@ -24,6 +41,14 @@ export class AudioSystem {
       this.muted = globalThis.localStorage?.getItem('bazuko.audio_muted') === 'true';
     } catch { /* sin almacenamiento */ }
     howler.volume(this.muted ? 0 : this._masterVolume);
+    this.mix = Object.fromEntries(MIX_CATEGORIES.map(category => [category, 1]));
+    try {
+      const saved = JSON.parse(globalThis.localStorage?.getItem('bazuko.audio_mix') ?? 'null');
+      for (const category of MIX_CATEGORIES) {
+        if (Number.isFinite(saved?.[category])) this.mix[category] = Math.max(0, Math.min(1, saved[category]));
+      }
+    } catch { /* sin almacenamiento o valor dañado */ }
+    this._duck = 1;
 
     // Definir sonidos. Si el archivo no existe, Howl queda en silencio
     // pero NO crashea (maneja el error internamente).
@@ -34,7 +59,7 @@ export class AudioSystem {
       full: sound('full.wav', { volume: .5 }),
       empty: sound('empty.wav', { volume: .4 }),
       carAlarm: sound('Sonido De Alarma De Auto.opus', { volume: .6, loop: false, pool: 6 }),
-      steps: sound('Sounds_of_a_steps.opus', { volume: .65, loop: true }),
+      steps: sound('Sounds_of_a_steps.opus', { volume: .65, sprite: STEP_SPRITES, pool: 6 }),
       ambient: sound('city_atmosphere_soun.opus', { volume: .18, loop: true }),
       rain: sound('rain_sound_01.mp3', { volume: .45, loop: true })
     };
@@ -58,6 +83,7 @@ export class AudioSystem {
     this.theftSounds = Array.from({ length: 5 }, (_, i) => sound(`roberto_robo_espejo_n${i + 1}.mp3`, { volume: 0, loop: false, pool: 6 }));
     this._theftVoices = new Map();
     this.vehicles = new VehicleAudio(this.vehicleSounds, Math.random, this.driverSounds);
+    this.vehicles.externalVoiceActive = () => this._theftVoiceActive();
     this._carAlarms = new Map();
 
     // El audio es opcional: un archivo ausente o bloqueado no impide jugar.
@@ -75,6 +101,8 @@ export class AudioSystem {
     })));
 
     this._stepsPlaying = false;
+    this._stepDistance = 0;
+    this._lastStep = -1;
     this._boostPlaying = false;
     this._ambientStarted = false;
     this._lastGroundType = 'sidewalk';
@@ -113,6 +141,41 @@ export class AudioSystem {
   setMuted(value) { this.muted = !!value; this._applySettings(); return this.muted; }
   toggleMute() { return this.setMuted(!this.muted); }
   isMuted() { return this.muted; }
+
+  _track(volume, howl) { this._baseVolume.set(howl, volume); return howl; }
+
+  /** Volumen de una categoría (ambiente, tráfico, voces, efectos), de 0 a 1. */
+  getMix(category) { return this.mix[category] ?? 1; }
+  setMix(category, value) {
+    if (!MIX_CATEGORIES.includes(category)) return 1;
+    this.mix[category] = Math.max(0, Math.min(1, Number(value) || 0));
+    if (this._effectsBus) this._effectsBus.gain.value = this.mix.effects;
+    this._applyLevels(true);
+    try { globalThis.localStorage?.setItem('bazuko.audio_mix', JSON.stringify(this.mix)); } catch { /* sin almacenamiento */ }
+    return this.mix[category];
+  }
+
+  /** Nivel efectivo: el de la categoría y, para tráfico y ambiente, la atenuación por voz. */
+  _level(category) {
+    return this.getMix(category) * (category === 'traffic' || category === 'ambient' ? this._duck : 1);
+  }
+
+  _theftVoiceActive() {
+    for (const voice of this._theftVoices.values()) if (voice.sound.playing(voice.id)) return true;
+    return false;
+  }
+
+  _voiceActive() { return this._theftVoiceActive() || this.vehicles.remarkPlaying(); }
+
+  /** Ajusta los bucles que no se recalculan cada cuadro (ambiente y lluvia). */
+  _applyLevels(force = false) {
+    this.vehicles.levels = { traffic: this._level('traffic'), voices: this._level('voices') };
+    const ambient = this._level('ambient');
+    if (!force && Math.abs(ambient - (this._appliedAmbient ?? -1)) < .002) return;
+    this._appliedAmbient = ambient;
+    if (this._ambientId !== undefined) this.sounds.ambient.volume(this._baseVolume.get(this.sounds.ambient) * ambient, this._ambientId);
+    if (this._rainId !== undefined) this.sounds.rain.volume(this._baseVolume.get(this.sounds.rain) * ambient, this._rainId);
+  }
   _applySettings() {
     this.howler.volume(this.muted ? 0 : this.volume);
     try {
@@ -125,13 +188,15 @@ export class AudioSystem {
   play(name) {
     const s = this.sounds[name];
     if (!s || s.playing()) return;
-    s.play();
+    const id = s.play();
+    s.volume(this._baseVolume.get(s) * this._level('effects'), id);
   }
 
   /** Ladrido breve sintetizado; usa el mismo volumen maestro y silencio que los vehículos. */
   barkDog() {
-    const ctx = this.howler.ctx;
-    if (this._paused || !ctx || ctx.state !== 'running' || !ctx.createBuffer || !this.howler.masterGain) return;
+    const fx = this._fx();
+    if (!fx || !fx.ctx.createBuffer) return;
+    const { ctx, out } = fx;
     if (!this._barkBuffer) {
       this._barkBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * .18), ctx.sampleRate);
       const data = this._barkBuffer.getChannelData(0);
@@ -144,7 +209,7 @@ export class AudioSystem {
     const source = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), gain = ctx.createGain();
     source.buffer = this._barkBuffer; filter.type = 'bandpass'; filter.frequency.value = 700; filter.Q.value = .7;
     gain.gain.value = .5;
-    source.connect(filter); filter.connect(gain); gain.connect(this.howler.masterGain);
+    source.connect(filter); filter.connect(gain); gain.connect(out);
     source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
     source.start();
   }
@@ -165,79 +230,71 @@ export class AudioSystem {
   }
 
   _alarmVolume(car, listener) {
-    if (!car.position || !listener) return .6;
+    if (!car.position || !listener) return .6 * this._level('traffic');
     const distance = Math.hypot(car.position.x - listener.x, car.position.y - listener.y, car.position.z - listener.z);
     // Volumen completo a cinco metros; silencio desde los 41 m, sin panner espacial.
-    return .6 * Math.max(0, Math.min(1, (41 - distance) / 36));
+    return .6 * this._level('traffic') * Math.max(0, Math.min(1, (41 - distance) / 36));
   }
 
   playMovingTheft(car) {
     if (!car?.traffic || this._paused) return false;
     const sound = this.theftSounds[Math.min(4, Math.floor(this.vehicles.random() * 5))];
     if (sound.state() !== 'loaded') return false;
-    const previous = this._theftVoices.get(car);
-    if (previous) previous.sound.stop(previous.id);
+    // Una sola voz a la vez: el reclamo reemplaza cualquier otra frase en curso.
+    for (const previous of this._theftVoices.values()) previous.sound.stop(previous.id);
+    this._theftVoices.clear();
+    this.vehicles.stopRemarks();
     const voice = { sound, id: sound.play() };
     sound.volume(this._theftVolume(car, this._listenerPosition), voice.id);
     this._theftVoices.set(car, voice);
     // El reclamo por el robo reemplaza la frase normal de obstrucción de ese conductor.
     const driver = this.vehicles.instances.get(car);
     if (driver) {
-      if (driver.remark) { driver.remark.sound.stop(driver.remark.id); driver.remark = null; }
       driver.cooldown = Math.max(driver.cooldown, sound.duration() + .5);
     }
     return true;
   }
 
   _theftVolume(car, listener) {
-    if (!car.position || !listener) return .75;
+    if (!car.position || !listener) return .75 * this._level('voices');
     const distance = Math.hypot(car.position.x - listener.x, car.position.y - listener.y, car.position.z - listener.z);
-    return .75 * Math.max(0, Math.min(1, (12 - distance) / 10));
+    return .75 * this._level('voices') * Math.max(0, Math.min(1, (12 - distance) / 10));
   }
 
-  updateSteps(moving, running, groundType = 'sidewalk', isRaining = false) {
-    const s = this.sounds.steps;
-    if (!s) return;
-
-    if (moving) {
-      let baseRate = running ? 1.4 : 1.0;
-      let vol = 0.5;
-
-      if (groundType === 'dirt' || groundType === 'grass') {
-        baseRate *= 0.88;
-        vol = 0.38;
-      } else if (groundType === 'road' || groundType === 'busway') {
-        baseRate *= 1.05;
-        vol = 0.48;
-      } else if (groundType === 'sidewalk' || groundType === 'floor' || groundType === 'plaza') {
-        baseRate *= 1.0;
-        vol = 0.52;
-      }
-
-      if (isRaining) {
-        baseRate *= 1.04;
-      }
-
-      if (this._stepsRate !== baseRate) {
-        if (typeof s.rate === 'function') s.rate(baseRate);
-        this._stepsRate = baseRate;
-      }
-
-      if (!this._stepsPlaying) {
-        if (typeof s.volume === 'function') s.volume(vol);
-        if (typeof s.play === 'function') s.play();
-        this._stepsPlaying = true;
-        this._lastGroundType = groundType;
-        this._lastRunning = running;
-      } else if (this._lastGroundType !== groundType || this._lastRunning !== running) {
-        if (typeof s.volume === 'function') s.volume(vol);
-        this._lastGroundType = groundType;
-        this._lastRunning = running;
-      }
-    } else if (this._stepsPlaying) {
-      if (typeof s.stop === 'function') s.stop();
+  /**
+   * Pisadas sueltas cada cierta distancia recorrida en el suelo (travelled, en metros por cuadro).
+   * Sin distancia (llamadas antiguas) se estima con la velocidad nominal del jugador.
+   */
+  updateSteps(moving, running, groundType = 'sidewalk', isRaining = false, travelled = null, dt = 1 / 60) {
+    const stride = running ? STRIDE_RUN : STRIDE_WALK;
+    if (!moving) {
+      // Al arrancar, la primera pisada llega pronto en lugar de esperar un paso completo.
+      this._stepDistance = stride * .6;
       this._stepsPlaying = false;
+      return;
     }
+    this._stepsPlaying = true;
+    this._lastGroundType = groundType;
+    this._lastRunning = running;
+    if (this._paused) return;
+    this._stepDistance += travelled ?? (running ? 6 : 3) * dt;
+    if (this._stepDistance < stride) return;
+    this._stepDistance %= stride;
+    this._playStep(running, groundType, isRaining);
+  }
+
+  _playStep(running, groundType, isRaining) {
+    const s = this.sounds.steps;
+    if (!s || s.state() !== 'loaded') return;
+    // Evita repetir la misma pisada dos veces seguidas.
+    let index = Math.floor(Math.random() * (STEP_NAMES.length - 1));
+    if (index >= this._lastStep) index++;
+    this._lastStep = index;
+    const surface = STEP_SURFACES[groundType] ?? STEP_SURFACES.sidewalk;
+    const id = s.play(STEP_NAMES[index]);
+    s.volume(surface.volume * (running ? 1.12 : 1) * (.85 + Math.random() * .15) * this._level('effects'), id);
+    s.rate(surface.rate * (running ? 1.06 : 1) * (.95 + Math.random() * .1), id);
+    if (isRaining && !SOFT_SURFACES.has(groundType)) this.playSplash(running ? .2 : .14);
   }
 
   updateBoost(active) {
@@ -258,6 +315,7 @@ export class AudioSystem {
     if (this._ambientStarted) return;
     this._ambientId = this.sounds.ambient?.play();
     this._ambientStarted = true;
+    this._applyLevels(true);
   }
 
   setRaining(raining) {
@@ -274,6 +332,7 @@ export class AudioSystem {
       if (this._rainId !== undefined && sound.playing(this._rainId)) sound.pause(this._rainId);
     } else if (sound.state() === 'loaded' && (this._rainId === undefined || !sound.playing(this._rainId))) {
       this._rainId = sound.play(this._rainId);
+      sound.volume(this._baseVolume.get(sound) * this._level('ambient'), this._rainId);
     }
   }
 
@@ -303,6 +362,9 @@ export class AudioSystem {
   updateWorld(dt, position, _camera, vehicles, bus) {
     this._listenerPosition = position;
     this.setPaused(false);
+    const duckTarget = this._voiceActive() ? VOICE_DUCK : 1;
+    this._duck += (duckTarget - this._duck) * (1 - Math.exp(-dt * (duckTarget < this._duck ? DUCK_ATTACK : DUCK_RELEASE)));
+    this._applyLevels();
     this.vehicles.update(dt, position, vehicles, bus);
     for (const [car, voice] of this._theftVoices) {
       if (!voice.sound.playing(voice.id)) this._theftVoices.delete(car);
@@ -339,7 +401,34 @@ export class AudioSystem {
     if (this._paused || this.muted || typeof window === 'undefined') return null;
     const ctx = this.howler.ctx;
     if (!ctx || ctx.state !== 'running' || !this.howler.masterGain) return null;
-    return { ctx, out: this.howler.masterGain };
+    if (!this._effectsBus || this._effectsBus.context !== ctx) {
+      this._effectsBus = ctx.createGain();
+      this._effectsBus.connect(this.howler.masterGain);
+    }
+    this._effectsBus.gain.value = this.mix.effects;
+    return { ctx, out: this._effectsBus };
+  }
+
+  /** Chapoteo corto sobre superficies duras mojadas, acompañando la pisada. */
+  playSplash(level = .14) {
+    const fx = this._fx();
+    if (!fx || !fx.ctx.createBuffer) return;
+    const { ctx, out } = fx;
+    if (!this._splashBuffer) {
+      this._splashBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * .12), ctx.sampleRate);
+      const data = this._splashBuffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) {
+        const t = i / ctx.sampleRate;
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-t * 38) * Math.min(1, t * 400);
+      }
+    }
+    const source = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), gain = ctx.createGain();
+    source.buffer = this._splashBuffer; source.playbackRate.value = .9 + Math.random() * .25;
+    filter.type = 'highpass'; filter.frequency.value = 1800;
+    gain.gain.value = level;
+    source.connect(filter); filter.connect(gain); gain.connect(out);
+    source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
+    source.start();
   }
 
   playFart() {

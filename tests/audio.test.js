@@ -224,9 +224,8 @@ test('los nueve audios nuevos existen y las rutas de claxon coinciden con los no
     const metadata = audioMetadata(bytes);
     assert.equal(metadata.format, 'opus');
     assert.ok(bytes.length > 1000);
-    if (sound.options.sprite) {
-      const [start, length] = sound.options.sprite.honk;
-      assert.ok(metadata.duration * 1000 >= start + length, 'La pitada cabe en el nuevo archivo');
+    for (const [start, length] of Object.values(sound.options.sprite ?? {})) {
+      assert.ok(metadata.duration * 1000 >= start + length, 'El fragmento cabe en el archivo');
     }
   }
   assert.deepEqual([bank.horn1, bank.horn2, bank.horn3].map(sound => sound.options.src[0]),
@@ -403,18 +402,108 @@ test('menús pausan motores y ambiente sin duplicar voces al volver; eliminar au
   assert.equal(audio.vehicles.instances.size, 0);
 });
 
-test('el audio normal ignora la orientación de cámara y correr cambia los pasos sin reiniciarlos', () => {
+test('el audio normal ignora la orientación de cámara', () => {
   const { audio, howler } = fixture();
   const camera = new THREE.PerspectiveCamera(); camera.position.set(100, 50, 100); camera.lookAt(101, 50, 100);
   audio.updateWorld(.1, new THREE.Vector3(10, 0, 20), camera, []);
   assert.equal(howler.position, undefined);
   assert.equal(howler.direction, undefined);
-  audio.updateSteps(true, false); audio.updateSteps(true, true);
-  assert.equal(audio.sounds.steps.starts, 1);
-  assert.equal(audio.sounds.steps.currentRate, 1.4);
   camera.lookAt(99, 50, 100);
   audio.updateWorld(.1, origin, camera, []);
   assert.equal(howler.direction, undefined);
+  audio.dispose();
+});
+
+test('las pisadas siguen la distancia recorrida, sin repetir la misma ni sonar en el aire', () => {
+  const { audio } = fixture(), steps = audio.sounds.steps;
+  assert.equal(steps.options.loop, undefined, 'Ya no es un bucle continuo');
+  const played = () => [...steps.voices.values()].map(voice => voice.sprite);
+  audio.updateSteps(false, false);
+  // Caminando a 3 m/s durante 2 s: una pisada cada 1,15 m y la primera llega pronto.
+  for (let i = 0; i < 120; i++) audio.updateSteps(true, false, 'sidewalk', false, 3 / 60);
+  const walking = steps.starts;
+  assert.ok(walking >= 5 && walking <= 6, `Unas cinco pisadas en seis metros (${walking})`);
+  assert.ok(played().every(name => /^step[1-7]$/.test(name)));
+  assert.ok(played().every((name, i, all) => i === 0 || name !== all[i - 1]), 'No repite dos veces la misma pisada');
+  // Corriendo, la zancada es más larga: en los mismos seis metros hay menos pisadas.
+  audio.updateSteps(false, false);
+  for (let i = 0; i < 60; i++) audio.updateSteps(true, true, 'sidewalk', false, 6 / 60);
+  assert.ok(steps.starts - walking < walking);
+  // En el aire (sin distancia sobre el suelo) no hay pisadas.
+  const before = steps.starts;
+  for (let i = 0; i < 60; i++) audio.updateSteps(true, false, 'sidewalk', false, 0);
+  assert.equal(steps.starts, before);
+  audio.dispose();
+});
+
+test('el pasto suena más suave y grave que el andén, y la pausa calla las pisadas', () => {
+  const { audio } = fixture(), steps = audio.sounds.steps;
+  const last = () => [...steps.voices.values()].at(-1);
+  audio.updateSteps(true, false, 'sidewalk', false, 2);
+  const sidewalk = last();
+  audio.updateSteps(true, false, 'grass', false, 2);
+  const grass = last();
+  assert.ok(grass.volume < sidewalk.volume && grass.rate < sidewalk.rate);
+  audio.setPaused(true);
+  const before = steps.starts;
+  audio.updateSteps(true, false, 'sidewalk', false, 2);
+  assert.equal(steps.starts, before);
+  audio.dispose();
+});
+
+test('el volumen por categoría ajusta tráfico, ambiente, voces y efectos y se guarda', () => {
+  const store = new Map();
+  globalThis.localStorage = { getItem: key => store.get(key) ?? null, setItem: (key, value) => store.set(key, value) };
+  try {
+    const { audio } = fixture(), vehicle = car(3);
+    audio.startAmbient(); audio.setRaining(true);
+    for (let i = 0; i < 40; i++) audio.updateWorld(.1, origin, null, [vehicle]);
+    const state = audio.vehicles.instances.get(vehicle.car), full = state.idleVolume;
+    assert.equal(audio.setMix('traffic', .5), .5);
+    for (let i = 0; i < 40; i++) audio.updateWorld(.1, origin, null, [vehicle]);
+    assert.ok(Math.abs(state.idleVolume - full / 2) < .01);
+    audio.setMix('ambient', .25);
+    assert.equal(audio.sounds.ambient.voices.get(audio._ambientId).volume, .18 * .25);
+    assert.equal(audio.sounds.rain.voices.get(audio._rainId).volume, .45 * .25);
+    audio.setMix('effects', 0); audio.play('pickup');
+    assert.equal([...audio.sounds.pickup.voices.values()].at(-1).volume, 0);
+    audio.setMix('voices', 2); assert.equal(audio.getMix('voices'), 1);
+    assert.equal(audio.setMix('desconocida', .3), 1);
+    assert.deepEqual(JSON.parse(store.get('bazuko.audio_mix')), { ambient: .25, traffic: .5, voices: 1, effects: 0 });
+    audio.dispose();
+    const again = new AudioSystem({ HowlClass: FakeHowl, howler: { volume() {} } });
+    assert.equal(again.getMix('traffic'), .5); assert.equal(again.getMix('effects'), 0);
+    again.dispose();
+  } finally { delete globalThis.localStorage; }
+});
+
+test('mientras alguien habla bajan tráfico y ambiente, y solo suena una voz a la vez', () => {
+  const { audio } = fixture(), first = car(2), second = car(-2);
+  first.car.traffic = second.car.traffic = true;
+  audio.startAmbient();
+  for (let i = 0; i < 40; i++) audio.updateWorld(.1, origin, null, [first, second]);
+  const a = audio.vehicles.instances.get(first.car), b = audio.vehicles.instances.get(second.car);
+  const quiet = a.idleVolume, ambient = audio.sounds.ambient.voices.get(audio._ambientId);
+  assert.equal(ambient.volume, .18);
+  // Primer conductor bloqueado: pita y habla; el segundo pita pero calla.
+  first.personBlocked = true; a.patience = 0;
+  audio.updateWorld(.1, origin, null, [first, second]);
+  assert.ok(a.remark);
+  second.personBlocked = true; b.patience = 0; audio.vehicles._lastHornAt = -Infinity;
+  for (let i = 0; i < 30; i++) audio.updateWorld(.1, origin, null, [first, second]);
+  assert.ok(b.horn, 'El segundo conductor sí pita');
+  assert.equal(b.remark, undefined, 'pero no habla encima del primero');
+  assert.ok(a.idleVolume < quiet * .6, 'El motor baja mientras suena la frase');
+  assert.ok(ambient.volume < .18 * .6, 'El ambiente también baja');
+  // El reclamo por robo reemplaza cualquier frase en curso.
+  audio.playMovingTheft(second.car);
+  assert.equal(a.remark, null);
+  // Al terminar las voces, todo vuelve a su nivel.
+  for (const voice of audio._theftVoices.values()) voice.sound.stop(voice.id);
+  first.personBlocked = second.personBlocked = false;
+  for (let i = 0; i < 60; i++) audio.updateWorld(.1, origin, null, [first, second]);
+  assert.ok(Math.abs(a.idleVolume - quiet) < .01);
+  assert.ok(Math.abs(ambient.volume - .18) < .002);
   audio.dispose();
 });
 

@@ -21,6 +21,10 @@ export class VehicleAudio {
     this.driverSounds = driverSounds;
     this.instances = new Map();
     this.paused = false;
+    // Multiplicadores de la mezcla (volumen por categoría y atenuación mientras alguien habla).
+    this.levels = { traffic: 1, voices: 1 };
+    // Otra voz ajena a los conductores (p. ej. el reclamo por robo) que impide empezar frases.
+    this.externalVoiceActive = () => false;
     this._hornClock = 0;
     this._lastHornAt = -Infinity;
     this._lastAmbientHornAt = -Infinity;
@@ -50,13 +54,27 @@ export class VehicleAudio {
     return { sound, id };
   }
 
+  /** Hay una frase de conductor sonando; con except se ignora la del propio carro. */
+  remarkPlaying(except = null) {
+    for (const state of this.instances.values()) {
+      if (state !== except && state.remark && state.remark.sound.playing(state.remark.id)) return true;
+    }
+    return false;
+  }
+
+  stopRemarks() {
+    for (const state of this.instances.values()) {
+      if (state.remark) { state.remark.sound.stop(state.remark.id); state.remark = null; }
+    }
+  }
+
   /** Pitada de tráfico entre carros: rara, cercana y sujeta al mismo presupuesto. */
   ambientHonk(x, z, listener) {
     if (this.paused || !listener) return false;
     const distance = Math.hypot(x - listener.x, z - listener.z);
     if (distance >= AMBIENT_HORN_FAR || this._hornClock - this._lastAmbientHornAt < AMBIENT_HORN_GAP || !this._hornAllowed()) return false;
     const voice = this._startHorn(Math.floor(this.random() * 3),
-      AMBIENT_HORN_VOLUME * distanceGain(distance, HORN_NEAR, AMBIENT_HORN_FAR), .94 + this.random() * .12);
+      AMBIENT_HORN_VOLUME * this.levels.traffic * distanceGain(distance, HORN_NEAR, AMBIENT_HORN_FAR), .94 + this.random() * .12);
     if (!voice) return false;
     this._lastAmbientHornAt = this._hornClock;
     this._ambientHorns.push(voice);
@@ -146,7 +164,7 @@ export class VehicleAudio {
       const drive = this._loop(state, 'drive', this.sounds[entry.bus ? 'busDrive' : 'carDrive']);
       const mix = Math.min(1, Math.max(0, entry.source.speed) / 2.5);
       const smoothing = 1 - Math.exp(-dt * 7);
-      const level = entry.gain * crowdScale;
+      const level = entry.gain * crowdScale * this.levels.traffic;
       state.idleVolume += ((1 - mix) * (entry.bus ? .38 : .34) * level - state.idleVolume) * smoothing;
       state.driveVolume += (mix * (entry.bus ? .42 : .40) * level - state.driveVolume) * smoothing;
       for (const [voice, volume, rate] of [[idle, state.idleVolume, state.pitch],
@@ -158,10 +176,12 @@ export class VehicleAudio {
       // Fuera del alcance del claxon el conductor espera sin pitar; sigue pudiendo hacerlo al acercarse.
       if (state.blockedFor >= state.patience && state.cooldown === 0 && entry.voiceDistance < HORN_FAR && this._hornAllowed()) {
         if (state.horn) state.horn.sound.stop(state.horn.id);
-        const horn = this._startHorn(state.hornIndex, HORN_VOLUME * distanceGain(entry.voiceDistance, HORN_NEAR, HORN_FAR), state.pitch);
+        const horn = this._startHorn(state.hornIndex, HORN_VOLUME * this.levels.traffic * distanceGain(entry.voiceDistance, HORN_NEAR, HORN_FAR), state.pitch);
         if (horn) {
           state.horn = horn;
-          if (!entry.bus && entry.voiceDistance < 8 && this.driverSounds.length) {
+          // Una sola voz a la vez: si otro conductor o el reclamo por robo ya hablan, solo pita.
+          if (!entry.bus && entry.voiceDistance < 8 && this.driverSounds.length
+            && !this.remarkPlaying(state) && !this.externalVoiceActive()) {
             const index = Math.min(this.driverSounds.length - 1, Math.floor(this.random() * this.driverSounds.length));
             const remark = this.driverSounds[index];
             if (remark.state() === 'loaded') {
@@ -175,7 +195,7 @@ export class VehicleAudio {
       if (state.remark) {
         const { sound, id } = state.remark;
         if (!sound.playing(id)) state.remark = null;
-        else sound.volume(.7 * Math.max(0, Math.min(1, (8 - entry.voiceDistance) / 6)), id);
+        else sound.volume(.7 * this.levels.voices * Math.max(0, Math.min(1, (8 - entry.voiceDistance) / 6)), id);
       }
     }
   }

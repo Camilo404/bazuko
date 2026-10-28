@@ -919,7 +919,9 @@ export class Game {
     const isRaining = !!this.weather?.isRaining;
     this.audio.updateWorld?.(dt, this.player.position, this.cameraRig.camera, this.traffic?.vehicles ?? [], this.world.active?.busServices ?? this.world.active?.busService);
     this.audio.setRaining?.(isRaining);
-    this.audio.updateSteps(moving, this.input.isRunning, groundType, isRaining);
+    // Las pisadas siguen la distancia recorrida en el suelo; en el aire no suenan.
+    const travelled = this.player.isGrounded === false ? 0 : Math.hypot(this.player.position.x - previousX, this.player.position.z - previousZ);
+    this.audio.updateSteps(moving, this.input.isRunning, groundType, isRaining, travelled, dt);
     this.audio.updateBoost(this.interaction.boostActive);
     this.overlays?.update?.(dt, this.weather, this.clock, this.psychosis);
     this.profiler?.mark?.('entidadesClimaAudio');
