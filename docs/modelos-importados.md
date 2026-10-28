@@ -14,7 +14,20 @@ Se incorporan estos nueve archivos del fork [mreyeswilson/bazuko](https://github
 | `semaforo.opt.glb` | Semáforos instanciados | `ce667cb18b60d88806ff94ca235492d281afc211` |
 | `lamparas.opt.glb` | Lámparas sobre los andenes | `69c565a575235631215903d9d489524559801f1f` |
 
-Los GLB conservan sus bytes y texturas originales. Se adaptan escala y orientación en tiempo de carga. Los carros siguen apuntando a +X local y el bus a −Z local; sus dimensiones se ajustan a las rutas existentes. El cargador comparte geometrías y texturas entre instancias. El bus tiene materiales independientes para que su desvanecimiento no cambie otras instancias.
+Los GLB conservan sus texturas originales. Seis de ellos tienen la geometría reducida con Blender mediante `tools/modelos/optimizar_glb.py`, que parte siempre del archivo del commit en que se incorporó:
+
+| Archivo | Triángulos | Tamaño |
+| --- | --- | --- |
+| `car1.opt.glb` | 11.923 → 5.887 | 735 → 513 KiB |
+| `car2.opt.glb` | 9.529 → 4.730 | 776 → 599 KiB |
+| `contenedor.opt.glb` | 18.640 → 6.524 | 1.084 → 593 KiB |
+| `bolsa.opt.glb` | 7.973 → 2.375 | 334 → 131 KiB |
+| `cambuche.opt.glb` | 44.058 → 22.029 | 2.366 → 1.472 KiB |
+| `semaforo.opt.glb` | 3.544 → 2.302 | 320 → 205 KiB |
+
+Canecas y cambuche se reducen sin soldar las costuras UV para que la textura no se desplace; carros, bolsa y semáforo se sueldan antes para no abrir grietas. El 4 % inferior de cada modelo no se reduce, de modo que el centro del poste que calculan `fitImportedModel` y los semáforos no cambia, y las dimensiones se mantienen. El semáforo ya no incluye los mapas normal y de rugosidad que su material descarta; los lentes se siguen detectando por el color base. El bus y las lámparas se dejan intactos: el fuelle del bus se abre al reducirlo. Para regenerarlos: `blender -b --factory-startup --python tools/modelos/optimizar_glb.py`.
+
+Se adaptan escala y orientación en tiempo de carga. Los carros siguen apuntando a +X local y el bus a −Z local; sus dimensiones se ajustan a las rutas existentes. El cargador comparte geometrías y texturas entre instancias. El bus tiene materiales independientes para que su desvanecimiento no cambie otras instancias.
 
 Los modelos de vehículos contienen las ruedas y carrocería en una misma malla; las ruedas de estos GLB no giran por separado. La circulación, las paradas y el frenado siguen a cargo de los sistemas de esta versión.
 
