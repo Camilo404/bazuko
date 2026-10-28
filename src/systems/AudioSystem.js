@@ -79,13 +79,12 @@ export class AudioSystem {
     this._ambientStarted = false;
     this._lastGroundType = 'sidewalk';
     this._lastRunning = false;
-    if (typeof window !== 'undefined' && window.addEventListener) {
-      window.addEventListener('car-honk', (e) => {
-        const pitch = 380 + Math.random() * 80;
-        this.playCarHorn(pitch, 0.22 + Math.random() * 0.12);
-      });
-    }
-
+    // Las pitadas entre carros solo se oyen cerca del jugador y comparten el límite de claxones.
+    this._carHonk = (event) => {
+      const { x, z } = event.detail ?? {};
+      if (Number.isFinite(x) && Number.isFinite(z)) this.vehicles.ambientHonk(x, z, this._listenerPosition);
+    };
+    eventTarget?.addEventListener('car-honk', this._carHonk);
 
     // Desbloquear audio tras primer click (política de navegadores)
     const unlock = () => {
@@ -326,6 +325,7 @@ export class AudioSystem {
     this._theftVoices.clear();
     this._carAlarms.clear();
     this.eventTarget?.removeEventListener('dog-bark', this._dogBark);
+    this.eventTarget?.removeEventListener('car-honk', this._carHonk);
     this.vehicles.clear();
     this._removeUnlock();
     globalThis.document?.removeEventListener?.('visibilitychange', this._visibilityChanged);
@@ -334,11 +334,19 @@ export class AudioSystem {
 
   /** ===== Efectos Procedurales (Web Audio) ===== */
 
+  /** Contexto activo para efectos sintetizados; pasan por el volumen maestro y callan en pausa. */
+  _fx() {
+    if (this._paused || this.muted || typeof window === 'undefined') return null;
+    const ctx = this.howler.ctx;
+    if (!ctx || ctx.state !== 'running' || !this.howler.masterGain) return null;
+    return { ctx, out: this.howler.masterGain };
+  }
+
   playFart() {
-    if (this._paused || this.muted || typeof window === 'undefined') return;
+    const fx = this._fx();
+    if (!fx) return;
     try {
-      const ctx = this.howler.ctx;
-      if (!ctx || ctx.state === 'suspended') return;
+      const { ctx, out } = fx;
       const t = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -352,22 +360,22 @@ export class AudioSystem {
       osc.frequency.setValueAtTime(130, t);
       osc.frequency.exponentialRampToValueAtTime(38, t + 0.38);
 
-      gain.gain.setValueAtTime(0.45 * (this.howler.masterGain ? 1 : this._masterVolume), t);
+      gain.gain.setValueAtTime(0.45, t);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
 
       osc.connect(filter);
       filter.connect(gain);
-      gain.connect(this.howler.masterGain ?? ctx.destination);
+      gain.connect(out);
       osc.start(t);
       osc.stop(t + 0.39);
     } catch {}
   }
 
   playWhoosh() {
-    if (this._paused || this.muted || typeof window === 'undefined') return;
+    const fx = this._fx();
+    if (!fx) return;
     try {
-      const ctx = this.howler.ctx;
-      if (!ctx || ctx.state === 'suspended') return;
+      const { ctx, out } = fx;
       const t = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -378,21 +386,21 @@ export class AudioSystem {
       osc.frequency.linearRampToValueAtTime(110, t + 0.24);
 
       gain.gain.setValueAtTime(0.01, t);
-      gain.gain.linearRampToValueAtTime(0.35 * (this.howler.masterGain ? 1 : this._masterVolume), t + 0.08);
+      gain.gain.linearRampToValueAtTime(0.35, t + 0.08);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
 
       osc.connect(gain);
-      gain.connect(this.howler.masterGain ?? ctx.destination);
+      gain.connect(out);
       osc.start(t);
       osc.stop(t + 0.25);
     } catch {}
   }
 
   playSplat() {
-    if (this._paused || this.muted || typeof window === 'undefined') return;
+    const fx = this._fx();
+    if (!fx) return;
     try {
-      const ctx = this.howler.ctx;
-      if (!ctx || ctx.state === 'suspended') return;
+      const { ctx, out } = fx;
       const t = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -401,21 +409,21 @@ export class AudioSystem {
       osc.frequency.setValueAtTime(290, t);
       osc.frequency.exponentialRampToValueAtTime(45, t + 0.18);
 
-      gain.gain.setValueAtTime(0.55 * (this.howler.masterGain ? 1 : this._masterVolume), t);
+      gain.gain.setValueAtTime(0.55, t);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
 
       osc.connect(gain);
-      gain.connect(this.howler.masterGain ?? ctx.destination);
+      gain.connect(out);
       osc.start(t);
       osc.stop(t + 0.19);
     } catch {}
   }
 
   playHeartbeat(intensity = 1) {
-    if (this._paused || this.muted || typeof window === 'undefined') return;
+    const fx = this._fx();
+    if (!fx) return;
     try {
-      const ctx = this.howler.ctx;
-      if (!ctx || ctx.state === 'suspended') return;
+      const { ctx, out } = fx;
       const t = ctx.currentTime;
       const makeThump = (offset, vol) => {
         const osc = ctx.createOscillator();
@@ -423,10 +431,10 @@ export class AudioSystem {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(65, t + offset);
         osc.frequency.exponentialRampToValueAtTime(28, t + offset + 0.12);
-        gain.gain.setValueAtTime(vol * 0.45 * (this.howler.masterGain ? 1 : this._masterVolume), t + offset);
+        gain.gain.setValueAtTime(vol * 0.45, t + offset);
         gain.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.12);
         osc.connect(gain);
-        gain.connect(this.howler.masterGain ?? ctx.destination);
+        gain.connect(out);
         osc.start(t + offset);
         osc.stop(t + offset + 0.13);
       };
@@ -436,10 +444,10 @@ export class AudioSystem {
   }
 
   playPsychosisWhisper() {
-    if (this._paused || this.muted || typeof window === 'undefined') return;
+    const fx = this._fx();
+    if (!fx) return;
     try {
-      const ctx = this.howler.ctx;
-      if (!ctx || ctx.state === 'suspended') return;
+      const { ctx, out } = fx;
       const dur = 1.1;
       const bufSize = Math.floor(ctx.sampleRate * dur);
       const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
@@ -455,22 +463,22 @@ export class AudioSystem {
 
       const gain = ctx.createGain();
       gain.gain.setValueAtTime(0.01, ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.22 * (this.howler.masterGain ? 1 : this._masterVolume), ctx.currentTime + 0.25);
+      gain.gain.linearRampToValueAtTime(0.22, ctx.currentTime + 0.25);
       gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + dur);
 
       src.connect(filter);
       filter.connect(gain);
-      gain.connect(this.howler.masterGain ?? ctx.destination);
+      gain.connect(out);
       src.start();
       src.stop(ctx.currentTime + dur);
     } catch {}
   }
 
   playCarHorn(frequency = 415, duration = 0.28) {
-    if (this.muted || typeof window === 'undefined') return;
+    const fx = this._fx();
+    if (!fx) return;
     try {
-      const ctx = Howler.ctx;
-      if (!ctx || ctx.state === 'suspended') return;
+      const { ctx, out } = fx;
       const t = ctx.currentTime;
 
       // Doble tono armónico típico de bocina de carro
@@ -485,13 +493,13 @@ export class AudioSystem {
       osc2.frequency.setValueAtTime(frequency * 1.25, t); // tercera mayor
 
       gain.gain.setValueAtTime(0.01, t);
-      gain.gain.linearRampToValueAtTime(0.35 * this._masterVolume, t + 0.02);
-      gain.gain.setValueAtTime(0.32 * this._masterVolume, t + duration - 0.04);
+      gain.gain.linearRampToValueAtTime(0.35, t + 0.02);
+      gain.gain.setValueAtTime(0.32, t + duration - 0.04);
       gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
 
       osc1.connect(gain);
       osc2.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(out);
 
       osc1.start(t);
       osc2.start(t);
@@ -501,10 +509,10 @@ export class AudioSystem {
   }
 
   playCartRumble() {
-    if (this.muted || typeof window === 'undefined') return;
+    const fx = this._fx();
+    if (!fx) return;
     try {
-      const ctx = Howler.ctx;
-      if (!ctx || ctx.state === 'suspended') return;
+      const { ctx, out } = fx;
       const t = ctx.currentTime;
       const dur = 0.15;
       const osc = ctx.createOscillator();
@@ -512,10 +520,10 @@ export class AudioSystem {
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(75 + Math.random() * 20, t);
       osc.frequency.linearRampToValueAtTime(85, t + dur);
-      gain.gain.setValueAtTime(0.12 * this._masterVolume, t);
+      gain.gain.setValueAtTime(0.07, t);
       gain.gain.linearRampToValueAtTime(0.01, t + dur);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(out);
       osc.start(t);
       osc.stop(t + dur);
     } catch {}
@@ -523,50 +531,50 @@ export class AudioSystem {
 
 
   playJump() {
-    if (this.muted || typeof window === 'undefined') return;
+    const fx = this._fx();
+    if (!fx) return;
     try {
-      const ctx = Howler.ctx;
-      if (!ctx || ctx.state === 'suspended') return;
+      const { ctx, out } = fx;
       const t = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(140, t);
       osc.frequency.exponentialRampToValueAtTime(320, t + 0.16);
-      gain.gain.setValueAtTime(0.28 * this._masterVolume, t);
+      gain.gain.setValueAtTime(0.28, t);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(out);
       osc.start(t);
       osc.stop(t + 0.17);
     } catch {}
   }
 
   playLanding() {
-    if (this.muted || typeof window === 'undefined') return;
+    const fx = this._fx();
+    if (!fx) return;
     try {
-      const ctx = Howler.ctx;
-      if (!ctx || ctx.state === 'suspended') return;
+      const { ctx, out } = fx;
       const t = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(95, t);
       osc.frequency.exponentialRampToValueAtTime(35, t + 0.12);
-      gain.gain.setValueAtTime(0.42 * this._masterVolume, t);
+      gain.gain.setValueAtTime(0.42, t);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(out);
       osc.start(t);
       osc.stop(t + 0.13);
     } catch {}
   }
 
   playPunchHit() {
-    if (this.muted || typeof window === 'undefined') return;
+    const fx = this._fx();
+    if (!fx) return;
     try {
-      const ctx = Howler.ctx;
-      if (!ctx || ctx.state === 'suspended') return;
+      const { ctx, out } = fx;
       const t = ctx.currentTime;
       const osc1 = ctx.createOscillator();
       const osc2 = ctx.createOscillator();
@@ -580,12 +588,12 @@ export class AudioSystem {
       osc2.frequency.setValueAtTime(120, t);
       osc2.frequency.exponentialRampToValueAtTime(30, t + 0.15);
 
-      gain.gain.setValueAtTime(0.55 * this._masterVolume, t);
+      gain.gain.setValueAtTime(0.55, t);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
 
       osc1.connect(gain);
       osc2.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(out);
 
       osc1.start(t);
       osc2.start(t);

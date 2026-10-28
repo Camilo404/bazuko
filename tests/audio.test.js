@@ -115,7 +115,7 @@ test('cada pitada elige al azar entre las doce frases de Valentina y Roberto', (
   assert.equal(audio.driverSounds.length, 12);
   for (let i = 0; i < files.length; i++) {
     audio.vehicles.random = () => (i + .1) / files.length;
-    state.cooldown = 0;
+    state.cooldown = 0; audio.vehicles._lastHornAt = -Infinity;
     audio.updateWorld(.1, origin, null, [vehicle]);
     const file = files[i];
     assert.equal(state.remark.sound.options.src[0], `/audio/${file}`);
@@ -133,7 +133,7 @@ test('las frases solo empiezan a menos de ocho metros, se atenúan y los menús 
   vehicle.personBlocked = true; state.patience = 0;
   audio.updateWorld(.1, listener, null, [vehicle]);
   assert.ok(state.horn); assert.equal(state.remark, undefined, 'La frase no empieza fuera de su alcance');
-  listener.x = 2; state.cooldown = 0;
+  listener.x = 2; state.cooldown = 0; audio.vehicles._lastHornAt = -Infinity;
   audio.updateWorld(.1, listener, null, [vehicle]);
   const { sound, id } = state.remark;
   listener.x = 5; audio.updateWorld(.1, listener, null, [vehicle]);
@@ -293,18 +293,18 @@ test('el claxon espera una obstrucción peatonal y mantiene enfriamiento indepen
   assert.equal(bank.horn2.starts, 2);
   const a = audio.vehicles.instances.get(first.car), b = audio.vehicles.instances.get(second.car);
   assert.notEqual(a.horn.id, b.horn.id);
-  assert.equal(bank.horn2.voices.get(a.horn.id).volume, .48);
+  assert.equal(bank.horn2.voices.get(a.horn.id).volume, .4);
   first.personBlocked = second.personBlocked = false;
   for (let i = 0; i < 100; i++) audio.vehicles.update(.1, origin, [first, second]);
   assert.equal(bank.horn2.starts, 2);
   audio.dispose();
 });
 
-test('el presupuesto de ocho vehículos cercanos evita motores lejanos y libera los retirados', () => {
+test('el presupuesto de seis vehículos cercanos evita motores lejanos y libera los retirados', () => {
   const { audio, bank } = fixture();
   const cars = Array.from({ length: 20 }, (_, index) => car(index * 4));
   audio.vehicles.update(.1, origin, cars);
-  assert.equal(bank.carIdle.starts, 8); assert.equal(bank.carDrive.starts, 8);
+  assert.equal(bank.carIdle.starts, 6); assert.equal(bank.carDrive.starts, 6);
   assert.equal(audio.vehicles.instances.get(cars[19].car).idle, null);
   const removed = audio.vehicles.instances.get(cars[0].car).idle.id;
   audio.vehicles.update(.1, origin, cars.slice(1));
@@ -314,6 +314,64 @@ test('el presupuesto de ocho vehículos cercanos evita motores lejanos y libera 
   audio.vehicles.update(.1, origin, cars.slice(1));
   assert.equal(audio.vehicles.instances.get(cars[1].car).idle, null);
   audio.dispose();
+});
+
+test('los motores se atenúan con la distancia y quedan sin voz desde los 40 metros', () => {
+  const { audio, bank } = fixture(), near = car(3), mid = car(0, 23), far = car(0, -45);
+  for (let i = 0; i < 40; i++) audio.vehicles.update(.1, origin, [near, mid, far]);
+  const a = audio.vehicles.instances.get(near.car), b = audio.vehicles.instances.get(mid.car);
+  assert.ok(Math.abs(a.idleVolume - .34) < .01, 'Pleno a menos de seis metros');
+  assert.ok(b.idleVolume > .05 && b.idleVolume < .34 * .5, 'A media distancia suena bastante más bajo');
+  assert.equal(audio.vehicles.instances.get(far.car).idle, null);
+  assert.equal(bank.carIdle.starts, 2);
+  audio.dispose();
+});
+
+test('una fila de carros junto al jugador no suma volumen sin límite', () => {
+  const { audio } = fixture(), queue = Array.from({ length: 6 }, (_, i) => car(i - 2.5, 2));
+  for (let i = 0; i < 40; i++) audio.vehicles.update(.1, origin, queue);
+  // Voces no correlacionadas suman energía: seis motores pegados equivalen a unos dos plenos.
+  const energy = queue.reduce((sum, vehicle) => sum + audio.vehicles.instances.get(vehicle.car).idleVolume ** 2, 0);
+  assert.ok(energy <= 2 * .34 ** 2 + 1e-6, `Seis motores pegados no deben sonar como seis voces plenas (${energy})`);
+  audio.dispose();
+});
+
+test('los claxones respetan su alcance, un intervalo global y como mucho dos a la vez', () => {
+  const { audio, bank } = fixture(), far = car(35), cars = [car(3), car(-3), car(0, 4), far];
+  for (const vehicle of cars) vehicle.personBlocked = true;
+  for (let i = 0; i < 10; i++) audio.vehicles.update(.1, origin, cars);
+  assert.equal(bank.horn2.starts, 0, 'Esperan su paciencia');
+  for (let i = 0; i < 8; i++) audio.vehicles.update(.1, origin, cars);
+  assert.equal(bank.horn2.starts, 1, 'Un solo pito aunque varios carros pierdan la paciencia a la vez');
+  for (let i = 0; i < 40; i++) audio.vehicles.update(.1, origin, cars);
+  assert.equal(bank.horn2.starts, 2, 'Con dos pitadas sonando, el tercero espera');
+  assert.equal(audio.vehicles.instances.get(far.car).horn, undefined, 'A más de 30 metros no pita');
+  bank.horn2.stop();
+  for (let i = 0; i < 20; i++) audio.vehicles.update(.1, origin, cars);
+  assert.equal(bank.horn2.starts, 3);
+  audio.dispose();
+});
+
+test('las pitadas del tráfico solo suenan cerca, atenuadas y espaciadas, y callan en pausa', () => {
+  const target = new EventTarget();
+  const audio = new AudioSystem({ HowlClass: FakeHowl, howler: { volume() {} }, eventTarget: target });
+  audio.vehicles.random = () => .5;
+  const honk = (x, z) => target.dispatchEvent(new CustomEvent('car-honk', { detail: { x, z } }));
+  const bank = audio.vehicleSounds;
+  honk(1, 0); assert.equal(bank.horn2.starts, 0, 'Sin oyente todavía no hay pitada');
+  audio.updateWorld(.1, origin, null, []);
+  honk(60, 0); honk(26, 0); assert.equal(bank.horn2.starts, 0, 'Las lejanas no se oyen');
+  honk(15, 0); assert.equal(bank.horn2.starts, 1);
+  const [id] = bank.horn2.voices.keys();
+  assert.ok(bank.horn2.voices.get(id).volume > 0 && bank.horn2.voices.get(id).volume < .22);
+  honk(2, 0); assert.equal(bank.horn2.starts, 1, 'Entre pitadas de tráfico hay un intervalo');
+  for (let i = 0; i < 100; i++) audio.updateWorld(.1, origin, null, []);
+  bank.horn2.stop(); honk(2, 0); assert.equal(bank.horn2.starts, 2);
+  audio.setPaused(true); assert.equal(bank.horn2.playing(), false);
+  for (let i = 0; i < 100; i++) audio.vehicles.update(.1, origin, []);
+  honk(2, 0); assert.equal(bank.horn2.starts, 2);
+  audio.dispose();
+  honk(2, 0); assert.equal(bank.horn2.starts, 2, 'Liberar el audio retira el oyente del evento');
 });
 
 test('los vehículos cercanos mantienen motor y claxon aunque no se dibujen en la cámara', () => {
