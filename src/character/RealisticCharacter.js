@@ -5,7 +5,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
-import { buildCharacterClips } from './actionforge.js';
+import { ACTIONFORGE_CLIPS, buildCharacterClips } from './actionforge.js';
+import { locomotionBlend, measureLocomotion } from './locomotion.js';
 import { PALETTES } from './look.js';
 import { addGrime, addHairTone } from './weathering.js';
 import { attachAccessories } from './props.js';
@@ -20,6 +21,14 @@ const ANIM_URLS = ['animaciones.glb', 'animaciones-prueba.glb'].map(file => MODE
 export const REALISTIC_SCALE = 1.08;
 
 const ACTIONFORGE_URL = `${MODEL_BASE}animaciones-actionforge.glb`;
+
+// Peso compartido de caminar y correr; su reparto lo decide la velocidad.
+const LOCOMOTION = 'locomocion';
+// Acciones sin clip propio: clip sustituto y velocidad de reproducción.
+const ACTION_FALLBACKS = {
+  cagar: ['buscar'], lanzar: ['pedir'], saludo: ['pedir'],
+  golpear: ['lanzar', 2] // el brazo baja dentro de los 0,38 s del golpe
+};
 
 export const REAL_DEFAULT = {
   sexo: 'hombre', edad: 'adulto', pelo: 'desordenado', barba: 'descuidada', ropa: 'chaqueta', calzado: 'tenis-rotos', cabeza: 'sin-sombrero'
@@ -94,8 +103,13 @@ async function clipsForBody(bodyId, bodyGltf) { // bodyId incluye el nivel de de
         console.warn('No se pudo cargar ActionForge; se usarán las animaciones anteriores.', error);
         return null;
       });
-      const [anims, actionforge] = await Promise.all([loadAnimations(), actionforgePromise]);
-      return buildCharacterClips(bodyGltf, anims, actionforge);
+      const actionforge = await actionforgePromise;
+      // El banco anterior (2 MB con mallas y texturas) solo se descarga si falta locomoción.
+      const complete = actionforge && ['idle', 'walk', 'run']
+        .every(key => actionforge.animations.some(clip => clip.name === ACTIONFORGE_CLIPS[key]));
+      const clips = buildCharacterClips(bodyGltf, complete ? null : await loadAnimations(), actionforge);
+      if (clips.walk) clips.walk.userData.locomotion = measureLocomotion(bodyGltf.scene, clips.walk, clips.run);
+      return clips;
     })());
   }
   return clipCache.get(bodyId);
@@ -249,11 +263,13 @@ async function buildInstance(catalog, look, lod = false) {
       actions[name].setLoop(THREE.LoopOnce, 1);
       actions[name].clampWhenFinished = true;
     }
+    // Caminar y correr avanzan por la fase compartida de update(), no por el reloj del mezclador.
+    if (clips.walk?.userData.locomotion && (name === 'walk' || name === 'run')) actions[name].timeScale = 0;
     actions[name].play();
     actions[name].setEffectiveWeight(name === 'idle' ? 1 : 0);
   }
   if (useLod) root.traverse((o) => { if (o.isMesh) o.castShadow = false; }); // lejos: sin sombra propia
-  return { root, mixer, actions, real, accessories, ownedGeometries: bodyMesh ? [bodyMesh.geometry] : [] };
+  return { root, mixer, actions, real, accessories, phase: 0, runShare: 0, ownedGeometries: bodyMesh ? [bodyMesh.geometry] : [] };
 }
 
 /** Solo recursos de instancia; los modelos y texturas del banco siguen compartidos. */
@@ -296,7 +312,7 @@ export async function createRealisticCharacter(look = {}, { lod = false } = {}) 
     inst = next;
     group.add(inst.root);
     for (const k of Object.keys(weights)) delete weights[k];
-    for (const k of Object.keys(inst.actions)) weights[k] = k === 'idle' ? 1 : 0;
+    for (const k of [...Object.keys(inst.actions), LOCOMOTION]) if (k !== 'walk' && k !== 'run') weights[k] = k === 'idle' ? 1 : 0;
   }
 
   await setLook(look);
@@ -314,31 +330,45 @@ export async function createRealisticCharacter(look = {}, { lod = false } = {}) 
     update(dt, { speed = 0, running = false, action = null } = {}) {
       if (!inst) return;
       const a = inst.actions;
-      // destino: acción especial si existe el clip; si no, idle / caminar / correr según la velocidad
-      let target = speed < 0.15 ? 'idle' : running && a.run ? 'run' : 'walk';
+      // destino: acción especial si existe el clip (o su sustituto); si no, reposo o locomoción
+      let target = speed < 0.15 ? 'idle' : a.walk ? LOCOMOTION : 'idle';
+      let scale = 1;
       if (action && speed < 0.15) {
-        if (a[action]) target = action;
-        else if (action === 'cagar' && a.buscar) target = 'buscar';
-        else if (action === 'lanzar' && a.pedir) target = 'pedir';
+        const [clip, clipScale = 1] = a[action] ? [action] : ACTION_FALLBACKS[action] ?? [];
+        if (a[clip]) { target = clip; scale = clipScale; }
       }
       if (inst?.root) {
         const targetY = action === 'cagar' && !a.cagar ? -0.3 : 0;
         inst.root.position.y += (targetY - inst.root.position.y) * Math.min(1, dt * 10);
       }
-      if (!a[target]) target = 'idle';
       if (target !== inst.previousTarget) {
-        if (a[target] && !['idle', 'walk', 'run'].includes(target)) a[target].reset().play();
+        if (target !== 'idle' && target !== LOCOMOTION) a[target].reset().setEffectiveTimeScale(scale).play();
         inst.previousTarget = target;
       }
       const k = Math.min(1, dt * 8);
-      for (const key of Object.keys(a)) {
+      for (const key of Object.keys(weights)) {
         weights[key] += ((key === target ? 1 : 0) - weights[key]) * k;
         if (key !== target && weights[key] < .001) weights[key] = 0;
-        a[key].enabled = weights[key] > 0 || key === target;
-        a[key].setEffectiveWeight(weights[key]);
       }
-      if (a.walk) a.walk.timeScale = THREE.MathUtils.clamp(speed / 1.4, 0.6, 1.6);
-      if (a.run) a.run.timeScale = THREE.MathUtils.clamp(speed / 3.5, 0.7, 1.4);
+      // Caminar y correr comparten fase; su mezcla depende de la velocidad para que los pies no deslicen.
+      const locomotion = a.walk?.getClip().userData.locomotion;
+      if (locomotion) {
+        const blend = locomotionBlend(speed, locomotion);
+        inst.runShare += (blend.run - inst.runShare) * k;
+        inst.phase = (inst.phase + blend.rate * dt) % 1;
+        a.walk.time = inst.phase * locomotion.walkDuration;
+        if (a.run) a.run.time = inst.phase * locomotion.runDuration;
+      } else {
+        inst.runShare += ((running && a.run ? 1 : 0) - inst.runShare) * k;
+        if (a.walk) a.walk.timeScale = THREE.MathUtils.clamp(speed / 1.4, 0.6, 1.6);
+        if (a.run) a.run.timeScale = THREE.MathUtils.clamp(speed / 3.5, 0.7, 1.4);
+      }
+      const share = { walk: 1 - inst.runShare, run: inst.runShare };
+      for (const key of Object.keys(a)) {
+        const weight = key in share ? weights[LOCOMOTION] * share[key] : weights[key];
+        a[key].enabled = weight > 0 || key === target;
+        a[key].setEffectiveWeight(weight);
+      }
       inst.mixer.update(dt);
       inst.accessories?.update();
     }
