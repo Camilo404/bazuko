@@ -474,6 +474,10 @@
 .pause-segmented { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
 .pause-segmented .btn { min-height: 38px; padding: 7px 8px 5px; font-size: 13px; }
 .pause-row > .pause-segmented { grid-column: 2 / -1; }
+.pause-dog-swatch {
+  display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px;
+  border-radius: 50%; background: var(--c); border: 1px solid rgba(255, 255, 255, .6);
+}
 .pause-hint { margin: 0; font-size: 12px; font-weight: 700; line-height: 1.4; color: var(--azul-texto); opacity: .85; }
 
 .pause-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }

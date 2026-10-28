@@ -27,6 +27,8 @@ Los GLB conservan sus texturas originales. Seis de ellos tienen la geometría re
 
 Canecas y cambuche se reducen sin soldar las costuras UV para que la textura no se desplace; carros, bolsa y semáforo se sueldan antes para no abrir grietas. El 4 % inferior de cada modelo no se reduce, de modo que el centro del poste que calculan `fitImportedModel` y los semáforos no cambia, y las dimensiones se mantienen. El semáforo ya no incluye los mapas normal y de rugosidad que su material descarta; los lentes se siguen detectando por el color base. El bus y las lámparas se dejan intactos: el fuelle del bus se abre al reducirlo. Para regenerarlos: `blender -b --factory-startup --python tools/modelos/optimizar_glb.py`.
 
+`perro.glb` (El Chato) no es importado: lo genera `tools/modelos/generar_perro.py` en Blender con un modificador Skin sobre un esqueleto de aristas, una subdivisión y pesos por distancia a 21 huesos. Tiene 1.684 triángulos, colores de vértice como tonos relativos del pelaje y ningún clip: `src/entities/Dog.js` mueve sus huesos con marchas de paso, trote y galope, y posturas de sentarse, echarse y dormir. Para regenerarlo: `blender -b --factory-startup --python tools/modelos/generar_perro.py`.
+
 Se adaptan escala y orientación en tiempo de carga. Los carros siguen apuntando a +X local y el bus a −Z local; sus dimensiones se ajustan a las rutas existentes. El cargador comparte geometrías y texturas entre instancias. El bus tiene materiales independientes para que su desvanecimiento no cambie otras instancias.
 
 Los modelos de vehículos contienen las ruedas y carrocería en una misma malla; las ruedas de estos GLB no giran por separado. La circulación, las paradas y el frenado siguen a cargo de los sistemas de esta versión.

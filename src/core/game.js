@@ -7,7 +7,7 @@ import { Clock } from './Clock.js';
 import { Input } from './Input.js';
 
 import { World } from '../world/World.js';
-import { Dog } from '../entities/Dog.js';
+import { Dog, DOG_DEFAULT_LOOK, legacyPetLook } from '../entities/Dog.js';
 import { CompanionNavigation } from '../systems/CompanionNavigation.js';
 import { Minimap } from '../ui/Minimap.js';
 import { WaypointBeacon } from '../entities/WaypointBeacon.js';
@@ -42,7 +42,6 @@ import { RadioSystem } from '../systems/RadioSystem.js';
 import { PoopSystem } from '../systems/PoopSystem.js';
 import { PsychosisSystem } from '../systems/PsychosisSystem.js';
 import { StealSystem } from '../features/steal.js';
-import { Pet } from '../features/pet.js';
 import { openRadioModal } from '../ui/RadioModal.js';
 
 
@@ -109,7 +108,6 @@ export class Game {
       this.diseases, this.talents, this.crafting
     );
 
-    this.pet = new Pet(this.sceneMgr.scene, this.player);
     this.steal = new StealSystem(this);
 
     // HUD, menús y creador de personaje
@@ -145,7 +143,7 @@ export class Game {
       if (e.code === 'KeyN' && !this.paused) this.minimap.toggle();
       if (e.code === 'Escape' && !e._panelHandled && !this.paused && !this.isSleeping) openPauseMenu(this);
       if (e.code === 'KeyV') this._toggleCamera();
-      if (e.code === 'KeyP' && !this.paused) this.pet?.toggleCustomizationMenu();
+      if (e.code === 'KeyP' && !this.paused && this.look) this.editLook();
       // La pausa ya abierta atiende M con su propio listener; la marca evita cerrarla en la misma pulsación.
       if (e.code === 'KeyM' && !this.paused && !this.isSleeping) { e._pauseOpened = true; openPauseMenu(this, 'mapa'); }
       if (e.code === 'KeyK' && !this.paused) this._toggleModel();
@@ -229,7 +227,7 @@ export class Game {
     const importedEntities = [
       ...(this.cars ?? []),
       ...(this.traffic?.vehicles ?? []).map(vehicle => vehicle.car),
-      ...(district?.busServices ?? [district?.busService]), this.cambuche, ...(this.pickups ?? [])
+      ...(district?.busServices ?? [district?.busService]), this.cambuche, this.dog, ...(this.pickups ?? [])
     ].filter(Boolean);
     let lastPaint = performance.now();
     await withLoadTimeout(loadTaskGroups([
@@ -579,7 +577,6 @@ export class Game {
       }
       this.built = data.built ?? {};
       this.costal = !!data.costal;
-      if (this.dog && data.dog?.isFriend) this.dog.befriend();
       this.cambuche?.setBuilt(this.built);
       if (data.look) this._applyLook(data.look);
       if (data.radio) {
@@ -589,6 +586,8 @@ export class Game {
       if (data.dog?.isFriend && this.dog) {
         this.dog.befriend();
       }
+      // La apariencia de la antigua mascota personalizable se conserva si la partida aún no tiene una.
+      this.dog?.setLook(data.dog?.look ?? legacyPetLook() ?? DOG_DEFAULT_LOOK);
       if (data.cart && this.cart) {
         this.cart.loadState(data.cart, this.player, this.inventory);
       }
@@ -610,7 +609,7 @@ export class Game {
       built: this.built,
       costal: this.costal,
       radio: this.radio ? { isOn: this.radio.isOn, freq: this.radio.frequency, battery: this.radio.battery } : null,
-      dog: { isFriend: !!this.dog?.isFriend },
+      dog: { isFriend: !!this.dog?.isFriend, look: this.dog?.look ?? null },
       cart: this.cart ? this.cart.saveState() : null,
       gps: this.gps?.serialize() ?? null
     });
@@ -874,7 +873,6 @@ export class Game {
     // 7. Interacción (basura, autos, recicladora, tienda, cambuche, dealer)
     if (!this.player.isStunned) this.interaction.update(dt, this.input, this.clock);
     this.steal?.update(dt);
-    this.pet?.update(dt, this.player.position, this.world.active?.npcs ?? []);
     if (this._handleDeath()) return;
 
     // 7b. Mecánica de popó y lanzamiento a peatones
@@ -913,7 +911,7 @@ export class Game {
     for (const { car } of this.traffic?.vehicles ?? []) car.update(dt);
     this.cambuche?.update(dt);
     this.dealer?.update(dt);
-    this.dog?.update(dt, this.player.position, this.pickups);
+    this.dog?.update(dt, this.player.position, this.pickups, this.world.active?.npcs ?? []);
     this.cart?.update(dt, this.player, this.audio);
 
     // 10. Audio
@@ -1040,7 +1038,6 @@ export class Game {
   stop() {
     this._running = false;
     this.gpsBeacon?.dispose();
-    this.pet?.dispose?.();
     this.psychosis?.dispose?.();
     this.poopSystem?.dispose?.();
     this.radio?.destroy?.();

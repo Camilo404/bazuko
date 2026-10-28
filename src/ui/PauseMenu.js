@@ -7,6 +7,7 @@ import { MapView } from './MapView.js';
 import { formatDistance, RADAR_ZOOM_MIN, RADAR_ZOOM_MAX, RADAR_SIZES } from './Minimap.js';
 import { NEED_META, needLevel } from './needsMeta.js';
 import { describeWeather } from '../world/Climate.js';
+import { DOG_ACCESSORIES, DOG_COATS } from '../entities/Dog.js';
 
 export const PAUSE_TABS = [
   { id: 'mapa', label: 'Mapa', icon: '🗺️' },
@@ -18,7 +19,7 @@ export const PAUSE_TABS = [
 const CONTROL_GROUPS = [
   ['Movimiento', [['WASD', 'Caminar'], ['Shift', 'Correr'], ['Espacio', 'Saltar'], ['Ratón', 'Clic fija la cámara ∙ rueda acerca'], ['V', 'Vista tercera persona / isométrica']]],
   ['Acciones', [['E', 'Interactuar: basura, tiendas, cambuche, carros'], ['Q', 'Mantener para clasificar basura ∙ dealer'], ['B / L', 'Pedir limosna'], ['F', 'Boost de adrenalina'], ['G / Clic', 'Golpear'], ['X', 'Lanzar / recoger'], ['Z', 'Defecar']]],
-  ['Paneles', [['I / Tab', 'Inventario ∙ 1-5 acceso rápido'], ['T', 'Talentos'], ['C', 'Fabricar'], ['P', 'Personalizar a El Chato'], ['R', 'Radio transistor'], ['K', 'Modelo realista / liviano'], ['F3', 'Panel de rendimiento'], ['Esc', 'Pausa ∙ cerrar panel']]],
+  ['Paneles', [['I / Tab', 'Inventario ∙ 1-5 acceso rápido'], ['T', 'Talentos'], ['C', 'Fabricar'], ['P', 'Editar personaje'], ['R', 'Radio transistor'], ['K', 'Modelo realista / liviano'], ['F3', 'Panel de rendimiento'], ['Esc', 'Pausa ∙ cerrar panel']]],
   ['Mapa y GPS', [['M', 'Abrir / cerrar el mapa'], ['N', 'Mostrar / ocultar radar'], ['+ / −', 'Zoom del radar'], ['Clic', 'Marcar destino en el mapa'], ['Clic der. / Supr', 'Quitar destino'], ['Q / E', 'Cambiar de pestaña en la pausa']]],
 ];
 
@@ -97,6 +98,31 @@ function mapPanel(game) {
   return game.mapView.root;
 }
 
+/** Apariencia de El Chato; solo cuando ya es compañero. Cada cambio se guarda con la partida. */
+function dogSection(game) {
+  const dog = game.dog;
+  if (!dog?.isFriend) return null;
+  const change = (look) => { dog.setLook(look); game._save?.(); game.menu.refresh(); };
+  const row = (label, ...controls) => el('div', { class: 'pause-row' }, el('label', { class: 'pause-row__label', text: label }), ...controls);
+  const size = Math.round(dog.look.tamano * 100);
+  const sizeLabel = el('span', { class: 'pause-value', text: `${size}%` });
+  const sizeInput = el('input', {
+    type: 'range', min: '80', max: '125', step: '5', value: String(size), class: 'pause-slider', 'aria-label': 'Tamaño de El Chato',
+    oninput: (e) => { dog.setLook({ tamano: Number(e.target.value) / 100 }); sizeLabel.textContent = `${e.target.value}%`; },
+    onchange: () => game._save?.()
+  });
+  return el('div', { class: 'pause-section pause-section--compact' },
+    el('h3', { class: 'pause-section-title', text: '🐕 El Chato' }),
+    row('Pelaje', el('div', { class: 'pause-segmented', role: 'group', 'aria-label': 'Pelaje de El Chato' },
+      Object.entries(DOG_COATS).map(([id, { label, color }]) => button(
+        [el('span', { class: 'pause-dog-swatch', style: `--c:${color}`, 'aria-hidden': 'true' }), label],
+        { primary: dog.look.pelaje === id, class: 'pause-choice', onClick: () => change({ pelaje: id }) })))),
+    row('Accesorio', el('div', { class: 'pause-segmented', role: 'group', 'aria-label': 'Accesorio de El Chato' },
+      Object.entries(DOG_ACCESSORIES).map(([id, label]) => button(label,
+        { primary: dog.look.accesorio === id, class: 'pause-choice', onClick: () => change({ accesorio: id }) })))),
+    row('Tamaño', sizeInput, sizeLabel));
+}
+
 function statePanel(game) {
   const { stats = {}, clock = {} } = game;
   const hour = clock.hour ?? 0;
@@ -121,6 +147,7 @@ function statePanel(game) {
         card('Temporada', `${game.weather.season.icon} ${game.weather.season.label} (${game.weather.season.months})`)] : []),
       card('El Chato', game.dog?.isFriend ? '🐕 Te acompaña' : 'Sin adoptar'),
     ),
+    dogSection(game),
     el('div', { class: 'pause-level' },
       el('span', { class: 'pause-level__badge', text: `Nv ${level}` }),
       el('div', { class: 'pause-meter' }, el('div', { class: 'pause-meter__fill', style: `width:${xpPct}%;--c:#19c463` })),
