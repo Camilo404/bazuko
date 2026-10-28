@@ -340,82 +340,48 @@ body.is-loading #creator-modal { visibility: visible; }
 .loading-hint { color: #afa99d; font-size: 14px; line-height: 1.6; }
 #loading-retry { padding: 10px 24px; cursor: pointer; }
 
-/* === Minimapa y Radar === */
+/* === Radar con GPS (esquina inferior izquierda, barras de estado encima) === */
 #minimap-container {
-  position: fixed; top: 12px; right: 12px;
-  width: 140px; padding: 5px;
-  background: rgba(10, 16, 20, 0.88);
-  border: 1px solid #54776a; border-radius: 6px;
-  display: flex; flex-direction: column; align-items: center;
-  z-index: 25; font-family: monospace;
+  position: fixed; left: 20px; bottom: 20px; z-index: 25;
+  width: 220px; display: flex; flex-direction: column; gap: 4px;
+  font-family: 'Overpass', system-ui, sans-serif;
+  pointer-events: none;
 }
 #minimap-container.hidden { display: none; }
-.minimap-header {
-  width: 100%; display: flex; justify-content: space-between; align-items: center;
-  padding: 0 2px 4px 2px; border-bottom: 1px solid #233830;
+#minimap-canvas {
+  width: 220px; height: 150px; display: block;
+  border-radius: 10px; border: 3px solid #0e0f12;
+  box-shadow: 0 0 0 2px rgba(246, 196, 0, .55), 0 6px 18px rgba(0, 0, 0, .55);
+  background: #101318;
 }
-.minimap-title { color: #d9f9e6; font-size: 11px; font-weight: bold; }
-.minimap-toggle-btn {
-  background: #1e332a; color: #ffe199; border: 1px solid #54776a;
-  border-radius: 3px; padding: 1px 5px; font-size: 10px; cursor: pointer;
-}
-.minimap-toggle-btn:hover { background: #2f4f41; }
-#minimap-canvas { width: 130px; height: 130px; max-width: 130px; max-height: 130px; display: block; border-radius: 50%; margin: 4px 0; box-shadow: 0 0 10px rgba(0, 0, 0, 0.4); }
+.minimap-bar { display: flex; align-items: stretch; gap: 4px; }
 .minimap-info {
-  color: #eed688; font-size: 10px; text-align: center;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px;
+  flex: 1; min-width: 0; padding: 4px 8px 2px; border-radius: 6px;
+  background: #0b4fa3; color: #fff; border: 2px solid #0e0f12;
+  font-size: 11px; font-weight: 800; line-height: 1.35;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-
-/* === Menú de Pausa === */
-.pause-menu-body {
-  display: flex; flex-direction: column; gap: 14px;
-  font-family: monospace; color: #ddd; max-height: 65vh; overflow-y: auto; padding-right: 4px;
+.minimap-toggle-btn {
+  pointer-events: auto; cursor: pointer;
+  padding: 0 8px; border-radius: 6px; border: 2px solid #0e0f12;
+  background: #f6c400; color: #0e0f12; font: 900 11px 'Overpass', sans-serif;
 }
-.pause-section {
-  background: rgba(0, 0, 0, 0.35); border: 1px solid #3d4a41;
-  border-radius: 5px; padding: 10px 12px;
-}
-.pause-section-title {
-  color: #eed688; font-size: 13px; margin-bottom: 8px; border-bottom: 1px solid #2d3b32; padding-bottom: 4px;
-}
-.pause-row {
-  display: flex; align-items: center; gap: 10px; font-size: 12px; flex-wrap: wrap;
-}
-.pause-slider {
-  flex: 1; min-width: 100px; accent-color: #27ae60; cursor: pointer;
-}
-.pause-vol-label {
-  min-width: 38px; color: #eed688; font-weight: bold;
-}
-.pause-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 12px; font-size: 12px;
-}
-.pause-grid strong { color: #aaa; }
-.pause-grid span { color: #fff; }
-.pause-actions {
-  display: flex; gap: 8px; flex-wrap: wrap;
-}
-.pause-actions button {
-  padding: 6px 10px; font-size: 12px; border-radius: 4px;
-  background: #1c2b24; color: #d9f9e6; border: 1px solid #54776a; cursor: pointer;
-}
-.pause-actions button:hover { background: #2b4238; }
-.pause-details {
-  font-size: 11px; color: #aaa; cursor: pointer;
-}
-.pause-details summary {
-  color: #ffe199; font-weight: bold; margin-bottom: 6px;
-}
-.pause-controls-list {
-  list-style: none; padding-left: 4px; line-height: 1.8;
-}
-.pause-controls-list kbd {
-  background: #333; color: #ffd166; padding: 1px 5px; border-radius: 3px; border: 1px solid #555;
-}
-
+.minimap-toggle-btn:hover { background: #ffd21a; }
 body.is-loading #minimap-container { visibility: hidden; }
-#minimap-container { top: 115px; right: 16px; width: 175px; }
-.minimap-info { white-space: normal; max-width: 170px; line-height: 1.5; }
+/* Con radar visible, las barras y avisos suben sobre él. */
+body:has(#minimap-container:not(.hidden)) #hud { bottom: 206px; }
+body:has(#minimap-container:not(.hidden)) #status { bottom: 340px; }
+@media (max-width: 1000px) {
+  #minimap-container { bottom: 100px; }
+  body:has(#minimap-container:not(.hidden)) #hud { bottom: 286px; }
+  body:has(#minimap-container:not(.hidden)) #status { bottom: 420px; }
+}
+@media (max-width: 760px) {
+  #minimap-container { width: 168px; }
+  #minimap-canvas { width: 168px; height: 115px; }
+  body:has(#minimap-container:not(.hidden)) #hud { bottom: 252px; }
+  body:has(#minimap-container:not(.hidden)) #status { bottom: 386px; }
+}
 #game-settings { position: fixed; top: 14px; right: 12px; z-index: 50; display: flex; gap: 6px; }
 #game-settings button { cursor: pointer; padding: 5px 10px; background: #18231feb; color: #eed688; border: 1px solid #54776a; border-radius: 4px; }
 

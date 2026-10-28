@@ -85,9 +85,11 @@ En PowerShell, si una política de ejecución impide usar `npm`, ejecuta los mis
 | `T` | Abrir talentos. |
 | `C` | Abrir fabricación. |
 | `P` | Editar el personaje. |
-| `M` | Alternar entre el personaje realista y el modelo liviano. |
-| `Esc` o botón Pausa | Abrir ajustes de pausa; cerrar primero el panel activo y liberar el cursor. |
+| `M` | Abrir el mapa para marcar un destino; en el mapa, cerrarlo. |
+| `K` | Alternar entre el personaje realista y el modelo liviano. |
+| `Esc` o botón Pausa | Abrir la pausa en la pestaña Estado; cerrar primero el panel activo y liberar el cursor. |
 | `N` | Mostrar u ocultar el radar. |
+| `+` / `−` | Acercar o alejar el radar. |
 | `R` en la calle | Abrir o cerrar la radio AM/FM; permite sintonizar emisoras y cambiar pilas. |
 | `X` en la calle | Lanzar si llevas munición; de lo contrario, hacer popó. |
 | `Z` en la calle | Hacer popó. |
@@ -108,11 +110,13 @@ Al cruzar delante de un carro, este intenta frenar progresivamente. Si te atravi
 
 Si la salud llega a cero, el juego se pausa y muestra una pantalla de recuperación. El regreso al cambuche ocurre al pulsar **Volver al cambuche**.
 
-## Radar, pausa y El Chato
+## Radar, mapa, GPS y pausa
 
-El radar gira con la cámara en las dos vistas: arriba representa el frente de la pantalla. La brújula y los puntos de interés se orientan en consecuencia; debajo aparecen la distancia y dirección al lugar más cercano. Es una guía de orientación, no un navegador que calcule el camino entre edificios. Usa **N** para ocultarlo o mostrarlo.
+El radar está en la esquina inferior izquierda, bajo las barras de necesidades. Muestra el plano de la ciudad (calles, andenes, manzanas, parques, lago y el viaducto en franja translúcida) y gira con la cámara en las dos vistas: arriba representa el frente de la pantalla. La **N** del borde indica el norte. Al correr se aleja para ver más lejos; **+** y **−** cambian el alcance base, que se guarda. Debajo aparece la distancia y la dirección al destino marcado o, sin destino, al lugar más cercano.
 
-**Esc** o **Pausa** abren los ajustes: volumen maestro, silencio, calidad gráfica y guardado manual. Cerrar una tienda o el inventario con Esc no abre a la vez la pausa. Abrir cualquier panel libera el cursor. El volumen afecta también a los motores y claxones actuales, que mantienen su reproducción normal y sus voces independientes.
+**M** abre el mapa grande con el norte arriba. Se puede arrastrar, acercar con la rueda y marcar un destino con un clic, sobre un lugar o en cualquier punto de la calle. La lista **Ir a…** permite elegir lugares de la ciudad. El clic derecho o **Quitar destino** lo borra. El GPS calcula la mejor ruta a pie: prefiere andenes, parques y cruces peatonales, evita caminar por la calzada y rodea edificios y el lago. Va por la calle inferior, no por el viaducto. La ruta amarilla aparece en el radar y en el mapa y se recalcula si el jugador se desvía más de 6 metros. Un haz amarillo marca el destino en la calle y desaparece al llegar. El destino se guarda con la partida.
+
+La pausa tiene cuatro pestañas, que se recorren con **Q** y **E**: Mapa, Estado (necesidades, dinero, nivel, El Chato y guardado manual), Ajustes (volumen, silencio, calidad gráfica, radar, haz del destino, modelo y radio) y Controles. Cerrar una tienda o el inventario con Esc no abre a la vez la pausa. Abrir cualquier panel libera el cursor. El volumen afecta también a los motores y claxones actuales, que mantienen su reproducción normal y sus voces independientes.
 
 El Chato aparece junto al cambuche. Acércate y pulsa **E**: si llevas pan o una lata de atún, lo alimentas y se vuelve compañero; también puedes acariciarlo para recuperar 5 de ánimo, con 20 segundos entre caricias. Te sigue por lugares transitables, rodea paredes y respeta las cajas de los vehículos. Avisa de basura cercana que aún no se haya vaciado, con un ladrido breve sintetizado y un mensaje. Dormir con él aporta 15 de ánimo adicional y lo muestra acostado a tu lado. La amistad se guarda sin invalidar partidas anteriores.
 

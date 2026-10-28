@@ -44,6 +44,7 @@ Para las pruebas de navegador, instalar Chromium con `npx playwright install chr
 - `src/entities/PigeonFlock.js`: bandadas instanciadas y reacción a personas.
 - `src/ui/HUD.js`, `InventoryUI.js`, `placeMenus.js`: paneles y acciones del jugador.
 - `src/ui/ShelterPreview.js`: imagen del refugio terminado sin alterar la construcción.
+- `src/systems/GpsNavigation.js`, `src/world/bogota/CityMapRaster.js`, `src/ui/MapView.js`, `src/ui/PauseMenu.js`: GPS a pie, plano del radar, mapa grande y pausa por pestañas.
 
 ## Decisiones que deben conservarse
 
@@ -106,3 +107,7 @@ LoadingArtwork.js administra parejas numeradas según loading-artwork.json. Las 
 ## Variedad urbana
 
 UrbanBuildings.js planifica sustituciones deterministas sobre tiles building exclusivamente. Conservar el mismo plan al construir las fachadas y las colisiones. Las huellas se incorporan a covered antes de generar casas y relleno; en _buildCollisions se excluyen esos tiles de las cajas genéricas de 8 metros y se añade una caja de altura real por solar. No cambiar el mapa ni ocupar ruinas, calles, parques, edificios especiales o reservas del viaducto. Los cinco diseños usan createBuildingShell y BuildingVisibility, con fachadas repetibles compartidas y sin luces nuevas. Las torres de 30 pisos miden 96 metros, menos que Colpatria.
+
+## Radar, mapa y GPS
+
+El radar dibuja el plano rasterizado una sola vez desde `tileTypeAt` (incluye las filas de Z negativa del Portal) y la ruta en coordenadas del mundo, a 20 Hz. `Bogota.createGpsNavigation` comparte `_pedestrianRules` con los NPC: andenes 1, cruces 1,3, calzada 8, bloqueados los sólidos, el agua y los tiles con suelo sobre 1,2 m. La ruta es peatonal y no usa el viaducto; si cambia el mapa, revisar `gps-navigation.test.js`. M abre la pestaña Mapa y K alterna el modelo. Q/E cambian de pestaña solo mientras la pausa está abierta. El haz del destino es un hijo directo de la escena, sin luces. El destino se guarda en `gps` del guardado.

@@ -6,7 +6,7 @@ Se adaptaron estas funciones sobre `pruebas-integracion`. Se mantienen la ciudad
 
 ## Adaptaciones
 
-- El radar calcula su orientación con la matriz de la cámara real, incluida la vista isométrica. Usa las posiciones actuales de cambuche, recicladora, tienda, crafteo y dealer. Se pinta como máximo veinte veces por segundo. La dirección es una orientación hacia el lugar más cercano; no muestra una ruta navegable.
+- El radar calcula su orientación con la matriz de la cámara real, incluida la vista isométrica. Usa las posiciones actuales de cambuche, recicladora, tienda, crafteo y dealer. Se pinta como máximo veinte veces por segundo. Desde la rama `feat/radar-gps` dibuja además el plano de la ciudad (`CityMapRaster.js`), la ruta del GPS a pie (`GpsNavigation.js`) y un zoom dinámico; el mapa grande (`MapView.js`) vive en la pestaña Mapa de la pausa.
 - Los ajustes de volumen usan el `Howler` ya existente. Motores, ralentí y claxones conservan sus archivos y voces normales. Volumen y silencio se guardan en almacenamiento local. El ladrido es un efecto corto sintetizado que pasa por el volumen maestro.
 - La pausa usa el menú actual. Esc cierra primero inventario, tienda o panel activo sin abrir simultáneamente otro menú. Los paneles liberan el cursor y frenan la simulación. La recuperación tras un atropello mortal sigue requiriendo su botón propio.
 - Los perfiles gráficos actualizan el límite de `AdaptiveResolution`; la adaptación no revierte la preferencia. La iluminación respeta la niebla elegida durante todo el día y se libera el render target anterior al cambiar el tamaño del mapa de sombras. No se promete un incremento fijo de FPS.
