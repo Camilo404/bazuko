@@ -6,6 +6,7 @@ import { cop } from '../utils/money.js';
 import { ITEMS, itemRarityLabel } from '../data/items.js';
 import { itemArtHTML, itemCategory } from './itemArt.js';
 import { NEED_META, needLevel } from './needsMeta.js';
+import { describeWeather } from '../world/Climate.js';
 
 const NEED_LABELS = { hambre: 'hambre', sed: 'sed', energia: 'energía', salud: 'salud', higiene: 'higiene', animo: 'ánimo', vicio: 'vicio' };
 
@@ -255,7 +256,13 @@ export class HUD {
     // Reloj
     const h = Math.floor(clock.hour).toString().padStart(2, '0');
     const m = Math.floor((clock.hour % 1) * 60).toString().padStart(2, '0');
-    this._setText(this.clockEl, `Día ${clock.day} — ${h}:${m}`);
+    const sky = this.weather?.type ? describeWeather(this.weather.type, clock.isNight) : null;
+    this._setText(this.clockEl, sky ? `Día ${clock.day} — ${h}:${m} ∙ ${sky.icon}` : `Día ${clock.day} — ${h}:${m}`);
+    const skyKey = sky && `${sky.label}|${this.weather.season?.id}`;
+    if (this.clockEl && sky && this._weatherTitle !== skyKey) {
+      this._weatherTitle = skyKey;
+      this.clockEl.title = `${sky.label} ∙ ${this.weather.season?.label ?? ''}`;
+    }
     this._setText(this.moneyEl, cop(stats.dinero));
 
     // Nivel y XP

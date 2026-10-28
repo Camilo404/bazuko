@@ -121,6 +121,8 @@ export class Game {
     this.menu = new Menu();
     this.minimap = new Minimap();
     this.weather = new WeatherSystem(this.sceneMgr.scene);
+    this.hud.weather = this.weather;
+    window.addEventListener('weather-lightning', ({ detail }) => this.audio.playThunder?.(detail?.distance));
     let quality = 'baja';
     try { quality = localStorage.getItem('bazuko.graphics_quality') || quality; } catch { /* sin almacenamiento */ }
     this.setGraphicsQuality(quality, false);
@@ -216,7 +218,7 @@ export class Game {
       this.player.root.position.copy(this.player.position);
     }
 
-    this.weather?.update(0, this.player.position, this.renderer.quality === 'baja' ? null : district);
+    this.weather?.update(0, this.player.position, this.renderer.quality === 'baja' ? null : district, this.clock);
 
     if (!this.look) {
       await this._createCharacter(loading);
@@ -255,7 +257,7 @@ export class Game {
 
     if (this.cameraRig.mode === 'third-person') this.player.root.rotation.y = this.cameraRig.yaw + Math.PI;
     this.cameraRig.follow(this.player.position, 0, this.collisions);
-    this.sceneMgr.setTimeOfDay(this.clock.hour);
+    this.sceneMgr.setTimeOfDay(this.clock.hour, this.weather, this.clock.day);
     this.sceneMgr.followTarget(this.player.position);
     this._wasNight = this.clock.isNight;
     district?.setNightMode?.(this._wasNight);
@@ -812,8 +814,8 @@ export class Game {
     this.clock.update(dt);
     this.time.update(dt, this.clock);
 
-    // 2. Día/noche: cielo nublado de Bogotá y sol que sigue al jugador (sombras nítidas)
-    this.sceneMgr.setTimeOfDay(this.clock.hour, this.weather?.isRaining, this.weather?.wetness);
+    // 2. Día/noche: sol, luna, nubes y clima de Bogotá; la luz sigue al jugador (sombras nítidas)
+    this.sceneMgr.setTimeOfDay(this.clock.hour, this.weather, this.clock.day);
     this.sceneMgr.followTarget(this.player.position, this.clock.hour);
     this.sceneMgr.update(dt);
     const isNight = this.clock.isNight;
@@ -902,7 +904,8 @@ export class Game {
     this.profiler?.mark('trafico');
     if (this._handleDeath()) return;
 
-    this.weather?.update(dt, this.player.position, this.renderer.effectiveQuality === 'baja' ? null : this.world.active);
+    this.weather?.update(dt, this.player.position, this.renderer.effectiveQuality === 'baja' ? null : this.world.active, this.clock);
+    this.audio.setRainLevel?.(this.weather?.isRaining ? this.weather.rainIntensity : 0);
 
     // 9. Entidades
     for (const p of this.pickups) p.update(dt);
@@ -964,6 +967,7 @@ export class Game {
     if (this._effectiveQuality !== quality) {
       this._effectiveQuality = quality;
       this.sceneMgr.setQuality(quality);
+      this.weather?.setQuality(quality);
       this.cameraRig.setQuality?.(quality);
       if (this.world.active) this.world.active.animationBudget = GRAPHICS_PROFILES[quality].animationBudget;
       this.world.active?.setWetness?.(quality === 'baja' ? 0 : this.weather?.wetness ?? 0);

@@ -668,4 +668,55 @@ export class AudioSystem {
     } catch {}
   }
 
+  /** Volumen del bucle de lluvia según la intensidad del clima (llovizna suave, tormenta fuerte). */
+  setRainLevel(level = 0) {
+    const sound = this.sounds.rain;
+    if (this._rainId === undefined || !sound?.volume) return;
+    const mix = typeof this._level === 'function' ? this._level('ambient') : 1;
+    const volume = (this._baseVolume?.get(sound) ?? .45) * (.4 + .6 * Math.max(0, Math.min(1, level))) * mix;
+    if (this._rainVolumeId === this._rainId && Math.abs(volume - this._rainVolume) < .01) return;
+    this._rainVolumeId = this._rainId;
+    this._rainVolume = volume;
+    sound.volume(volume, this._rainId);
+  }
+
+  /**
+   * Trueno sintetizado: llega con el retraso del sonido (343 m/s) y los lejanos
+   * pierden agudos y volumen. Pasa por el volumen maestro mediante `_fx()`.
+   */
+  playThunder(distance = 1200) {
+    const fx = this._fx();
+    if (!fx || !fx.ctx.createBuffer) return;
+    try {
+      const { ctx, out } = fx;
+      if (!this._thunderBuffer) {
+        const length = Math.ceil(ctx.sampleRate * 4);
+        this._thunderBuffer = ctx.createBuffer(1, length, ctx.sampleRate);
+        const data = this._thunderBuffer.getChannelData(0);
+        let brown = 0;
+        for (let i = 0; i < length; i++) {
+          brown = (brown + .02 * (Math.random() * 2 - 1)) / 1.02;
+          data[i] = brown * 3.5;
+        }
+      }
+      const near = Math.max(0, Math.min(1, 1 - (distance - 300) / 2200));
+      const t = ctx.currentTime + Math.min(7, distance / 343);
+      const source = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), gain = ctx.createGain();
+      source.buffer = this._thunderBuffer;
+      source.playbackRate.value = .75 + Math.random() * .3;
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(220 + near * 900, t);
+      filter.frequency.exponentialRampToValueAtTime(120 + near * 100, t + 3);
+      const peak = .25 + near * .55;
+      gain.gain.setValueAtTime(.0001, t);
+      gain.gain.linearRampToValueAtTime(peak, t + (near > .6 ? .03 : .35));
+      gain.gain.setValueAtTime(peak * .7, t + .5);
+      gain.gain.linearRampToValueAtTime(peak * .45, t + 1.4);
+      gain.gain.exponentialRampToValueAtTime(.001, t + 3.6);
+      source.connect(filter); filter.connect(gain); gain.connect(out);
+      source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
+      source.start(t);
+      source.stop(t + 3.7);
+    } catch {}
+  }
 }

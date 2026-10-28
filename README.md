@@ -18,7 +18,7 @@ Este proyecto es un fork de [juanagogo/bazuko](https://github.com/juanagogo/bazu
 - Calzadas de 12 metros y andenes de 4 metros.
 - Ciudad de 240 × 322 metros: conserva la ampliación urbana y añade un gran parque al sur, con barrios nuevos al oriente y al sur, dos calles y dos carreras adicionales y dos parques nuevos.
 - Creación de personaje, inventario, reciclaje, comercio, talentos y construcción del cambuche.
-- Ciclo de día y noche y necesidades de supervivencia con un ritmo relajado. Un día del juego dura una hora real.
+- Ciclo de día y noche con sol, luna con fases, estrellas y nubes; cuatro temporadas bogotanas y siete estados del tiempo, de soleado a tormenta eléctrica. Necesidades de supervivencia con un ritmo relajado. Un día del juego dura una hora real. [Detalles del clima](docs/clima.md).
 - Panel de FPS actuales, mínimos, máximos, promedio, percentiles recientes, 1 % de FPS bajos y coordenadas X, Y, Z.
 - Pantalla de carga con precarga de personajes, texturas y shaders antes de iniciar la partida y la medición de FPS.
 - Descarte de sectores fuera de cámara, geometría agrupada, iluminación limitada y resolución adaptable para reducir el trabajo de renderizado.
@@ -121,7 +121,7 @@ La pausa tiene cuatro pestañas de alto fijo, que se recorren con **Q** y **E**:
 
 El Chato aparece junto al cambuche. Acércate y pulsa **E**: si llevas pan o una lata de atún, lo alimentas y se vuelve compañero; también puedes acariciarlo para recuperar 5 de ánimo, con 20 segundos entre caricias. Te sigue por lugares transitables, rodea paredes y respeta las cajas de los vehículos. Avisa de basura cercana que aún no se haya vaciado, con un ladrido breve sintetizado y un mensaje. Dormir con él aporta 15 de ánimo adicional y lo muestra acostado a tu lado. La amistad se guarda sin invalidar partidas anteriores.
 
-El cielo usa tonos de amanecer andino y cambia entre nublado y llovizna con 350 partículas cercanas al jugador. El clima y El Chato se detienen durante la pausa; el material de lluvia se prepara en la pantalla de carga.
+El cielo sigue la posición del sol y la luna sobre Bogotá, con nubes que derivan con el viento. El tiempo pasa de forma gradual entre soleado, parcialmente nublado, nublado, neblina, llovizna, aguacero y tormenta según la temporada; ver [docs/clima.md](docs/clima.md). El clima y El Chato se detienen durante la pausa; el material de lluvia se prepara en la pantalla de carga.
 
 ## Rendimiento
 

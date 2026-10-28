@@ -6,6 +6,7 @@ import { XP_PER_LEVEL } from '../utils/constants.js';
 import { MapView } from './MapView.js';
 import { formatDistance, RADAR_ZOOM_MIN, RADAR_ZOOM_MAX, RADAR_SIZES } from './Minimap.js';
 import { NEED_META, needLevel } from './needsMeta.js';
+import { describeWeather } from '../world/Climate.js';
 
 export const PAUSE_TABS = [
   { id: 'mapa', label: 'Mapa', icon: '🗺️' },
@@ -107,6 +108,7 @@ function statePanel(game) {
   const wp = game.gps?.waypoint;
   const pos = game.player?.position;
 
+  const sky = game.weather?.type && describeWeather(game.weather.type, clock.isNight ?? (hour < 6 || hour >= 20));
   const card = (label, value) => el('div', { class: 'pause-card' },
     el('span', { class: 'pause-card__label', text: label }), el('strong', { class: 'pause-card__value', text: value }));
 
@@ -115,6 +117,8 @@ function statePanel(game) {
       card('Personaje', game.look?.nombre ?? 'Parcero'),
       card('Dinero', cop(stats.dinero ?? 0)),
       card('Tiempo', `Día ${clock.day ?? 1} ∙ ${h}:${m}`),
+      ...(sky ? [card('Clima', `${sky.icon} ${sky.label}`),
+        card('Temporada', `${game.weather.season.icon} ${game.weather.season.label} (${game.weather.season.months})`)] : []),
       card('El Chato', game.dog?.isFriend ? '🐕 Te acompaña' : 'Sin adoptar'),
     ),
     el('div', { class: 'pause-level' },

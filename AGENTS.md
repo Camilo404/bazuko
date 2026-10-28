@@ -88,6 +88,8 @@ AvenueLandmarks.js define alturas variadas y la pasarela en Z 8. GasStation.js r
 
 Al iniciar, después de cargar el guardado, fijar las 22:00 sin cambiar el día ni el progreso. Activar llovizna, reiniciar su temporizador y colocar partículas junto al jugador antes del primer render; luego continúan los ciclos normales.
 
+Climate.js define temporadas (cuatro días de juego cada una), estados del tiempo y la posición de sol y luna; los cerros orientales están en −X. WeatherSystem mezcla las transiciones y deriva `isRaining` de la intensidad; la lluvia se anima en el vertex shader y su presupuesto depende de la calidad. Cielo, nubes, luna y relámpagos viven en el shader de la cúpula, sin luces nuevas. Los truenos usan `_fx()`. Ver `docs/clima.md`.
+
 ## Estación y buses en ambos sentidos
 
 TransitTerminal.js extiende la avenida al norte: X 54–96, Z −74–0, conservando la ciudad anterior. paintTerminalEntrance abre el borde del mapa sin alterar los carriles de carros existentes. La isla de Portal del Centro mide 4 × 40 metros y está centrada en X 75, Z −30, a 0,92 metros. Sus rampas peatonales de 8 metros usan terminalGroundHeight; no añadir una caja sólida que impida subir. La estructura y el mobiliario sí tienen colliders layered. No cargar el antiguo modelo GLB de estación.
