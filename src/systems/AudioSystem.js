@@ -12,11 +12,10 @@ const STEP_NAMES = Object.keys(STEP_SPRITES);
 // Metros entre pisadas: con la animación escalada por velocidad mantiene el ritmo de los pies.
 const STRIDE_WALK = 1.15, STRIDE_RUN = 1.9;
 const STEP_SURFACES = {
-  grass: { volume: .3, rate: .82 }, dirt: { volume: .34, rate: .86 },
-  road: { volume: .46, rate: 1.04 }, busway: { volume: .46, rate: 1.04 },
+  grass: { volume: .3, rate: .88 }, dirt: { volume: .34, rate: .9 },
+  road: { volume: .46, rate: 1 }, busway: { volume: .46, rate: 1 },
   sidewalk: { volume: .5, rate: 1 }, floor: { volume: .5, rate: 1 }, plaza: { volume: .5, rate: 1 }
 };
-const SOFT_SURFACES = new Set(['grass', 'dirt']);
 
 export class AudioSystem {
   constructor({ HowlClass = Howl, howler = Howler, eventTarget = globalThis.window } = {}) {
@@ -280,10 +279,10 @@ export class AudioSystem {
     this._stepDistance += travelled ?? (running ? 6 : 3) * dt;
     if (this._stepDistance < stride) return;
     this._stepDistance %= stride;
-    this._playStep(running, groundType, isRaining);
+    this._playStep(running, groundType);
   }
 
-  _playStep(running, groundType, isRaining) {
+  _playStep(running, groundType) {
     const s = this.sounds.steps;
     if (!s || s.state() !== 'loaded') return;
     // Evita repetir la misma pisada dos veces seguidas.
@@ -293,8 +292,7 @@ export class AudioSystem {
     const surface = STEP_SURFACES[groundType] ?? STEP_SURFACES.sidewalk;
     const id = s.play(STEP_NAMES[index]);
     s.volume(surface.volume * (running ? 1.12 : 1) * (.85 + Math.random() * .15) * this._level('effects'), id);
-    s.rate(surface.rate * (running ? 1.06 : 1) * (.95 + Math.random() * .1), id);
-    if (isRaining && !SOFT_SURFACES.has(groundType)) this.playSplash(running ? .2 : .14);
+    s.rate(surface.rate * (.98 + Math.random() * .04), id);
   }
 
   updateBoost(active) {
@@ -409,27 +407,6 @@ export class AudioSystem {
     return { ctx, out: this._effectsBus };
   }
 
-  /** Chapoteo corto sobre superficies duras mojadas, acompañando la pisada. */
-  playSplash(level = .14) {
-    const fx = this._fx();
-    if (!fx || !fx.ctx.createBuffer) return;
-    const { ctx, out } = fx;
-    if (!this._splashBuffer) {
-      this._splashBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * .12), ctx.sampleRate);
-      const data = this._splashBuffer.getChannelData(0);
-      for (let i = 0; i < data.length; i++) {
-        const t = i / ctx.sampleRate;
-        data[i] = (Math.random() * 2 - 1) * Math.exp(-t * 38) * Math.min(1, t * 400);
-      }
-    }
-    const source = ctx.createBufferSource(), filter = ctx.createBiquadFilter(), gain = ctx.createGain();
-    source.buffer = this._splashBuffer; source.playbackRate.value = .9 + Math.random() * .25;
-    filter.type = 'highpass'; filter.frequency.value = 1800;
-    gain.gain.value = level;
-    source.connect(filter); filter.connect(gain); gain.connect(out);
-    source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
-    source.start();
-  }
 
   playFart() {
     const fx = this._fx();
